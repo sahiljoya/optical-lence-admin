@@ -1,0 +1,74 @@
+.veriwide-root {
+  --card: #ffffff;
+  --card-border: #e3ebf7;
+  --shadow: 0 2px 10px rgba(30, 64, 175, 0.06);
+  --shadow-hover: 0 6px 18px rgba(30, 64, 175, 0.12);
+  --ink: #0f172a;
+  --muted: #64748b;
+  --faint: #94a3b8;
+  --divider: #edf2f9;
+  --primary: #2563eb;
+  --primary-2: #3b82f6;
+  --primary-pressed: #1d4ed8;
+  --primary-tint: #dcebff;
+  --primary-gradient: linear-gradient(135deg, #3b82f6, #2563eb);
+  --on-primary: #ffffff;
+  --rail-bg: rgba(255, 255, 255, 0.72);
+  --soft-bg: #f1f6fd;
+  --search-bg: rgba(255, 255, 255, 0.9);
+  --glow: 0 0 0 3px #ffffff, 0 6px 20px rgba(59, 130, 246, 0.35);
+
+  --t-blue-bg: linear-gradient(135deg, #e8f1ff, #f5f9ff); --t-blue-ic: #3b82f6;
+  --t-green-bg: linear-gradient(135deg, #e4f8ee, #f3fcf8); --t-green-ic: #22b573;
+  --t-purple-bg: linear-gradient(135deg, #efe9ff, #f8f5ff); --t-purple-ic: #8b5cf6;
+  --t-orange-bg: linear-gradient(135deg, #fff0e3, #fff8f1); --t-orange-ic: #f97316;
+  --t-teal-bg: linear-gradient(135deg, #e0f7f6, #f1fbfb); --t-teal-ic: #14b8a6;
+  --t-pink-bg: linear-gradient(135deg, #ffe7ec, #fff4f6); --t-pink-ic: #f43f5e;
+  --up: #16a34a;
+  --down: #dc2626;
+
+  --p-pending-bg: #fff1db; --p-pending: #b45309;
+  --p-delivered-bg: #ddf7e8; --p-delivered: #15803d;
+  --p-process-bg: #dcebff; --p-process: #1d4ed8;
+  --p-overdue-bg: #ffe4e8; --p-overdue: #be123c;
+  --p-packed-bg: #eef2f7; --p-packed: #475569;
+  --pink-box: #ffedf1;
+
+  --qa-green-bg: #e6f7ee; --qa-green: #15803d; --qa-green-h: #d3f0e0;
+  --qa-blue-bg: #e4eeff; --qa-blue: #1d4ed8; --qa-blue-h: #d2e2ff;
+  --qa-purple-bg: #f0eaff; --qa-purple: #6d28d9; --qa-purple-h: #e3d8ff;
+  --qa-orange-bg: #fff0e3; --qa-orange: #c2410c; --qa-orange-h: #ffe2c9;
+
+  --c-line: #3b82f6;
+  --c-bar-a: #60a5fa;
+  --c-bar-b: #2563eb;
+  --c-grid: #e8eef7;
+  --c-d1: #3b82f6; --c-d2: #34c38f; --c-d3: #fbbf24; --c-d4: #8b5cf6; --c-d5: #cbd5e1;
+
+  font-family: "Inter", sans-serif;
+  color: var(--ink);
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 224px minmax(0, 1fr);
+  background:
+    radial-gradient(circle at 8% 12%, rgba(147, 197, 253, 0.35), transparent 40%),
+    radial-gradient(circle at 92% 8%, rgba(191, 219, 254, 0.45), transparent 35%),
+    linear-gradient(180deg, #eaf2fd 0%, #f5f9ff 45%, #ffffff 100%);
+}
+.veriwide-root *:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.vw-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; box-shadow: var(--shadow); }
+.vw-rail { position: sticky; top: 0; height: 100vh; background: var(--rail-bg); backdrop-filter: blur(10px); border-right: 1px solid var(--card-border); padding: 20px 14px; display: flex; flex-direction: column; }
+.vw-nav { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; border-radius: 12px; margin-bottom: 4px; font-size: 14px; font-weight: 500; color: var(--muted); }
+.vw-nav:hover { background: var(--soft-bg); color: var(--ink); }
+.vw-nav.active { background: var(--primary-tint); color: var(--primary-pressed); font-weight: 600; }
+.vw-btn-primary { background: var(--primary-gradient); color: var(--on-primary); font-weight: 600; border-radius: 10px; padding: 0 16px; }
+.vw-btn-primary:hover { background: var(--primary-pressed); }
+.vw-tile { position: relative; height: 112px; border-radius: 14px; padding: 14px; border: 1px solid var(--card-border); box-shadow: var(--shadow); transition: transform .15s, box-shadow .15s; overflow: hidden; }
+.vw-tile:hover { transform: translateY(-1px); box-shadow: var(--shadow-hover); }
+.vw-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.vw-qa { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border-radius: 10px; font-size: 13px; font-weight: 600; width: 100%; }
+.vw-qa-green { background: var(--qa-green-bg); color: var(--qa-green); } .vw-qa-green:hover { background: var(--qa-green-h); }
+.vw-qa-blue { background: var(--qa-blue-bg); color: var(--qa-blue); } .vw-qa-blue:hover { background: var(--qa-blue-h); }
+.vw-qa-purple { background: var(--qa-purple-bg); color: var(--qa-purple); } .vw-qa-purple:hover { background: var(--qa-purple-h); }
+.vw-qa-orange { background: var(--qa-orange-bg); color: var(--qa-orange); } .vw-qa-orange:hover { background: var(--qa-orange-h); }
+.vw-tip { background: var(--card); border-radius: 10px; box-shadow: var(--shadow-hover); padding: 8px 10px; font-size: 12px; border: 1px solid var(--card-border); }
