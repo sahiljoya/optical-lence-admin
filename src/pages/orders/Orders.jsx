@@ -1,62 +1,74 @@
 import { useState } from "react";
-import { Search, Filter, Download, Eye, Truck, MoreHorizontal, PackageOpen } from "lucide-react";
+import { Search, Filter, Download, PackageOpen } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { OrderActions } from "./components/OrderActions";
 import "@/styles/veriwide.css";
 
-const MOCK_ORDERS = [
-  { id: "ORD-9021", customer: "Vision Plus", city: "Delhi", date: "2026-10-05", amount: 4500, status: "pending", items: 45 },
-  { id: "ORD-9020", customer: "Clear Optics", city: "Pune", date: "2026-10-05", amount: 1200, status: "processing", items: 12 },
-  { id: "ORD-9018", customer: "Sunshine Eyewear", city: "Mumbai", date: "2026-10-04", amount: 12400, status: "shipped", items: 120 },
-  { id: "ORD-9015", customer: "City Optics", city: "Jaipur", date: "2026-10-03", amount: 8900, status: "delivered", items: 80 },
-  { id: "ORD-9010", customer: "Rajat Vision", city: "Delhi", date: "2026-10-02", amount: 3200, status: "cancelled", items: 30 },
-  { id: "ORD-9005", customer: "Vision Plus", city: "Delhi", date: "2026-10-01", amount: 15600, status: "delivered", items: 150 },
+const INITIAL_MOCK_ORDERS = [
+  { id: "ORD-9021", customer: "Vision Plus", city: "Delhi", date: "2026-10-06T18:30:00Z", amount: 4500, status: "pending", items: 45, isUrgent: true, placedBy: "Ramesh (Staff)", trackingId: "" },
+  { id: "ORD-9020", customer: "Clear Optics", city: "Pune", date: "2026-10-05T10:15:00Z", amount: 1200, status: "blocked", items: 12, isUrgent: false, placedBy: "Owner", blockReason: "Credit Limit Exceeded", trackingId: "" },
+  { id: "ORD-9018", customer: "Sunshine Eyewear", city: "Mumbai", date: "2026-10-04T14:20:00Z", amount: 12400, status: "processing", items: 120, isUrgent: true, placedBy: "Owner", trackingId: "" },
+  { id: "ORD-9015", customer: "City Optics", city: "Jaipur", date: "2026-10-03T09:00:00Z", amount: 8900, status: "shipped", items: 80, isUrgent: false, placedBy: "Suresh (Staff)", trackingId: "BLUEDART8921" },
+  { id: "ORD-9010", customer: "Rajat Vision", city: "Delhi", date: "2026-10-02T16:45:00Z", amount: 3200, status: "delivered", items: 30, isUrgent: false, placedBy: "Owner", trackingId: "DELHIVERY445" },
+  { id: "ORD-9005", customer: "Vision Plus", city: "Delhi", date: "2026-10-01T11:30:00Z", amount: 15600, status: "delivered", items: 150, isUrgent: false, placedBy: "Owner", trackingId: "BLUEDART8900" },
 ];
 
 const STATUS_CONFIG = {
-  pending: { label: "Pending", bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-200" },
-  processing: { label: "Processing", bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200" },
-  shipped: { label: "Shipped", bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" },
+  pending: { label: "New Order", bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200" },
+  blocked: { label: "On Hold", bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-200" },
+  processing: { label: "Picking", bg: "bg-amber-100", text: "text-amber-700", border: "border-amber-200" },
+  shipped: { label: "Dispatched", bg: "bg-purple-100", text: "text-purple-700", border: "border-purple-200" },
   delivered: { label: "Delivered", bg: "bg-emerald-100", text: "text-emerald-700", border: "border-emerald-200" },
-  cancelled: { label: "Cancelled", bg: "bg-rose-100", text: "text-rose-700", border: "border-rose-200" },
+  cancelled: { label: "Cancelled", bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-200" },
 };
 
-function StatusBadge({ status }) {
+function StatusBadge({ status, reason, trackingId }) {
   const config = STATUS_CONFIG[status] || STATUS_CONFIG.pending;
   return (
-    <span className={`inline-flex items-center px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider border ${config.bg} ${config.text} ${config.border}`}>
-      {config.label}
-    </span>
+    <div className="flex flex-col items-center gap-1">
+      <span className={`inline-flex items-center px-2 py-1 rounded text-[11px] font-bold uppercase tracking-wider border ${config.bg} ${config.text} ${config.border}`}>
+        {config.label}
+      </span>
+      {status === "blocked" && <span className="text-[10px] text-rose-500 font-semibold">{reason}</span>}
+      {status === "shipped" && trackingId && <span className="text-[9px] text-slate-500 font-mono mt-0.5">{trackingId}</span>}
+    </div>
   );
 }
 
 export function Orders() {
+  const [orders, setOrders] = useState(INITIAL_MOCK_ORDERS);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [filterDate, setFilterDate] = useState("this_month");
   
   const tabs = [
     { id: "all", label: "All Orders" },
-    { id: "pending", label: "Pending" },
-    { id: "processing", label: "Processing" },
-    { id: "shipped", label: "Shipped" },
+    { id: "pending", label: "New Orders" },
+    { id: "blocked", label: "On Hold (Credit)" },
+    { id: "processing", label: "Picking" },
+    { id: "shipped", label: "Dispatched" },
     { id: "delivered", label: "Delivered" },
   ];
 
-  const filteredOrders = MOCK_ORDERS.filter(o => {
+  const filteredOrders = orders.filter(o => {
     const matchesTab = activeTab === "all" || o.status === activeTab;
     const matchesSearch = o.id.toLowerCase().includes(search.toLowerCase()) || 
                           o.customer.toLowerCase().includes(search.toLowerCase());
     return matchesTab && matchesSearch;
   });
 
+  const handleUpdateOrder = (updatedOrder) => {
+    setOrders(orders.map(o => o.id === updatedOrder.id ? updatedOrder : o));
+  };
+
   return (
     <>
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mt-2 gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Orders</h1>
-          <p className="text-[13px] text-slate-500 mt-1">Manage all B2B orders, track shipments, and process fulfillments.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Orders & Dispatch</h1>
+          <p className="text-[13px] text-slate-500 mt-1">Manage B2B orders, urgent deliveries, picking, and credit holds.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
           <button className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
@@ -122,9 +134,9 @@ export function Orders() {
               <tr>
                 <th className="py-3.5 px-5 font-bold text-slate-500 tracking-wide uppercase text-[11px]">Order Details</th>
                 <th className="py-3.5 px-5 font-bold text-slate-500 tracking-wide uppercase text-[11px]">Customer</th>
-                <th className="py-3.5 px-5 font-bold text-slate-500 tracking-wide uppercase text-[11px]">Date</th>
+                <th className="py-3.5 px-5 font-bold text-slate-500 tracking-wide uppercase text-[11px]">Date & Time</th>
                 <th className="py-3.5 px-5 font-bold text-slate-500 tracking-wide uppercase text-[11px] text-center">Status</th>
-                <th className="py-3.5 px-5 font-bold text-slate-500 tracking-wide uppercase text-[11px] text-right">Amount</th>
+                <th className="py-3.5 px-5 font-bold text-slate-500 tracking-wide uppercase text-[11px] text-right">Amount (Incl. Tax)</th>
                 <th className="py-3.5 px-5 font-bold text-slate-500 tracking-wide uppercase text-[11px] w-12 text-center">Action</th>
               </tr>
             </thead>
@@ -133,10 +145,12 @@ export function Orders() {
                 <tr key={o.id} className="border-b border-slate-100 hover:bg-slate-50/50 transition-colors group">
                   <td className="py-4 px-5">
                     <div className="font-bold text-blue-600 hover:underline cursor-pointer flex items-center gap-2">
-                      {o.id}
+                      <Link to={`/orders/${o.id}`} className="hover:underline">{o.id}</Link>
+                      {o.isUrgent && <span className="bg-rose-100 text-rose-600 text-[9px] px-1.5 py-0.5 rounded-sm uppercase tracking-wide border border-rose-200">Urgent</span>}
                     </div>
-                    <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-                      <PackageOpen size={12} /> {o.items} items
+                    <div className="text-[11px] text-slate-500 mt-1 flex flex-col gap-0.5">
+                      <span className="flex items-center gap-1"><PackageOpen size={12} /> {o.items} items</span>
+                      <span className="text-slate-400">By: {o.placedBy}</span>
                     </div>
                   </td>
                   <td className="py-4 px-5">
@@ -144,24 +158,19 @@ export function Orders() {
                     <div className="text-[11px] text-slate-500 mt-0.5">{o.city}</div>
                   </td>
                   <td className="py-4 px-5 font-medium text-slate-600">
-                    {new Date(o.date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })}
+                    <div className="text-[13px]">{new Date(o.date).toLocaleDateString("en-IN", { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+                    <div className="text-[11px] text-slate-400">{new Date(o.date).toLocaleTimeString("en-IN", { hour: '2-digit', minute: '2-digit' })}</div>
                   </td>
                   <td className="py-4 px-5 text-center">
-                    <StatusBadge status={o.status} />
+                    <StatusBadge status={o.status} reason={o.blockReason} />
                   </td>
                   <td className="py-4 px-5 text-right">
                     <div className="font-bold text-slate-800 text-[14px]">₹{o.amount.toLocaleString('en-IN')}</div>
-                    {o.status === "pending" && <div className="text-[10px] text-rose-500 font-bold mt-0.5 uppercase">Unpaid</div>}
-                    {["shipped", "delivered"].includes(o.status) && <div className="text-[10px] text-emerald-600 font-bold mt-0.5 uppercase">Paid</div>}
+                    {o.isUrgent && <div className="text-[10px] text-slate-400 mt-0.5">+ Surcharge</div>}
                   </td>
                   <td className="py-4 px-5 text-center">
-                    <div className="flex items-center justify-center gap-2 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors" title="View Order">
-                        <Eye size={16} />
-                      </button>
-                      <button className="p-1.5 text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 rounded-md transition-colors" title="Update Status">
-                        <MoreHorizontal size={16} />
-                      </button>
+                    <div className="flex items-center justify-center opacity-100 sm:opacity-0 group-hover:opacity-100 transition-opacity">
+                      <OrderActions order={o} onUpdate={handleUpdateOrder} />
                     </div>
                   </td>
                 </tr>
