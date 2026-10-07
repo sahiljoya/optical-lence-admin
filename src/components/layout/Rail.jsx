@@ -10,11 +10,11 @@ export function Rail() {
     ["Customers", Users, "/customers"], 
     ["Orders", ClipboardList, "/orders"], 
     ["Inventory", Package, "/products"], 
-    ["Billing", Receipt, "#"], 
-    ["Dispatch", Truck, "#"], 
+    ["Billing", Receipt, "/billing"], 
+    ["Dispatch", Truck, "/dispatch"], 
     ["Returns", Undo2, "#"], 
     ["Reports", BarChart3, "#"], 
-    ["Access", KeyRound, "/settings"]
+    ["Access", KeyRound, "#"]
   ];
   
   return (
@@ -29,7 +29,7 @@ export function Rail() {
       <nav>
         {nav.map(([l, I, href]) => (
           href === "#" ? (
-            <button key={l} className="vw-nav w-full"><I size={20} />{l}</button>
+            <button key={l} type="button" className="vw-nav w-full opacity-50 cursor-not-allowed hover:bg-transparent" onClick={(e) => e.preventDefault()}><I size={20} />{l}</button>
           ) : (
             <Link key={l} to={href} className="vw-nav w-full" activeProps={{ className: "active" }} activeOptions={{ exact: href === "/" }}>
               <I size={20} />{l}
@@ -37,10 +37,13 @@ export function Rail() {
           )
         ))}
       </nav>
-      <div className="mt-auto flex items-center gap-3" style={{ background: "var(--soft-bg)", borderRadius: 14, padding: 14 }}>
-        <span className="grid place-items-center rounded-full" style={{ width: 36, height: 36, background: "var(--card)", color: "var(--primary)" }}><Headphones size={18} /></span>
-        <div><div style={{ fontSize: 14, fontWeight: 600 }}>Support</div><div style={{ fontSize: 12, color: "var(--muted)" }}>Mon - Sat, 9 AM - 6 PM</div></div>
-      </div>
+      <Link to="/support" className="mt-auto flex items-center gap-3 w-full hover:bg-slate-100 transition-colors" style={{ background: "var(--soft-bg)", borderRadius: 14, padding: 14 }}>
+        <span className="grid place-items-center rounded-full shrink-0" style={{ width: 36, height: 36, background: "var(--card)", color: "var(--primary)" }}><Headphones size={18} /></span>
+        <div className="flex-1 min-w-0">
+          <div style={{ fontSize: 14, fontWeight: 600 }} className="text-slate-800">Support</div>
+          <div style={{ fontSize: 11, color: "var(--muted)" }} className="truncate">Manage Tickets</div>
+        </div>
+      </Link>
     </aside>
   );
 }
