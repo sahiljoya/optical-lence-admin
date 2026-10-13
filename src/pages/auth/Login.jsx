@@ -1,19 +1,33 @@
 import { useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Eye, EyeOff, Lock, Mail, ArrowRight, ShieldCheck } from "lucide-react";
+import { Eye, EyeOff, Lock, Phone, ArrowRight, ShieldCheck } from "lucide-react";
+import { makeRequest } from "@/config/apiClient";
+import { setItem } from "@/services/storage";
 import "@/styles/veriwide.css";
 
 export function Login() {
   const [showPassword, setShowPassword] = useState(false);
-  const [email, setEmail] = useState("admin@vishaloptical.com");
-  const [password, setPassword] = useState("admin123");
+  const [phone, setPhone] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
 
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
-    localStorage.setItem("TEMP_DEV_AUTH_TOKEN", "valid_admin");
-    navigate({ to: "/" });
+    setError("");
+    setLoading(true);
+    try {
+      const res = await makeRequest("post", "/admin/login", { phone, password });
+      setItem("admin_token", res.data.token);
+      setItem("admin_user", res.data.user);
+      navigate({ to: "/" });
+    } catch (err) {
+      setError(err.message || "Something went wrong. Please try again.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -84,19 +98,24 @@ export function Login() {
             </div>
 
             <form onSubmit={handleLogin} className="space-y-5">
+              {error && (
+                <div className="px-4 py-3 rounded-xl bg-rose-50 border border-rose-100 text-rose-600 text-sm font-medium">
+                  {error}
+                </div>
+              )}
               <div>
-                <label className="block mb-2 text-sm font-semibold text-slate-900">Email Address</label>
+                <label className="block mb-2 text-sm font-semibold text-slate-900">Phone Number</label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400 group-focus-within:text-blue-600 transition-colors">
-                    <Mail size={18} />
+                    <Phone size={18} />
                   </div>
-                  <input 
-                    type="email" 
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
                     required
                     className="w-full pl-10 pr-4 py-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 transition-all text-sm font-medium"
-                    placeholder="admin@vishaloptical.com" 
+                    placeholder="9876543210"
                   />
                 </div>
               </div>
@@ -128,11 +147,12 @@ export function Login() {
                 </div>
               </div>
 
-              <button 
-                type="submit" 
-                className="w-full mt-8 py-3.5 px-4 rounded-xl font-semibold flex items-center justify-center gap-2 text-white bg-blue-600 hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-600/20 active:scale-[0.98] transition-all"
+              <button
+                type="submit"
+                disabled={loading}
+                className="w-full mt-8 py-3.5 px-4 rounded-xl font-semibold flex items-center justify-center gap-2 text-white bg-blue-600 hover:bg-blue-700 hover:shadow-lg hover:shadow-blue-600/20 active:scale-[0.98] transition-all disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Sign in to Dashboard <ArrowRight size={18} />
+                {loading ? "Signing in..." : "Sign in to Dashboard"} {!loading && <ArrowRight size={18} />}
               </button>
             </form>
             

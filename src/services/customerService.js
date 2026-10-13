@@ -1,5 +1,6 @@
 // Centralized Mock Service for Customers (Frontend-Only)
-// This uses localStorage to persist data during UI development.
+// This uses sessionStorage to persist data during UI development.
+import { getItem, setItem } from "./storage";
 
 const STORAGE_KEY = "MOCK_CUSTOMERS_DB";
 
@@ -13,19 +14,19 @@ const initialMockData = [
 
 // Initialize DB
 if (typeof window !== "undefined") {
-  if (!localStorage.getItem(STORAGE_KEY)) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(initialMockData));
+  if (!getItem(STORAGE_KEY)) {
+    setItem(STORAGE_KEY, initialMockData);
   }
 }
 
 const getDb = () => {
   if (typeof window === "undefined") return initialMockData;
-  return JSON.parse(localStorage.getItem(STORAGE_KEY)) || initialMockData;
+  return getItem(STORAGE_KEY) || initialMockData;
 };
 
 const saveDb = (data) => {
   if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    setItem(STORAGE_KEY, data);
   }
 };
 

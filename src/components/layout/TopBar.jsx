@@ -1,20 +1,30 @@
 import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import { Search, Bell, ChevronDown, User, Lock, LogOut, X, Camera } from "lucide-react";
 import { useIst } from "@/hooks/useIst";
+import { getItem } from "@/services/storage";
+import { logout } from "@/config/authService";
 
 export function TopBar() {
   const { d, t } = useIst();
+  const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const dropdownRef = useRef(null);
 
-  // Mock logged-in user state
+  const storedUser = getItem("admin_user");
+
   const [user, setUser] = useState({
-    name: "Sahil",
-    role: "Owner",
-    email: "sahil@opticalerp.com",
-    phone: "+91 9876543210"
+    name: storedUser?.name || "Admin",
+    role: storedUser?.role?.name || "Staff",
+    email: storedUser?.email || "",
+    phone: storedUser?.phone || ""
   });
+
+  const handleLogout = () => {
+    logout();
+    navigate({ to: "/login" });
+  };
 
   const [profileForm, setProfileForm] = useState(user);
   const [passwordForm, setPasswordForm] = useState({ current: "", new: "", confirm: "" });
@@ -81,7 +91,10 @@ export function TopBar() {
                 >
                   <User size={16} /> My Profile
                 </button>
-                <button className="flex items-center gap-2 px-3 py-2 text-[13px] font-medium text-rose-600 rounded-lg hover:bg-rose-50 transition-colors">
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleLogout(); }}
+                  className="flex items-center gap-2 px-3 py-2 text-[13px] font-medium text-rose-600 rounded-lg hover:bg-rose-50 transition-colors"
+                >
                   <LogOut size={16} /> Logout
                 </button>
               </div>

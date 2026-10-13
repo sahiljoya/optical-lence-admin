@@ -12,9 +12,9 @@ export function Rail() {
     ["Inventory", Package, "/products"], 
     ["Billing", Receipt, "/billing"], 
     ["Dispatch", Truck, "/dispatch"], 
-    ["Returns", Undo2, "#"], 
-    ["Reports", BarChart3, "#"], 
-    ["Access", KeyRound, "#"]
+    ["Returns", Undo2, "/returns"], 
+    ["Reports", BarChart3, "/reports"], 
+    ["Access", KeyRound, "/settings"]
   ];
   
   return (
