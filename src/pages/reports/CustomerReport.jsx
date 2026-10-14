@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ArrowLeft, Edit, TrendingUp, IndianRupee, CreditCard, ShoppingBag, Eye, Settings, Download } from "lucide-react";
 import { Link, useParams } from "@tanstack/react-router";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from "recharts";
+import { notify } from "@/lib/notify";
 import "@/styles/veriwide.css";
 
 const MOCK_CUSTOMERS = {
@@ -29,7 +30,7 @@ export function CustomerReport() {
 
   const handleUpdateLimit = (e) => {
     e.preventDefault();
-    alert(`Credit Limit for ${customer.name} updated to ₹${newLimit}`);
+    notify.success(`Credit Limit for ${customer.name} updated to ₹${newLimit}`);
     setLimitModal(false);
   }
 

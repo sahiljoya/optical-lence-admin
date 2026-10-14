@@ -7,16 +7,21 @@ import {
 } from "lucide-react";
 import { customerService } from "@/services/customerService";
 import { StatusPill } from "@/components/common/StatusPill";
+import { notify } from "@/lib/notify";
+import { hasPermission } from "@/lib/permissions";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   AreaChart, Area
 } from "recharts";
 import "@/styles/veriwide.css";
 
-const MOCK_SALES_DATA = [
-  { name: 'Jan', total: 4000 }, { name: 'Feb', total: 3000 }, { name: 'Mar', total: 5000 },
-  { name: 'Apr', total: 4500 }, { name: 'May', total: 6000 }, { name: 'Jun', total: 7500 },
-];
+const ACCOUNT_STATUS_STYLES = {
+  Hold: "bg-rose-50 text-rose-700 border-rose-200",
+  Short: "bg-amber-50 text-amber-700 border-amber-200",
+  Cash: "bg-blue-50 text-blue-700 border-blue-200",
+  Credit: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Review: "bg-purple-50 text-purple-700 border-purple-200",
+};
 
 export function CustomerDetails() {
   const { id } = useParams({ strict: false });
@@ -28,19 +33,44 @@ export function CustomerDetails() {
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferData, setTransferData] = useState({ subId: null, newParentId: "" });
 
-  const [subForm, setSubForm] = useState({ id: null, name: "", phone: "", email: "", password: "", permissions: { allow_cart: true, allow_order: false, allow_stock: true }, parent_customer_id: "" });
+  const [subForm, setSubForm] = useState({ id: null, name: "", phone: "", email: "", password: "", allow_cart: true, allow_order: false, show_quantity: true, parent_customer_id: "" });
+
+  const [showLimitModal, setShowLimitModal] = useState(false);
+  const [limitForm, setLimitForm] = useState({ amount: "", reason: "" });
+
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [newStatus, setNewStatus] = useState("Credit");
+
+  const [orderVolume, setOrderVolume] = useState([]);
+  const [recentOrders, setRecentOrders] = useState([]);
+  const [cartItems, setCartItems] = useState([]);
 
   const fetchData = async () => {
     setLoading(true);
     try {
       const res = await customerService.getCustomerById(id);
-      setData(res.data);
-      const allRes = await customerService.getCustomers();
-      // Only keep approved and active customers (excluding current)
-      setAllCustomers(allRes.data.list.filter(c => c.id !== id && c.approval_status === "APPROVED" && c.is_active));
+      const subRes = await customerService.getSubCustomers(id);
+      setData({
+        ...res.data,
+        id: res.data._id,
+        sub_customers: (subRes.data || []).map(s => ({ ...s, id: s._id })),
+      });
+      const allRes = await customerService.getCustomers({ approval_status: "APPROVED", limit: 500 });
+      setAllCustomers(allRes.data.list
+        .map(c => ({ ...c, id: c._id }))
+        .filter(c => c.id !== id && c.is_active));
+
+      const [volumeRes, ordersRes, cartRes] = await Promise.all([
+        customerService.getOrderVolume(id),
+        customerService.getRecentOrders(id),
+        customerService.getCart(id),
+      ]);
+      setOrderVolume(volumeRes.data || []);
+      setRecentOrders(ordersRes.data || []);
+      setCartItems(cartRes.data || []);
     } catch (err) {
       console.error(err);
-      alert("Customer not found or error loading data.");
+      notify.error("Customer not found or error loading data.");
     } finally {
       setLoading(false);
     }
@@ -50,40 +80,94 @@ export function CustomerDetails() {
     fetchData();
   }, [id]);
 
-  const handleResetDevice = async () => {
-    if (!confirm("Are you sure you want to reset the login device for this account?")) return;
-    setActionLoading("device");
-    await customerService.resetDevice(id);
-    alert("Device reset successfully. Customer can now login from a new device.");
-    setActionLoading(null);
+  const handleResetDevice = async (platform) => {
+    const label = platform === "web" ? "web" : "app";
+    if (!confirm(`Are you sure you want to reset the ${label} login device for this account?`)) return;
+    setActionLoading(`device-${platform}`);
+    try {
+      await customerService.resetDevice(id, platform);
+      notify.success(`${label === "web" ? "Web" : "App"} device reset successfully. Customer can now log in from a new device.`);
+      await fetchData();
+    } catch (err) {
+      notify.error(err.message || "Failed to reset device.");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
-  const handleRequestLimit = async () => {
+  const handleOpenLimitModal = () => {
+    setLimitForm({ amount: "", reason: "" });
+    setShowLimitModal(true);
+  };
+
+  const handleOpenStatusModal = () => {
+    setNewStatus(data.account_status || "Credit");
+    setShowStatusModal(true);
+  };
+
+  const handleChangeStatus = async (e) => {
+    e.preventDefault();
+    setActionLoading("status");
+    try {
+      await customerService.updateAccountStatus(id, newStatus);
+      notify.success(`Account status updated to ${newStatus}.`);
+      setShowStatusModal(false);
+      await fetchData();
+    } catch (err) {
+      notify.error(err.message || "Failed to update account status.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleRequestLimit = async (e) => {
+    e.preventDefault();
     setActionLoading("limit");
-    await customerService.requestLimitIncrease(id, { amount: 100000 });
-    alert("Limit increase request sent to Accounts Team.");
-    setActionLoading(null);
+    try {
+      await customerService.requestLimitIncrease(id, Number(limitForm.amount), limitForm.reason);
+      notify.success("Limit increase request sent to Accounts Team.");
+      setShowLimitModal(false);
+    } catch (err) {
+      notify.error(err.message || "Failed to request limit increase.");
+    } finally {
+      setActionLoading(null);
+    }
   };
 
   const handleAddSub = async (e) => {
     e.preventDefault();
     setActionLoading("sub");
     try {
+      const permissions = {
+        allow_cart: subForm.allow_cart,
+        allow_order: subForm.allow_order,
+        show_quantity: subForm.show_quantity,
+      };
       if (subForm.id) {
-        // Edit mode
-        await customerService.updateSubCustomer(subForm.id, subForm);
-        alert("Sub-customer updated successfully!");
+        // Edit mode: name/phone/password via one endpoint, permissions via another
+        await customerService.updateSubCustomer(subForm.id, {
+          name: subForm.name,
+          phone: subForm.phone,
+          ...(subForm.password ? { password: subForm.password } : {}),
+        });
+        await customerService.updateSubCustomerPermissions(subForm.id, permissions);
+        notify.success("Sub-customer updated successfully!");
       } else {
         // Create mode
-        await customerService.createSubCustomer(id, subForm);
-        alert("Sub-customer added successfully!");
+        await customerService.createSubCustomer(id, {
+          name: subForm.name,
+          phone: subForm.phone,
+          password: subForm.password,
+          ...permissions,
+        });
+        notify.success("Sub-customer added successfully!");
       }
       setShowSubModal(false);
-      setSubForm({ id: null, name: "", phone: "", email: "", password: "", permissions: { allow_cart: true, allow_order: false, allow_stock: true }, parent_customer_id: "" });
+      setSubForm({ id: null, name: "", phone: "", email: "", password: "", allow_cart: true, allow_order: false, show_quantity: true, parent_customer_id: "" });
       await fetchData();
     } catch (err) {
       console.error(err);
-      alert("Error adding/updating sub-customer");
+      notify.error(err.message || "Error adding/updating sub-customer");
     } finally {
       setActionLoading(null);
     }
@@ -96,29 +180,27 @@ export function CustomerDetails() {
       phone: sub.phone,
       email: sub.email || "",
       password: "",
-      permissions: {
-        allow_cart: sub.permissions?.allow_cart ?? true,
-        allow_order: sub.permissions?.allow_order ?? false,
-        allow_stock: sub.permissions?.allow_stock ?? true
-      },
+      allow_cart: sub.subcustomer_permissions?.allow_cart ?? true,
+      allow_order: sub.subcustomer_permissions?.allow_order ?? false,
+      show_quantity: sub.subcustomer_permissions?.show_quantity ?? true,
       parent_customer_id: id // current customer id
     });
     setShowSubModal(true);
   };
 
-  const handleToggleSubStatus = async (subId) => {
+  const handleToggleSubStatus = async (sub) => {
     if (!confirm("Are you sure you want to change the status of this sub-customer?")) return;
     try {
-      await customerService.toggleSubCustomerStatus(subId);
+      await customerService.updateSubCustomer(sub.id, { is_active: !sub.is_active });
       await fetchData();
     } catch (err) {
-      alert("Failed to change status.");
+      notify.error(err.message || "Failed to change status.");
     }
   };
 
   const handleTransferSub = async (e) => {
     e.preventDefault();
-    if (!transferData.newParentId) return alert("Please select a target shop/customer.");
+    if (!transferData.newParentId) return notify.warning("Please select a target shop/customer.");
     
     const targetCustomer = allCustomers.find(c => c.id === transferData.newParentId);
     if (!confirm(`Are you sure you want to permanently transfer this staff member to "${targetCustomer?.company_name || 'the selected shop'}"?`)) {
@@ -128,11 +210,11 @@ export function CustomerDetails() {
     setActionLoading("transfer");
     try {
       await customerService.updateSubCustomer(transferData.subId, { parent_customer_id: transferData.newParentId });
-      alert("Staff member successfully transferred to new shop!");
+      notify.success("Staff member successfully transferred to new shop!");
       setShowTransferModal(false);
       await fetchData();
     } catch (err) {
-      alert("Failed to transfer staff.");
+      notify.error(err.message || "Failed to transfer staff.");
     } finally {
       setActionLoading(null);
     }
@@ -140,7 +222,7 @@ export function CustomerDetails() {
 
   const handleDelete = () => {
     if (confirm("Are you sure you want to delete this customer? This action cannot be undone.")) {
-      alert("Customer deleted.");
+      notify.success("Customer deleted.");
     }
   };
 
@@ -168,8 +250,12 @@ export function CustomerDetails() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <button className="vw-btn-secondary h-9 px-4 text-[13px] flex items-center gap-2 bg-white shadow-sm"><Edit size={14}/> Edit Profile</button>
-          <button onClick={handleDelete} className="vw-btn-secondary h-9 px-4 text-[13px] text-destructive hover:bg-destructive/10 hover:border-destructive/30 flex items-center gap-2 bg-white shadow-sm transition-colors"><Trash2 size={14}/> Delete</button>
+          {hasPermission("EDIT_CUSTOMER") && (
+            <button className="vw-btn-secondary h-9 px-4 text-[13px] flex items-center gap-2 bg-white shadow-sm"><Edit size={14}/> Edit Profile</button>
+          )}
+          {hasPermission("DELETE_CUSTOMER") && (
+            <button onClick={handleDelete} className="vw-btn-secondary h-9 px-4 text-[13px] text-destructive hover:bg-destructive/10 hover:border-destructive/30 flex items-center gap-2 bg-white shadow-sm transition-colors"><Trash2 size={14}/> Delete</button>
+          )}
         </div>
       </div>
 
@@ -246,6 +332,17 @@ export function CustomerDetails() {
             <div className="p-5 space-y-5 text-[13px]">
               <div className="flex items-center justify-between">
                 <div>
+                  <span className="text-slate-500 block text-[11px] uppercase mb-1">Account Status</span>
+                  <span className={`font-bold px-2.5 py-1 border rounded-md uppercase text-[11px] tracking-wide ${ACCOUNT_STATUS_STYLES[data.account_status] || "bg-slate-50 text-slate-700 border-slate-200"}`}>
+                    {data.account_status || "N/A"}
+                  </span>
+                </div>
+                {hasPermission("APPROVE_CUSTOMER") && (
+                  <button onClick={handleOpenStatusModal} className="text-[12px] font-semibold text-blue-600 hover:underline">Change</button>
+                )}
+              </div>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <div>
                   <span className="text-slate-500 block text-[11px] uppercase mb-1">Pricing Tier</span>
                   <span className="font-bold text-blue-700 px-2.5 py-1 bg-blue-50 border border-blue-100 rounded-md uppercase text-[11px] tracking-wide">
                     {data.pricing_tier ? data.pricing_tier.replace(/_/g, " ") : "N/A"}
@@ -257,9 +354,11 @@ export function CustomerDetails() {
                 </div>
               </div>
               <div className="pt-4 border-t border-slate-100">
-                <button onClick={handleRequestLimit} disabled={actionLoading === "limit"} className="w-full h-9 flex items-center justify-center gap-2 text-[13px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                  {actionLoading === "limit" ? <Loader2 size={14} className="animate-spin" /> : <TrendingUp size={14}/>} Request Limit Increase
+                {hasPermission("REQUEST_CREDIT_LIMIT") && (
+                <button onClick={handleOpenLimitModal} className="w-full h-9 flex items-center justify-center gap-2 text-[13px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
+                  <TrendingUp size={14}/> Request Limit Increase
                 </button>
+                )}
               </div>
             </div>
           </div>
@@ -269,13 +368,21 @@ export function CustomerDetails() {
             <div className="p-5 border-b border-amber-100 bg-amber-50/30">
               <h3 className="text-[12px] font-bold text-amber-600 uppercase tracking-wider flex items-center gap-2"><MonitorSmartphone size={14}/> Device Security</h3>
             </div>
-            <div className="p-5">
-              <p className="text-[13px] font-medium text-slate-800 mb-1">{data.device_id}</p>
-              <p className="text-[11px] text-slate-500 mb-4">Last Login: {data.device_last_login}</p>
-              
-              <button onClick={handleResetDevice} disabled={actionLoading === "device"} className="w-full h-8 flex items-center justify-center gap-2 text-[12px] font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 rounded-md transition-colors">
-                {actionLoading === "device" ? <Loader2 size={14} className="animate-spin" /> : "Reset Device Lock"}
-              </button>
+            <div className="p-5 space-y-4">
+              <div>
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">App Device</p>
+                <p className="text-[13px] font-medium text-slate-800 mb-2">{data.device_id || "Not logged in yet"}</p>
+                <button onClick={() => handleResetDevice("app")} disabled={!data.device_id || actionLoading === "device-app"} className="w-full h-8 flex items-center justify-center gap-2 text-[12px] font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors">
+                  {actionLoading === "device-app" ? <Loader2 size={14} className="animate-spin" /> : "Reset App Device"}
+                </button>
+              </div>
+              <div className="pt-4 border-t border-slate-100">
+                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">Web Device</p>
+                <p className="text-[13px] font-medium text-slate-800 mb-2">{data.web_device_id || "Not logged in yet"}</p>
+                <button onClick={() => handleResetDevice("web")} disabled={!data.web_device_id || actionLoading === "device-web"} className="w-full h-8 flex items-center justify-center gap-2 text-[12px] font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors">
+                  {actionLoading === "device-web" ? <Loader2 size={14} className="animate-spin" /> : "Reset Web Device"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -290,7 +397,7 @@ export function CustomerDetails() {
               <h3 className="text-[13px] font-bold text-slate-800 mb-4">Order Volume (6 Months)</h3>
               <div className="flex-1 min-h-0 -ml-4">
                 <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={MOCK_SALES_DATA} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
+                  <AreaChart data={orderVolume} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
                     <defs>
                       <linearGradient id="colorTotal" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/>
@@ -312,7 +419,7 @@ export function CustomerDetails() {
               <div className="flex-1 flex flex-col justify-center">
                 {(() => {
                   const limit = data.credit_limit || 0;
-                  const used = limit * 0.45; // Mocking 45% usage for UI purposes
+                  const used = data.current_balance || 0;
                   const available = limit - used;
                   const percent = limit > 0 ? (used / limit) * 100 : 0;
                   
@@ -380,9 +487,9 @@ export function CustomerDetails() {
                       <td className="py-3 px-5 text-slate-600">{sub.phone}</td>
                       <td className="py-3 px-5">
                         <div className="flex flex-wrap gap-2">
-                          {sub.permissions?.allow_cart ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Cart: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Cart: No</span>}
-                          {sub.permissions?.allow_order ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Order: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Order: No</span>}
-                          {sub.permissions?.allow_stock ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Stock: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Stock: No</span>}
+                          {sub.subcustomer_permissions?.allow_cart ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Cart: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Cart: No</span>}
+                          {sub.subcustomer_permissions?.allow_order ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Order: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Order: No</span>}
+                          {sub.subcustomer_permissions?.show_quantity ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Stock: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Stock: No</span>}
                         </div>
                       </td>
                       <td className="py-3 px-5 text-center"><StatusPill status={sub.is_active ? "active" : "frozen"} /></td>
@@ -397,7 +504,7 @@ export function CustomerDetails() {
                           <button onClick={() => openEditSubModal(sub)} className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors" title="Edit">
                             <Edit size={16} />
                           </button>
-                          <button onClick={() => handleToggleSubStatus(sub.id)} className={`p-1.5 rounded transition-colors ${sub.is_active ? "text-amber-600 hover:bg-amber-50" : "text-emerald-600 hover:bg-emerald-50"}`} title={sub.is_active ? "Deactivate" : "Activate"}>
+                          <button onClick={() => handleToggleSubStatus(sub)} className={`p-1.5 rounded transition-colors ${sub.is_active ? "text-amber-600 hover:bg-amber-50" : "text-emerald-600 hover:bg-emerald-50"}`} title={sub.is_active ? "Deactivate" : "Activate"}>
                             {sub.is_active ? <PowerOff size={16} /> : <Power size={16} />}
                           </button>
                         </div>
@@ -420,15 +527,17 @@ export function CustomerDetails() {
                 <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2"><ShoppingCart size={16} className="text-amber-500"/> Active Cart</h3>
               </div>
               <div className="p-5 space-y-3 flex-1">
-                {data.cart_items?.length > 0 ? data.cart_items.map(item => (
-                  <div key={item.id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 shadow-sm rounded-lg hover:border-slate-300 transition-colors">
+                {cartItems.length > 0 ? cartItems.map(item => (
+                  <div key={item._id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 shadow-sm rounded-lg hover:border-slate-300 transition-colors">
                     <div>
-                      <div className="font-semibold text-[13px] text-slate-800">{item.product}</div>
-                      <div className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">Added by: <span className="font-medium text-slate-700">{item.added_by}</span></div>
+                      <div className="font-semibold text-[13px] text-slate-800">
+                        {[item.product_id?.brand, item.product_id?.index, item.product_id?.base, item.product_id?.coating].filter(Boolean).join(" ") || "Product"}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1">SPH {item.sph} / CYL {item.cyl}{item.axis != null ? ` / AXIS ${item.axis}` : ""}{item.add != null ? ` / ADD ${item.add}` : ""}</div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-[14px] text-slate-900">₹{item.price}</div>
-                      <div className="text-[11px] font-medium text-slate-500">Qty: {item.qty}</div>
+                      <div className="font-bold text-[14px] text-slate-900">₹{item.unit_price}</div>
+                      <div className="text-[11px] font-medium text-slate-500">Qty: {item.quantity}</div>
                     </div>
                   </div>
                 )) : (
@@ -444,14 +553,14 @@ export function CustomerDetails() {
                 <Link to="/orders" className="text-[12px] text-blue-600 hover:underline font-semibold">View All</Link>
               </div>
               <div className="divide-y divide-slate-100 flex-1">
-                {data.recent_orders?.length > 0 ? data.recent_orders.slice(0,5).map(ord => (
-                  <div key={ord.id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                {recentOrders.length > 0 ? recentOrders.slice(0,5).map(ord => (
+                  <div key={ord._id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                     <div>
-                      <div className="font-bold text-[13px] text-blue-600 cursor-pointer hover:underline">{ord.id}</div>
-                      <div className="text-[11px] text-slate-500 mt-1">{ord.date} • <span className="font-medium text-slate-700">{ord.items_count} items</span></div>
+                      <div className="font-bold text-[13px] text-blue-600 cursor-pointer hover:underline">{ord.order_number}</div>
+                      <div className="text-[11px] text-slate-500 mt-1">{new Date(ord.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} • <span className="font-medium text-slate-700">{ord.items?.length || 0} items</span></div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-[13px] text-slate-900">₹{ord.total.toLocaleString()}</div>
+                      <div className="font-bold text-[13px] text-slate-900">₹{ord.total_amount?.toLocaleString()}</div>
                       <div className="text-[11px] text-emerald-600 font-semibold mt-1 bg-emerald-50 px-1.5 py-0.5 rounded-sm inline-block">{ord.status}</div>
                     </div>
                   </div>
@@ -510,21 +619,21 @@ export function CustomerDetails() {
                 <p className="text-[11px] text-slate-500 mb-4 font-medium">Pricing is hidden from staff by default.</p>
                 <div className="space-y-3">
                   <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
-                    <input type="checkbox" checked={subForm.permissions.allow_cart} onChange={e=>setSubForm({...subForm, permissions: {...subForm.permissions, allow_cart: e.target.checked}})} className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                    <input type="checkbox" checked={subForm.allow_cart} onChange={e=>setSubForm({...subForm, allow_cart: e.target.checked})} className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
                     <div>
                       <div className="text-[13px] font-bold text-slate-800">Allow Adding to Cart</div>
                       <div className="text-[11px] text-slate-500 font-medium">Can add/remove items in the cart on behalf of the shop.</div>
                     </div>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
-                    <input type="checkbox" checked={subForm.permissions.allow_order} onChange={e=>setSubForm({...subForm, permissions: {...subForm.permissions, allow_order: e.target.checked}})} className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                    <input type="checkbox" checked={subForm.allow_order} onChange={e=>setSubForm({...subForm, allow_order: e.target.checked})} className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
                     <div>
                       <div className="text-[13px] font-bold text-slate-800">Allow Placing Orders</div>
                       <div className="text-[11px] text-slate-500 font-medium">Can finalise and place orders directly to the company.</div>
                     </div>
                   </label>
                   <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
-                    <input type="checkbox" checked={subForm.permissions.allow_stock} onChange={e=>setSubForm({...subForm, permissions: {...subForm.permissions, allow_stock: e.target.checked}})} className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                    <input type="checkbox" checked={subForm.show_quantity} onChange={e=>setSubForm({...subForm, show_quantity: e.target.checked})} className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
                     <div>
                       <div className="text-[13px] font-bold text-slate-800">Allow Checking Stock Quantity</div>
                       <div className="text-[11px] text-slate-500 font-medium">Can view the live available stock quantities for products.</div>
@@ -568,6 +677,65 @@ export function CustomerDetails() {
                 <button type="button" onClick={() => setShowTransferModal(false)} className="h-9 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
                 <button disabled={actionLoading === "transfer"} type="submit" className="h-9 px-4 flex items-center gap-2 text-[12px] font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-all">
                   {actionLoading === "transfer" ? <Loader2 size={14} className="animate-spin" /> : "Transfer Now"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Request Limit Increase Modal */}
+      {showLimitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex justify-between items-center">
+              <h2 className="text-md font-bold text-slate-900 flex items-center gap-2">Request Limit Increase</h2>
+              <button onClick={() => setShowLimitModal(false)} className="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-xl transition-colors"><X size={16}/></button>
+            </div>
+            <form onSubmit={handleRequestLimit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Requested Amount (₹) <span className="text-red-500">*</span></label>
+                <input required type="number" min="1" value={limitForm.amount} onChange={e=>setLimitForm({...limitForm, amount: e.target.value})} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-slate-50/50 focus:bg-white" placeholder="e.g. 100000" />
+              </div>
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Reason <span className="text-red-500">*</span></label>
+                <textarea required value={limitForm.reason} onChange={e=>setLimitForm({...limitForm, reason: e.target.value})} rows={3} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-slate-50/50 focus:bg-white" placeholder="Why does this customer need a higher limit?" />
+              </div>
+              <div className="pt-2 flex justify-end gap-2 mt-2">
+                <button type="button" onClick={() => setShowLimitModal(false)} className="h-9 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
+                <button disabled={actionLoading === "limit"} type="submit" className="h-9 px-4 flex items-center gap-2 text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all">
+                  {actionLoading === "limit" ? <Loader2 size={14} className="animate-spin" /> : "Submit Request"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* Change Account Status Modal */}
+      {showStatusModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex justify-between items-center">
+              <h2 className="text-md font-bold text-slate-900 flex items-center gap-2">Change Account Status</h2>
+              <button onClick={() => setShowStatusModal(false)} className="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-xl transition-colors"><X size={16}/></button>
+            </div>
+            <form onSubmit={handleChangeStatus} className="p-5 space-y-4">
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">New Status <span className="text-red-500">*</span></label>
+                <select value={newStatus} onChange={e => setNewStatus(e.target.value)} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-white">
+                  <option value="Hold">Hold — do not take any orders</option>
+                  <option value="Short">Short — only high-value items</option>
+                  <option value="Cash">Cash — pay first, then goods</option>
+                  <option value="Credit">Credit — normal, up to limit</option>
+                  <option value="Review">Review — staff decides manually</option>
+                </select>
+                {newStatus === "Cash" && (
+                  <p className="text-[11px] text-amber-600 mt-1.5">Switching to Cash will reset this customer's Payment Term to "Cash" and Credit Limit to ₹0.</p>
+                )}
+              </div>
+              <div className="pt-2 flex justify-end gap-2 mt-2">
+                <button type="button" onClick={() => setShowStatusModal(false)} className="h-9 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
+                <button disabled={actionLoading === "status"} type="submit" className="h-9 px-4 flex items-center gap-2 text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all">
+                  {actionLoading === "status" ? <Loader2 size={14} className="animate-spin" /> : "Update Status"}
                 </button>
               </div>
             </form>

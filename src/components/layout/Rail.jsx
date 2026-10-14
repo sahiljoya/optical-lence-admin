@@ -1,22 +1,26 @@
 import { Link } from "@tanstack/react-router";
-import { 
-  Home, Users, ClipboardList, Package, Receipt, Truck, Undo2, BarChart3, KeyRound, Headphones
+import {
+  Home, Users, ClipboardList, Package, Receipt, Truck, Undo2, BarChart3, KeyRound, Headphones, Search, ListChecks, RefreshCw
 } from "lucide-react";
+import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
 export function Rail() {
   const nav = [
-    ["Dashboard", Home, "/"], 
-    ["Customers", Users, "/customers"], 
-    ["Orders", ClipboardList, "/orders"], 
-    ["Inventory", Package, "/products"], 
-    ["Billing", Receipt, "/billing"], 
-    ["Dispatch", Truck, "/dispatch"], 
-    ["Returns", Undo2, "/returns"], 
-    ["Reports", BarChart3, "/reports"], 
-    ["Access", KeyRound, "/settings"]
-  ];
-  
+    ["Dashboard", Home, "/", null],
+    ["Customers", Users, "/customers", "VIEW_CUSTOMERS"],
+    ["Orders", ClipboardList, "/orders", "VIEW_ORDERS"],
+    ["Products", Package, "/products", "VIEW_PRODUCTS"],
+    ["Find My Lens", Search, "/find-my-lens", "VIEW_INVENTORY"],
+    ["Billing", Receipt, "/billing", "VIEW_CUSTOMERS"],
+    ["Dispatch", Truck, "/dispatch", "MANAGE_DISPATCH"],
+    ["Pick List", ListChecks, "/pick-list", "MANAGE_DISPATCH"],
+    ["Replenishment", RefreshCw, "/replenishment", "VIEW_INVENTORY"],
+    ["Returns", Undo2, "/returns", "VIEW_ORDERS"],
+    ["Reports", BarChart3, "/reports", null],
+    ["Access", KeyRound, "/settings", "MANAGE_USERS"]
+  ].filter(([, , , permission]) => !permission || hasPermission(permission));
+
   return (
     <aside className="vw-rail">
       <div className="flex items-center gap-3 mb-6 px-1">
@@ -37,13 +41,15 @@ export function Rail() {
           )
         ))}
       </nav>
-      <Link to="/support" className="mt-auto flex items-center gap-3 w-full hover:bg-slate-100 transition-colors" style={{ background: "var(--soft-bg)", borderRadius: 14, padding: 14 }}>
-        <span className="grid place-items-center rounded-full shrink-0" style={{ width: 36, height: 36, background: "var(--card)", color: "var(--primary)" }}><Headphones size={18} /></span>
-        <div className="flex-1 min-w-0">
-          <div style={{ fontSize: 14, fontWeight: 600 }} className="text-slate-800">Support</div>
-          <div style={{ fontSize: 11, color: "var(--muted)" }} className="truncate">Manage Tickets</div>
-        </div>
-      </Link>
+      {hasPermission("MANAGE_SUPPORT") && (
+        <Link to="/support" className="mt-auto flex items-center gap-3 w-full hover:bg-slate-100 transition-colors" style={{ background: "var(--soft-bg)", borderRadius: 14, padding: 14 }}>
+          <span className="grid place-items-center rounded-full shrink-0" style={{ width: 36, height: 36, background: "var(--card)", color: "var(--primary)" }}><Headphones size={18} /></span>
+          <div className="flex-1 min-w-0">
+            <div style={{ fontSize: 14, fontWeight: 600 }} className="text-slate-800">Support</div>
+            <div style={{ fontSize: 11, color: "var(--muted)" }} className="truncate">Manage Tickets</div>
+          </div>
+        </Link>
+      )}
     </aside>
   );
 }

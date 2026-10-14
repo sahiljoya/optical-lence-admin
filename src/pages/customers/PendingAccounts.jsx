@@ -3,6 +3,8 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, CheckCircle, Clock, ShieldCheck, X, Loader2, AlertCircle } from "lucide-react";
 import { customerService } from "@/services/customerService";
 import { StatusPill } from "@/components/common/StatusPill";
+import { notify } from "@/lib/notify";
+import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
 export function PendingAccounts() {
@@ -14,31 +16,43 @@ export function PendingAccounts() {
   const [formData, setFormData] = useState({
     pricing_tier: "stock_a",
     stock_grade: "Medium",
-    account_status: "Hold",
+    account_status: "Credit",
     payment_term: "cash",
-    credit_limit: 50000
+    credit_limit: 0
   });
 
   const fetchPending = async () => {
     setLoading(true);
-    const res = await customerService.getCustomers();
-    setPendingCustomers(res.data.list.filter(c => c.approval_status === "PENDING_ACCOUNTS"));
-    setLoading(false);
+    try {
+      const res = await customerService.getPendingCustomers({});
+      setPendingCustomers(res.data.list.map(c => ({ ...c, id: c._id })));
+    } catch (err) {
+      console.error(err);
+      setPendingCustomers([]);
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
     fetchPending();
   }, []);
 
+  const isOwnerStep = selectedCustomer?.approval_status === "PENDING_OWNER";
+
   const handleVerify = async (e) => {
     e.preventDefault();
     setIsPending(true);
     try {
-      await customerService.approveCustomer(selectedCustomer.id, formData);
+      if (isOwnerStep) {
+        await customerService.approveOwner(selectedCustomer.id);
+      } else {
+        await customerService.approveAccounts({ customerId: selectedCustomer.id, ...formData });
+      }
       setSelectedCustomer(null);
       fetchPending();
     } catch(err) {
-      alert("Failed to approve");
+      notify.error(err.message || "Failed to approve");
     } finally {
       setIsPending(false);
     }
@@ -104,14 +118,21 @@ export function PendingAccounts() {
                   </td>
                   <td className="py-3 px-4">
                     <StatusPill status="pending_approval" />
+                    <div className="text-muted-foreground mt-1" style={{ fontSize: 11 }}>
+                      {c.approval_status === "PENDING_OWNER" ? "Awaiting Owner sign-off" : "Awaiting Accounts sign-off"}
+                    </div>
                   </td>
                   <td className="py-3 px-4 text-right">
-                    <button 
-                      onClick={() => setSelectedCustomer(c)}
-                      className="vw-btn-primary h-8 px-3 text-[12px] whitespace-nowrap"
-                    >
-                      Review & Verify
-                    </button>
+                    {hasPermission("APPROVE_CUSTOMER") ? (
+                      <button
+                        onClick={() => setSelectedCustomer(c)}
+                        className="vw-btn-primary h-8 px-3 text-[12px] whitespace-nowrap"
+                      >
+                        {c.approval_status === "PENDING_OWNER" ? "Owner Approve" : "Review & Verify"}
+                      </button>
+                    ) : (
+                      <span className="text-[12px] text-muted-foreground italic">View only</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -140,7 +161,7 @@ export function PendingAccounts() {
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-100 bg-slate-50">
               <div className="flex items-center gap-3">
                 <ShieldCheck className="text-blue-600" size={24} />
-                <h2 className="text-lg font-bold text-slate-900">Verify & Approve Account</h2>
+                <h2 className="text-lg font-bold text-slate-900">{isOwnerStep ? "Owner Sign-Off" : "Accounts Team Sign-Off"}</h2>
               </div>
               <button onClick={() => setSelectedCustomer(null)} className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-200 rounded-lg">
                 <X size={20} />
@@ -160,8 +181,15 @@ export function PendingAccounts() {
               </div>
 
               <form id="verifyForm" onSubmit={handleVerify} className="space-y-4">
+                {isOwnerStep ? (
+                  <div className="p-3 bg-emerald-50 border border-emerald-100 rounded-lg text-sm text-emerald-800">
+                    Accounts Team has already signed off with pricing tier <strong className="uppercase">{(selectedCustomer.pricing_tier || "").replace(/_/g, " ")}</strong> and credit limit ₹{selectedCustomer.credit_limit?.toLocaleString()}.
+                    Confirm final Owner approval to activate this account.
+                  </div>
+                ) : (
+                <>
                 <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider mb-2">Assign Business Settings</h3>
-                
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Pricing Tier *</label>
@@ -186,27 +214,55 @@ export function PendingAccounts() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Initial Account Status</label>
-                    <select value={formData.account_status} onChange={e => setFormData({...formData, account_status: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
-                      <option value="Hold">Hold</option>
+                    <select
+                      value={formData.account_status}
+                      onChange={e => {
+                        const status = e.target.value;
+                        setFormData(prev => status === "Cash"
+                          ? { ...prev, account_status: status, payment_term: "cash", credit_limit: 0 }
+                          : { ...prev, account_status: status });
+                      }}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                    >
                       <option value="Cash">Cash</option>
                       <option value="Credit">Credit</option>
                     </select>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Payment Term</label>
-                    <select value={formData.payment_term} onChange={e => setFormData({...formData, payment_term: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm">
+                    <select
+                      value={formData.payment_term}
+                      disabled={formData.account_status === "Cash"}
+                      onChange={e => setFormData({...formData, payment_term: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+                    >
                       <option value="cash">Cash</option>
                       <option value="1_week">1 Week</option>
                       <option value="1_month">1 Month</option>
                       <option value="credit_on_bills">Credit on Bills</option>
                       <option value="one_time">One Time</option>
                     </select>
+                    {formData.account_status === "Cash" && (
+                      <p className="text-[11px] text-slate-500 mt-1">Cash accounts get no credit, so payment term is locked to Cash.</p>
+                    )}
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Credit Limit (₹)</label>
-                    <input required type="number" value={formData.credit_limit} onChange={e => setFormData({...formData, credit_limit: e.target.value})} className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" />
+                    <input
+                      required
+                      type="number"
+                      value={formData.credit_limit}
+                      disabled={formData.account_status === "Cash"}
+                      onChange={e => setFormData({...formData, credit_limit: e.target.value})}
+                      className="w-full px-3 py-2 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+                    />
+                    {formData.account_status === "Cash" && (
+                      <p className="text-[11px] text-slate-500 mt-1">No credit extended on Cash accounts.</p>
+                    )}
                   </div>
                 </div>
+                </>
+                )}
               </form>
             </div>
 

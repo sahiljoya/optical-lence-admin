@@ -1,36 +1,17 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Save, Grid, Settings2, Plus, Trash2, AlertCircle, Package } from "lucide-react";
+import { ArrowLeft, Save, Settings2, Plus, Tag } from "lucide-react";
 import { brandApi, productApi, warehouseApi } from "../../services/productApi";
+import { customerService } from "../../services/customerService";
+import { notify } from "@/lib/notify";
+import { MatrixEditor, defaultRangeConfigFromProduct } from "./MatrixEditor";
 import "@/styles/veriwide.css";
-
-function PowerInput({ value, onChange, placeholder }) {
-  const handleDec = () => {
-    let val = parseFloat(value || 0);
-    if(isNaN(val)) val = 0;
-    const newVal = (val - 0.25).toFixed(2);
-    onChange(parseFloat(newVal) > 0 ? `+${newVal}` : newVal);
-  };
-  const handleInc = () => {
-    let val = parseFloat(value || 0);
-    if(isNaN(val)) val = 0;
-    const newVal = (val + 0.25).toFixed(2);
-    onChange(parseFloat(newVal) > 0 ? `+${newVal}` : newVal);
-  };
-
-  return (
-    <div className="flex items-center border border-slate-200 rounded overflow-hidden h-8 bg-white">
-      <button onClick={handleDec} className="w-8 h-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 border-r border-slate-200 font-bold transition-colors">−</button>
-      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="flex-1 w-full h-full text-center text-[12px] font-mono focus:outline-none" />
-      <button onClick={handleInc} className="w-8 h-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 border-l border-slate-200 font-bold transition-colors">+</button>
-    </div>
-  );
-}
 
 export function CreateProduct() {
   const navigate = useNavigate();
   const [brands, setBrands] = useState([]);
-  const [locations, setLocations] = useState([]);
+  const [racks, setRacks] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [newBrand, setNewBrand] = useState({ name: "", description: "", image: "" });
   const [isSaving, setIsSaving] = useState(false);
@@ -44,23 +25,29 @@ export function CreateProduct() {
     diameter: 65,
     product_code: "",
     min_selling_price: 100,
-    tier_prices: { courier: 120, stock_a: 110, stock_a_plus: 105, stock_platinum: 100 }
+    value_tier: "commodity",
+    tier_prices: { courier: 120, stock_a: 110, stock_a_plus: 105, stock_platinum: 100 },
+    range_label: "",
+    grade: "",
+    purchase_status: "Stable",
+    return_status: "Can Take",
+    part_number: "",
+    low_stock_threshold: null,
+    exclusivity: { city: "", customer_id: "" }
   });
 
-  const [matrices, setMatrices] = useState([
-    { 
-      id: 1, 
-      name: "Base Range", 
-      minSph: "-6.00", maxSph: "+4.00", 
-      minCyl: "-2.00", maxCyl: "0.00",
-      grid: null,
-      location_id: ""
-    }
-  ]);
+  // A Product document is exactly one priced power range (matches the client's real SKU
+  // naming, e.g. "AIRSMART 1.61 B.CUT SV -6-4" vs "...+2+4" are two separate products).
+  // A second range needs a second product, not a second entry here. The actual matrix
+  // structure (SPH/CYL/AXIS/ADD cells) is generated and edited by <MatrixEditor>, which
+  // needs a saved productId first — see handleSaveProduct below.
+  const [productId, setProductId] = useState(null);
+  const [rangeConfig, setRangeConfig] = useState(defaultRangeConfigFromProduct(null));
 
   useEffect(() => {
     fetchBrands();
-    fetchLocations();
+    fetchRacks();
+    fetchCustomers();
   }, []);
 
   const fetchBrands = async () => {
@@ -77,17 +64,21 @@ export function CreateProduct() {
     }
   };
 
-  const fetchLocations = async () => {
+  const fetchRacks = async () => {
     try {
-      const res = await warehouseApi.getLocations({});
-      if (res.error === false) {
-        setLocations(res.data);
-        if (res.data.length > 0) {
-          setMatrices(prev => prev.map(m => ({ ...m, location_id: res.data[0]._id })));
-        }
-      }
+      const res = await warehouseApi.getRackSummary();
+      if (res.error === false) setRacks(res.data);
     } catch (e) {
-      console.error("Failed to fetch locations", e);
+      console.error("Failed to fetch racks", e);
+    }
+  };
+
+  const fetchCustomers = async () => {
+    try {
+      const res = await customerService.getCustomers({ limit: 200 });
+      if (res.error === false) setCustomers(res.data?.list || []);
+    } catch (e) {
+      console.error("Failed to fetch customers", e);
     }
   };
 
@@ -100,140 +91,53 @@ export function CreateProduct() {
         setNewBrand({ name: "", description: "", image: "" });
         fetchBrands();
       } else {
-        alert(res.message);
+        notify.error(res.message);
       }
     } catch (error) {
-      alert("Error creating brand");
+      notify.error("Error creating brand");
     }
   };
 
   const handleSaveProduct = async () => {
-    if (!productData.brand || !productData.product_code) return alert("Brand and Product Code are required.");
+    if (!productData.brand || !productData.product_code) return notify.warning("Brand and Product Code are required.");
     setIsSaving(true);
     try {
-      // 1. Create Product
+      const cylMins = rangeConfig.cylBlocks.map(b => parseFloat(b.min));
+      const cylMaxs = rangeConfig.cylBlocks.map(b => parseFloat(b.max));
       const payload = {
         ...productData,
-        power_ranges: matrices.map(m => ({
-          name: m.name,
-          min_sph: parseFloat(m.minSph),
-          max_sph: parseFloat(m.maxSph),
-          min_cyl: parseFloat(m.minCyl),
-          max_cyl: parseFloat(m.maxCyl)
-        }))
+        min_sph: parseFloat(rangeConfig.sph.min),
+        max_sph: parseFloat(rangeConfig.sph.max),
+        min_cyl: cylMins.length > 0 ? Math.min(...cylMins) : 0,
+        max_cyl: cylMaxs.length > 0 ? Math.max(...cylMaxs) : 0,
+        grade: productData.grade || undefined,
+        exclusivity: {
+          city: productData.exclusivity.city || null,
+          customer_id: productData.exclusivity.customer_id || null
+        }
       };
 
-      const pRes = await productApi.createProduct(payload);
-      if (pRes.error !== false) {
-        setIsSaving(false);
-        return alert(pRes.message || "Failed to create product");
-      }
-      
-      const productId = pRes.data._id;
-
-      // 2. Update Stock Matrices if grid generated
-      let powerCells = [];
-      
-      for (const matrix of matrices) {
-        if (matrix.grid) {
-          for (const sph of matrix.grid.sphList) {
-            for (const cyl of matrix.grid.cylList) {
-              const qty = matrix.grid.values[`${sph}_${cyl}`];
-              if (qty && parseInt(qty) > 0) {
-                const locations = matrix.location_id 
-                  ? [{ warehouse_location_id: matrix.location_id, quantity: parseInt(qty) }] 
-                  : [];
-
-                powerCells.push({
-                  sph: parseFloat(sph),
-                  cyl: parseFloat(cyl),
-                  quantity: parseInt(qty), // Send quantity for backward compatibility
-                  locations
-                });
-              }
-            }
-          }
+      if (productId) {
+        const res = await productApi.updateProduct(productId, payload);
+        if (res.error !== false) {
+          notify.error(res.message || "Failed to update product");
+        } else {
+          notify.success("Product details updated.");
+        }
+      } else {
+        const res = await productApi.createProduct(payload);
+        if (res.error !== false) {
+          notify.error(res.message || "Failed to create product");
+        } else {
+          setProductId(res.data._id);
+          notify.success("Product created — now generate its matrix below.");
         }
       }
-
-      if (powerCells.length > 0) {
-        await productApi.updateMatrix({
-          productId,
-          godownId: "running_stock",
-          powerCells
-        });
-      }
-
-      alert("Product and Stock Saved Successfully!");
-      navigate({ to: "/products" });
-
     } catch (error) {
-      alert("An error occurred while saving.");
+      notify.error("An error occurred while saving.");
       console.error(error);
     }
     setIsSaving(false);
-  };
-
-  const addMatrix = () => {
-    setMatrices([...matrices, { 
-      id: Date.now(), 
-      name: `Matrix Range ${matrices.length + 1}`, 
-      minSph: "0.00", maxSph: "0.00", minCyl: "0.00", maxCyl: "0.00",
-      grid: null,
-      location_id: locations.length > 0 ? locations[0]._id : ""
-    }]);
-  };
-
-  const removeMatrix = (id) => {
-    if (matrices.length > 1) {
-      setMatrices(matrices.filter(m => m.id !== id));
-    }
-  };
-
-  const updateMatrix = (id, field, value) => {
-    setMatrices(matrices.map(m => m.id === id ? { ...m, [field]: value } : m));
-  };
-  
-  const validateMatrix = (m) => {
-    const minS = parseFloat(m.minSph);
-    const maxS = parseFloat(m.maxSph);
-    const minC = parseFloat(m.minCyl);
-    const maxC = parseFloat(m.maxCyl);
-    let error = null;
-    if (minS > maxS) error = "Min SPH cannot be greater than Max SPH.";
-    else if (minC > maxC) error = "Min CYL cannot be greater than Max CYL.";
-    return error;
-  };
-
-  const handleGenerateGrid = (id) => {
-    const m = matrices.find(x => x.id === id);
-    if (validateMatrix(m)) return alert("Fix matrix errors before generating.");
-    
-    const minS = parseFloat(m.minSph);
-    const maxS = parseFloat(m.maxSph);
-    const minC = parseFloat(m.minCyl);
-    const maxC = parseFloat(m.maxCyl);
-    
-    const sList = [];
-    for(let i=maxS; i>=minS; i-=0.25) sList.push(i > 0 ? `+${i.toFixed(2)}` : i.toFixed(2));
-    
-    const cList = [];
-    for(let i=maxC; i>=minC; i-=0.25) cList.push(i > 0 ? `+${i.toFixed(2)}` : i.toFixed(2));
-
-    setMatrices(matrices.map(x => x.id === id ? { ...x, grid: { sphList: sList, cylList: cList, values: {} } } : x));
-  };
-
-  const handleCellChange = (matrixId, sph, cyl, val) => {
-    setMatrices(matrices.map(m => {
-      if (m.id !== matrixId) return m;
-      return {
-        ...m,
-        grid: {
-          ...m.grid,
-          values: { ...m.grid.values, [`${sph}_${cyl}`]: val }
-        }
-      };
-    }));
   };
 
   return (
@@ -245,11 +149,11 @@ export function CreateProduct() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Create New Lens Series</h1>
-            <p className="text-[13px] text-slate-500 mt-1">Define product attributes and generate power matrices.</p>
+            <p className="text-[13px] text-slate-500 mt-1">Define product attributes and generate the power matrix.</p>
           </div>
         </div>
         <button onClick={handleSaveProduct} disabled={isSaving} className="vw-btn-primary h-10 px-4 gap-2 flex items-center justify-center disabled:opacity-50">
-          <Save size={16} /> {isSaving ? "Saving..." : "Save Product"}
+          <Save size={16} /> {isSaving ? "Saving..." : (productId ? "Update Details" : "Save Product")}
         </button>
       </div>
 
@@ -257,7 +161,7 @@ export function CreateProduct() {
         <div className="flex flex-col gap-6">
           <div className="vw-card p-5">
             <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4 border-b border-slate-100 pb-3"><Settings2 size={16} className="text-blue-600"/> Basic Details</h3>
-            
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
               <div>
                 <div className="flex justify-between items-center mb-1.5">
@@ -271,10 +175,10 @@ export function CreateProduct() {
                   ))}
                 </select>
               </div>
-              
+
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Product Code (SKU) <span className="text-rose-500">*</span></label>
-                <input type="text" placeholder="e.g. VIS-HC-156" value={productData.product_code} onChange={e => setProductData({...productData, product_code: e.target.value})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 uppercase" />
+                <input type="text" placeholder="e.g. AIRSMART-1.61-BCUT-SV--6-4" value={productData.product_code} onChange={e => setProductData({...productData, product_code: e.target.value})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 uppercase" />
               </div>
 
               <div>
@@ -328,11 +232,18 @@ export function CreateProduct() {
                   <option value="70">70 DIA</option>
                 </select>
               </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Value Tier</label>
+                <select value={productData.value_tier} onChange={e => setProductData({...productData, value_tier: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="commodity">Commodity</option>
+                  <option value="high_value">High Value</option>
+                </select>
+              </div>
             </div>
-            
+
             {/* PRICING */}
             <div className="border-t border-slate-100 pt-5 mt-2">
-              <h4 className="text-[12px] font-bold text-slate-600 mb-3 uppercase">Tier Pricing</h4>
+              <h4 className="text-[12px] font-bold text-slate-600 mb-3 uppercase">Tier Pricing <span className="text-slate-400 normal-case font-medium">(applies to this product's power range only)</span></h4>
               <div className="grid grid-cols-4 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 mb-1">Courier</label>
@@ -352,146 +263,88 @@ export function CreateProduct() {
                 </div>
               </div>
             </div>
-            
+
+          </div>
+
+          <div className="vw-card p-5">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4 border-b border-slate-100 pb-3"><Tag size={16} className="text-emerald-600"/> Additional Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Minimum Selling Price</label>
+                <input type="number" value={productData.min_selling_price} onChange={e => setProductData({...productData, min_selling_price: parseFloat(e.target.value)})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Part Number</label>
+                <input type="text" value={productData.part_number} onChange={e => setProductData({...productData, part_number: e.target.value})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" placeholder="Optional" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Sales Grade</label>
+                <select value={productData.grade} onChange={e => setProductData({...productData, grade: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="">-- Not graded --</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Purchase Status</label>
+                <select value={productData.purchase_status} onChange={e => setProductData({...productData, purchase_status: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="Stable">Stable</option>
+                  <option value="Growing">Growing</option>
+                  <option value="Risky">Risky</option>
+                  <option value="Stopped">Stopped</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Return Status</label>
+                <select value={productData.return_status} onChange={e => setProductData({...productData, return_status: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="Can Take">Can Take</option>
+                  <option value="Do Not Take">Do Not Take</option>
+                  <option value="Review">Review</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Low Stock Alert Threshold</label>
+                <input type="number" value={productData.low_stock_threshold ?? ""} onChange={e => setProductData({...productData, low_stock_threshold: e.target.value === "" ? null : parseInt(e.target.value)})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" placeholder="Default (10)" />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-5 mt-5">
+              <h4 className="text-[12px] font-bold text-slate-600 mb-3 uppercase">City/Customer Exclusivity <span className="text-slate-400 normal-case font-medium">(for high-value, distributor-model products)</span></h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Exclusive City</label>
+                  <input type="text" value={productData.exclusivity.city} onChange={e => setProductData({...productData, exclusivity: {...productData.exclusivity, city: e.target.value}})} className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none" placeholder="e.g. Udaipur" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Exclusive Customer</label>
+                  <select value={productData.exclusivity.customer_id} onChange={e => setProductData({...productData, exclusivity: {...productData.exclusivity, customer_id: e.target.value}})} className="w-full h-9 px-2 bg-slate-50 border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none">
+                    <option value="">-- None --</option>
+                    {customers.map(c => (
+                      <option key={c._id} value={c._id}>{c.company_name || c.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="vw-card p-5">
-          <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Grid size={16} className="text-purple-600"/> STEP 1: SELECT POWER RANGE</h3>
-            <button onClick={addMatrix} className="text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
-              <Plus size={14} /> Add Range
+        <div className="flex flex-col gap-4">
+          <MatrixEditor
+            productId={productId}
+            lensType={productData.lens_type}
+            racks={racks}
+            rangeConfig={rangeConfig}
+            onRangeConfigChange={setRangeConfig}
+            autoGenerateIfEmpty={true}
+          />
+          {productId && (
+            <button onClick={() => navigate({ to: "/products" })} className="vw-btn-secondary h-10 w-full font-bold">
+              Done — Back to Products
             </button>
-          </div>
-          
-          <p className="text-[12px] text-slate-500 mb-5 leading-relaxed">
-            Set the Min and Max boundaries for SPH and CYL. The system will use this range to generate customer dropdowns and stock grids.
-          </p>
-          
-          <div className="flex flex-col gap-6">
-            {matrices.map((matrix) => {
-              const error = validateMatrix(matrix);
-              return (
-                <div key={matrix.id} className={`bg-slate-50/50 border rounded-lg p-4 relative transition-colors ${error ? 'border-rose-300' : 'border-slate-200'}`}>
-                  {matrices.length > 1 && (
-                    <button onClick={() => removeMatrix(matrix.id)} className="absolute top-4 right-4 text-slate-400 hover:text-rose-500 transition-colors">
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                  
-                  <div className="mb-4 pr-8">
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase tracking-wide">Matrix Name</label>
-                    <input 
-                      type="text" 
-                      value={matrix.name} 
-                      onChange={e => updateMatrix(matrix.id, 'name', e.target.value)}
-                      className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[13px] font-semibold text-slate-800 focus:outline-none focus:border-blue-500" 
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                      <div className="text-[11px] font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">SPH Range</div>
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-slate-500 w-10">Min</span>
-                          <div className="flex-1"><PowerInput value={matrix.minSph} onChange={v => updateMatrix(matrix.id, 'minSph', v)} placeholder="-6.00" /></div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-slate-500 w-10">Max</span>
-                          <div className="flex-1"><PowerInput value={matrix.maxSph} onChange={v => updateMatrix(matrix.id, 'maxSph', v)} placeholder="+4.00" /></div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                      <div className="text-[11px] font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">CYL Range</div>
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-slate-500 w-10">Min</span>
-                          <div className="flex-1"><PowerInput value={matrix.minCyl} onChange={v => updateMatrix(matrix.id, 'minCyl', v)} placeholder="-2.00" /></div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-slate-500 w-10">Max</span>
-                          <div className="flex-1"><PowerInput value={matrix.maxCyl} onChange={v => updateMatrix(matrix.id, 'maxCyl', v)} placeholder="0.00" /></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {error && (
-                    <div className="mt-4 bg-rose-50 text-rose-600 border border-rose-200 p-2.5 rounded text-[12px] flex items-center gap-2 font-medium">
-                      <AlertCircle size={14} />
-                      {error}
-                    </div>
-                  )}
-
-                  {!matrix.grid && !error && (
-                    <button onClick={() => handleGenerateGrid(matrix.id)} className="mt-6 vw-btn-secondary h-10 w-full font-bold bg-purple-600 text-white hover:bg-purple-700">
-                      ⬇️ STEP 2: OPEN GRID TO ENTER STOCK
-                    </button>
-                  )}
-
-                  {matrix.grid && (
-                    <div className="mt-6 pt-6 border-t border-slate-200 animate-in fade-in slide-in-from-top-4 duration-300">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2"><Package size={16} className="text-emerald-600"/> WAREHOUSE LOCATION & STOCK ENTRY</h3>
-                        <button onClick={() => handleGenerateGrid(matrix.id)} className="text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
-                          🔄 Update Grid
-                        </button>
-                      </div>
-                      
-                      <div className="mb-6 p-4 bg-emerald-50/50 border border-emerald-100 rounded-lg">
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase">Select Warehouse Location</label>
-                        <select value={matrix.location_id} onChange={e => updateMatrix(matrix.id, 'location_id', e.target.value)} className="w-full h-9 px-2.5 bg-white border border-slate-200 rounded focus:border-emerald-500 focus:outline-none text-[13px]">
-                          <option value="">-- Choose Location --</option>
-                          {locations.map(loc => (
-                            <option key={loc._id} value={loc._id}>
-                              {loc.location_code} (Floor: {loc.floor}, Rack: {loc.rack}, Box: {loc.box_no})
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-
-                      <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-[500px] overflow-y-auto">
-                        <table className="w-full text-center border-collapse text-[12px]">
-                          <thead className="bg-slate-100 sticky top-0 z-10">
-                            <tr>
-                              <th className="p-2 border-b border-r border-slate-200 min-w-[80px] font-bold text-slate-700 bg-slate-200">SPH \ CYL</th>
-                              {matrix.grid.cylList.map(cyl => (
-                                <th key={cyl} className="p-2 border-b border-r border-slate-200 min-w-[60px] font-bold text-slate-700">{cyl}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {matrix.grid.sphList.map(sph => (
-                              <tr key={sph}>
-                                <th className="p-2 border-b border-r border-slate-200 bg-slate-50 font-bold text-slate-700 sticky left-0 z-10">{sph}</th>
-                                {matrix.grid.cylList.map(cyl => (
-                                  <td key={cyl} className="p-1 border-b border-r border-slate-100 hover:bg-emerald-50 transition-colors relative">
-                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-300 pointer-events-none select-none z-0">
-                                      {matrix.grid.values[`${sph}_${cyl}`] ? '' : 'Qty'}
-                                    </div>
-                                    <input 
-                                      type="number" 
-                                      min="0"
-                                      value={matrix.grid.values[`${sph}_${cyl}`] || ''}
-                                      onChange={(e) => handleCellChange(matrix.id, sph, cyl, e.target.value)}
-                                      className="w-full text-center h-7 focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 rounded bg-transparent relative z-10"
-                                    />
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
+          )}
         </div>
       </div>
 
@@ -502,41 +355,41 @@ export function CreateProduct() {
               <h3 className="font-bold text-slate-800 text-[15px]">Add New Brand</h3>
               <button onClick={() => setShowBrandModal(false)} className="text-slate-400 hover:text-slate-600 p-1">✕</button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Brand Name <span className="text-rose-500">*</span></label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newBrand.name}
                   onChange={e => setNewBrand({...newBrand, name: e.target.value})}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" 
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
                   placeholder="e.g. Vishal HC"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Image URL</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newBrand.image}
                   onChange={e => setNewBrand({...newBrand, image: e.target.value})}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" 
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
                   placeholder="https://example.com/logo.png"
                 />
               </div>
 
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Description</label>
-                <textarea 
+                <textarea
                   value={newBrand.description}
                   onChange={e => setNewBrand({...newBrand, description: e.target.value})}
-                  className="w-full p-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 resize-none h-24" 
+                  className="w-full p-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 resize-none h-24"
                   placeholder="Brand details..."
                 />
               </div>
             </div>
-            
+
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
               <button onClick={() => setShowBrandModal(false)} className="px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
                 Cancel

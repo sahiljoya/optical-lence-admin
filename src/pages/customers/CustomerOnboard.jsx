@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Link as LinkIcon, UserPlus, FileText, Loader2 } from "lucide-react";
 import { customerService } from "@/services/customerService";
+import { notify } from "@/lib/notify";
 import "@/styles/veriwide.css";
 
 export function CustomerOnboard() {
@@ -21,7 +22,9 @@ export function CustomerOnboard() {
     setIsPending(true);
     try {
       const res = await customerService.generateInvite(inviteData);
-      setInviteLink(res.data.link);
+      setInviteLink(res.data.inviteLink);
+    } catch (err) {
+      notify.error(err.message || "Failed to generate invite link.");
     } finally {
       setIsPending(false);
     }
@@ -32,10 +35,10 @@ export function CustomerOnboard() {
     setIsPending(true);
     try {
       await customerService.createCustomer(formData);
-      alert("Customer Onboarding submitted! Sent to Accounts Team for Verification.");
+      notify.success("Customer Onboarding submitted! Sent to Accounts Team for Verification.");
       navigate({ to: "/customers" });
     } catch (err) {
-      alert("Failed to submit.");
+      notify.error(err.message || "Failed to submit.");
     } finally {
       setIsPending(false);
     }

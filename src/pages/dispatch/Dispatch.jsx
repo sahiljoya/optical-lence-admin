@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Search, Download, Truck, PackageCheck, Send, Navigation, Clock, CheckCircle, Package } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { notify } from "@/lib/notify";
 import "@/styles/veriwide.css";
 
 const INITIAL_MOCK_DISPATCH = [
@@ -71,7 +72,7 @@ export function Dispatch() {
 
   const submitDispatch = (e) => {
     e.preventDefault();
-    if (!trackingId) return alert("Tracking ID is required to dispatch");
+    if (!trackingId) return notify.warning("Tracking ID is required to dispatch");
 
     setOrders(prev => prev.map(o => 
       o.id === selectedOrder.id 
@@ -80,7 +81,7 @@ export function Dispatch() {
     ));
     
     setShowDispatchModal(false);
-    alert(`Order ${selectedOrder.id} dispatched via ${deliveryPartner}!`);
+    notify.success(`Order ${selectedOrder.id} dispatched via ${deliveryPartner}!`);
   };
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -104,7 +105,7 @@ export function Dispatch() {
           <p className="text-[13px] text-slate-500 mt-1">Manage packing, tracking IDs, and delivery partners.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button onClick={() => alert("Exporting manifest...")} className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
+          <button onClick={() => notify.success("Exporting manifest...")} className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
             <Download size={16} /> Export Manifest
           </button>
         </div>

@@ -1,10 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-  createRootRouteWithContext,
-  HeadContent,
-  Scripts,
-  Outlet,
-} from "@tanstack/react-router";
+import { createRootRouteWithContext, HeadContent, Scripts, Outlet } from "@tanstack/react-router";
+import { Toaster } from "sonner";
 
 import appCss from "../styles.css?url";
 import { NotFoundComponent } from "../pages/errors/NotFound";
@@ -18,7 +14,8 @@ export const Route = createRootRouteWithContext()({
       { title: "VOC ERP – Vishal Optical Co." },
       {
         name: "description",
-        content: "Owner dashboard for Vishal Optical Co.: orders, revenue, inventory, billing and dispatch.",
+        content:
+          "Owner dashboard for Vishal Optical Co.: orders, revenue, inventory, billing and dispatch.",
       },
     ],
     links: [
@@ -62,7 +59,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <Outlet />
+      <Toaster position="top-center" richColors closeButton duration={4000} />
     </QueryClientProvider>
   );
-
 }

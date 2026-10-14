@@ -16,10 +16,14 @@ import { Route as AdminBillingRouteImport } from './routes/_admin.billing'
 import { Route as AdminCustomerOnboardRouteImport } from './routes/_admin.customer-onboard'
 import { Route as AdminCustomersRouteImport } from './routes/_admin.customers'
 import { Route as AdminDispatchRouteImport } from './routes/_admin.dispatch'
+import { Route as AdminFindMyLensRouteImport } from './routes/_admin.find-my-lens'
 import { Route as AdminOrdersRouteImport } from './routes/_admin.orders'
 import { Route as AdminPendingAccountsRouteImport } from './routes/_admin.pending-accounts'
+import { Route as AdminPickListRouteImport } from './routes/_admin.pick-list'
 import { Route as AdminProductsRouteImport } from './routes/_admin.products'
+import { Route as AdminReplenishmentRouteImport } from './routes/_admin.replenishment'
 import { Route as AdminReturnsRouteImport } from './routes/_admin.returns'
+import { Route as AdminReviewQueueRouteImport } from './routes/_admin.review-queue'
 import { Route as AdminSettingsRouteImport } from './routes/_admin.settings'
 import { Route as AdminSupportRouteImport } from './routes/_admin.support'
 import { Route as AdminCustomerIdRouteImport } from './routes/_admin.customer.$id'
@@ -65,6 +69,11 @@ const AdminDispatchRoute = AdminDispatchRouteImport.update({
   path: '/dispatch',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminFindMyLensRoute = AdminFindMyLensRouteImport.update({
+  id: '/find-my-lens',
+  path: '/find-my-lens',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
   id: '/orders',
   path: '/orders',
@@ -75,14 +84,29 @@ const AdminPendingAccountsRoute = AdminPendingAccountsRouteImport.update({
   path: '/pending-accounts',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPickListRoute = AdminPickListRouteImport.update({
+  id: '/pick-list',
+  path: '/pick-list',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminProductsRoute = AdminProductsRouteImport.update({
   id: '/products',
   path: '/products',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminReplenishmentRoute = AdminReplenishmentRouteImport.update({
+  id: '/replenishment',
+  path: '/replenishment',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminReturnsRoute = AdminReturnsRouteImport.update({
   id: '/returns',
   path: '/returns',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReviewQueueRoute = AdminReviewQueueRouteImport.update({
+  id: '/review-queue',
+  path: '/review-queue',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
@@ -143,10 +167,14 @@ export interface FileRoutesByFullPath {
   '/customer-onboard': typeof AdminCustomerOnboardRoute
   '/customers': typeof AdminCustomersRoute
   '/dispatch': typeof AdminDispatchRoute
+  '/find-my-lens': typeof AdminFindMyLensRoute
   '/orders': typeof AdminOrdersRoute
   '/pending-accounts': typeof AdminPendingAccountsRoute
+  '/pick-list': typeof AdminPickListRoute
   '/products': typeof AdminProductsRoute
+  '/replenishment': typeof AdminReplenishmentRoute
   '/returns': typeof AdminReturnsRoute
+  '/review-queue': typeof AdminReviewQueueRoute
   '/settings': typeof AdminSettingsRoute
   '/support': typeof AdminSupportRoute
   '/customer/$id': typeof AdminCustomerIdRoute
@@ -164,10 +192,14 @@ export interface FileRoutesByTo {
   '/customer-onboard': typeof AdminCustomerOnboardRoute
   '/customers': typeof AdminCustomersRoute
   '/dispatch': typeof AdminDispatchRoute
+  '/find-my-lens': typeof AdminFindMyLensRoute
   '/orders': typeof AdminOrdersRoute
   '/pending-accounts': typeof AdminPendingAccountsRoute
+  '/pick-list': typeof AdminPickListRoute
   '/products': typeof AdminProductsRoute
+  '/replenishment': typeof AdminReplenishmentRoute
   '/returns': typeof AdminReturnsRoute
+  '/review-queue': typeof AdminReviewQueueRoute
   '/settings': typeof AdminSettingsRoute
   '/support': typeof AdminSupportRoute
   '/': typeof AdminIndexRoute
@@ -188,10 +220,14 @@ export interface FileRoutesById {
   '/_admin/customer-onboard': typeof AdminCustomerOnboardRoute
   '/_admin/customers': typeof AdminCustomersRoute
   '/_admin/dispatch': typeof AdminDispatchRoute
+  '/_admin/find-my-lens': typeof AdminFindMyLensRoute
   '/_admin/orders': typeof AdminOrdersRoute
   '/_admin/pending-accounts': typeof AdminPendingAccountsRoute
+  '/_admin/pick-list': typeof AdminPickListRoute
   '/_admin/products': typeof AdminProductsRoute
+  '/_admin/replenishment': typeof AdminReplenishmentRoute
   '/_admin/returns': typeof AdminReturnsRoute
+  '/_admin/review-queue': typeof AdminReviewQueueRoute
   '/_admin/settings': typeof AdminSettingsRoute
   '/_admin/support': typeof AdminSupportRoute
   '/_admin/': typeof AdminIndexRoute
@@ -213,10 +249,14 @@ export interface FileRouteTypes {
     | '/customer-onboard'
     | '/customers'
     | '/dispatch'
+    | '/find-my-lens'
     | '/orders'
     | '/pending-accounts'
+    | '/pick-list'
     | '/products'
+    | '/replenishment'
     | '/returns'
+    | '/review-queue'
     | '/settings'
     | '/support'
     | '/customer/$id'
@@ -234,10 +274,14 @@ export interface FileRouteTypes {
     | '/customer-onboard'
     | '/customers'
     | '/dispatch'
+    | '/find-my-lens'
     | '/orders'
     | '/pending-accounts'
+    | '/pick-list'
     | '/products'
+    | '/replenishment'
     | '/returns'
+    | '/review-queue'
     | '/settings'
     | '/support'
     | '/'
@@ -257,10 +301,14 @@ export interface FileRouteTypes {
     | '/_admin/customer-onboard'
     | '/_admin/customers'
     | '/_admin/dispatch'
+    | '/_admin/find-my-lens'
     | '/_admin/orders'
     | '/_admin/pending-accounts'
+    | '/_admin/pick-list'
     | '/_admin/products'
+    | '/_admin/replenishment'
     | '/_admin/returns'
+    | '/_admin/review-queue'
     | '/_admin/settings'
     | '/_admin/support'
     | '/_admin/'
@@ -330,6 +378,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDispatchRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/_admin/find-my-lens': {
+      id: '/_admin/find-my-lens'
+      path: '/find-my-lens'
+      fullPath: '/find-my-lens'
+      preLoaderRoute: typeof AdminFindMyLensRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/_admin/orders': {
       id: '/_admin/orders'
       path: '/orders'
@@ -344,6 +399,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPendingAccountsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/_admin/pick-list': {
+      id: '/_admin/pick-list'
+      path: '/pick-list'
+      fullPath: '/pick-list'
+      preLoaderRoute: typeof AdminPickListRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/_admin/products': {
       id: '/_admin/products'
       path: '/products'
@@ -351,11 +413,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminProductsRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/_admin/replenishment': {
+      id: '/_admin/replenishment'
+      path: '/replenishment'
+      fullPath: '/replenishment'
+      preLoaderRoute: typeof AdminReplenishmentRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/_admin/returns': {
       id: '/_admin/returns'
       path: '/returns'
       fullPath: '/returns'
       preLoaderRoute: typeof AdminReturnsRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/_admin/review-queue': {
+      id: '/_admin/review-queue'
+      path: '/review-queue'
+      fullPath: '/review-queue'
+      preLoaderRoute: typeof AdminReviewQueueRouteImport
       parentRoute: typeof AdminRoute
     }
     '/_admin/settings': {
@@ -436,10 +512,14 @@ interface AdminRouteChildren {
   AdminCustomerOnboardRoute: typeof AdminCustomerOnboardRoute
   AdminCustomersRoute: typeof AdminCustomersRoute
   AdminDispatchRoute: typeof AdminDispatchRoute
+  AdminFindMyLensRoute: typeof AdminFindMyLensRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
   AdminPendingAccountsRoute: typeof AdminPendingAccountsRoute
+  AdminPickListRoute: typeof AdminPickListRoute
   AdminProductsRoute: typeof AdminProductsRoute
+  AdminReplenishmentRoute: typeof AdminReplenishmentRoute
   AdminReturnsRoute: typeof AdminReturnsRoute
+  AdminReviewQueueRoute: typeof AdminReviewQueueRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminSupportRoute: typeof AdminSupportRoute
   AdminIndexRoute: typeof AdminIndexRoute
@@ -458,10 +538,14 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCustomerOnboardRoute: AdminCustomerOnboardRoute,
   AdminCustomersRoute: AdminCustomersRoute,
   AdminDispatchRoute: AdminDispatchRoute,
+  AdminFindMyLensRoute: AdminFindMyLensRoute,
   AdminOrdersRoute: AdminOrdersRoute,
   AdminPendingAccountsRoute: AdminPendingAccountsRoute,
+  AdminPickListRoute: AdminPickListRoute,
   AdminProductsRoute: AdminProductsRoute,
+  AdminReplenishmentRoute: AdminReplenishmentRoute,
   AdminReturnsRoute: AdminReturnsRoute,
+  AdminReviewQueueRoute: AdminReviewQueueRoute,
   AdminSettingsRoute: AdminSettingsRoute,
   AdminSupportRoute: AdminSupportRoute,
   AdminIndexRoute: AdminIndexRoute,

@@ -1,137 +1,164 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "@tanstack/react-router";
-import { ArrowLeft, Save, Grid, Settings2, Plus, Trash2, AlertCircle, Package } from "lucide-react";
+import { Link, useParams, useNavigate } from "@tanstack/react-router";
+import { ArrowLeft, Save, Settings2, Plus, Tag } from "lucide-react";
+import { brandApi, productApi, warehouseApi } from "../../services/productApi";
+import { customerService } from "../../services/customerService";
+import { notify } from "@/lib/notify";
+import { MatrixEditor, defaultRangeConfigFromProduct } from "./MatrixEditor";
 import "@/styles/veriwide.css";
-
-function PowerInput({ value, onChange, placeholder }) {
-  const handleDec = () => {
-    let val = parseFloat(value || 0);
-    if(isNaN(val)) val = 0;
-    const newVal = (val - 0.25).toFixed(2);
-    onChange(parseFloat(newVal) > 0 ? `+${newVal}` : newVal);
-  };
-  const handleInc = () => {
-    let val = parseFloat(value || 0);
-    if(isNaN(val)) val = 0;
-    const newVal = (val + 0.25).toFixed(2);
-    onChange(parseFloat(newVal) > 0 ? `+${newVal}` : newVal);
-  };
-
-  return (
-    <div className="flex items-center border border-slate-200 rounded overflow-hidden h-8 bg-white">
-      <button onClick={handleDec} className="w-8 h-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 border-r border-slate-200 font-bold transition-colors">−</button>
-      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="flex-1 w-full h-full text-center text-[12px] font-mono focus:outline-none" />
-      <button onClick={handleInc} className="w-8 h-full bg-slate-50 hover:bg-slate-100 flex items-center justify-center text-slate-500 border-l border-slate-200 font-bold transition-colors">+</button>
-    </div>
-  );
-}
 
 export function EditProduct() {
   const { id } = useParams({ strict: false });
-  const [brands, setBrands] = useState([
-    { id: 1, name: "Vishal HC" },
-    { id: 2, name: "Lords" },
-    { id: 3, name: "Max" },
-    { id: 4, name: "SLX" },
-    { id: 5, name: "VeriWide" },
-    { id: 6, name: "Blu Safe" },
-    { id: 7, name: "AirSmart" },
-    { id: 8, name: "PhotoFast" },
-    { id: 9, name: "Bold" }
-  ]);
+  const navigate = useNavigate();
+
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [brands, setBrands] = useState([]);
+  const [racks, setRacks] = useState([]);
+  const [customers, setCustomers] = useState([]);
   const [showBrandModal, setShowBrandModal] = useState(false);
   const [newBrand, setNewBrand] = useState({ name: "", description: "", image: "" });
 
-  const handleSaveBrand = () => {
-    setBrands([...brands, { id: Date.now(), name: newBrand.name }]);
-    setShowBrandModal(false);
-    setNewBrand({ name: "", description: "", image: "" });
-  };
+  const [productData, setProductData] = useState({
+    brand: "",
+    index: 1.56,
+    base: "Hard Coat (HC)",
+    coating: "Standard",
+    lens_type: "Single Vision",
+    diameter: 65,
+    product_code: "",
+    min_selling_price: 100,
+    value_tier: "commodity",
+    tier_prices: { courier: 120, stock_a: 110, stock_a_plus: 105, stock_platinum: 100 },
+    range_label: "",
+    grade: "",
+    purchase_status: "Stable",
+    return_status: "Can Take",
+    part_number: "",
+    low_stock_threshold: null,
+    exclusivity: { city: "", customer_id: "" }
+  });
 
-  const [matrices, setMatrices] = useState([
-    { 
-      id: 1, 
-      name: "Low Power Range (+2+4)", 
-      minSph: "0.00", maxSph: "+2.00", 
-      minCyl: "-2.00", maxCyl: "0.00",
-      grid: null,
-      location: { floor: "Floor 1 (KT)", rack: "", shelf: "", box: "" }
-    },
-    { 
-      id: 2, 
-      name: "High Power Range (+6+2)", 
-      minSph: "+2.25", maxSph: "+6.00", 
-      minCyl: "-2.00", maxCyl: "0.00",
-      grid: null,
-      location: { floor: "Floor 2 (PG)", rack: "", shelf: "", box: "" }
+  // A Product document is exactly one priced power range (see CreateProduct.jsx). The actual
+  // matrix structure/stock is generated and edited by <MatrixEditor>; rangeConfig here just
+  // seeds its range-definition form from this product's current min/max boundaries.
+  const [rangeConfig, setRangeConfig] = useState(defaultRangeConfigFromProduct(null));
+
+  useEffect(() => {
+    if (!id) return;
+    const init = async () => {
+      setIsLoading(true);
+      try {
+        const [brandsRes, rackRes, custRes, prodRes] = await Promise.all([
+          brandApi.getBrands(),
+          warehouseApi.getRackSummary(),
+          customerService.getCustomers({ limit: 200 }),
+          productApi.getProductDetail(id)
+        ]);
+
+        const brandsList = brandsRes.error === false ? brandsRes.data : [];
+        setBrands(brandsList);
+        setRacks(rackRes.error === false ? rackRes.data : []);
+        setCustomers(custRes.error === false ? (custRes.data?.list || []) : []);
+
+        if (prodRes.error !== false) {
+          notify.error(prodRes.message || "Failed to load product");
+          return;
+        }
+        const product = prodRes.data;
+        setProductData({
+          brand: product.brand,
+          index: product.index,
+          base: product.base,
+          coating: product.coating,
+          lens_type: product.lens_type,
+          diameter: product.diameter,
+          product_code: product.product_code,
+          min_selling_price: product.min_selling_price || 0,
+          value_tier: product.value_tier || "commodity",
+          tier_prices: product.tier_prices || { courier: 0, stock_a: 0, stock_a_plus: 0, stock_platinum: 0 },
+          range_label: product.range_label || "",
+          grade: product.grade || "",
+          purchase_status: product.purchase_status || "Stable",
+          return_status: product.return_status || "Can Take",
+          part_number: product.part_number || "",
+          low_stock_threshold: product.low_stock_threshold ?? null,
+          exclusivity: {
+            city: product.exclusivity?.city || "",
+            customer_id: product.exclusivity?.customer_id || ""
+          }
+        });
+
+        setRangeConfig(defaultRangeConfigFromProduct(product));
+      } catch (e) {
+        console.error("Failed to load product", e);
+        notify.error("Failed to load product");
+      }
+      setIsLoading(false);
+    };
+    init();
+  }, [id]);
+
+  const fetchBrands = async () => {
+    try {
+      const res = await brandApi.getBrands();
+      if (res.error === false) setBrands(res.data);
+    } catch (e) {
+      console.error("Failed to fetch brands", e);
     }
-  ]);
-
-  const addMatrix = () => {
-    setMatrices([...matrices, { 
-      id: Date.now(), 
-      name: `Matrix Range ${matrices.length + 1}`, 
-      minSph: "0.00", maxSph: "0.00", minCyl: "0.00", maxCyl: "0.00",
-      grid: null,
-      location: { floor: "Floor 1 (KT)", rack: "", shelf: "", box: "" }
-    }]);
   };
 
-  const removeMatrix = (id) => {
-    if (matrices.length > 1) {
-      setMatrices(matrices.filter(m => m.id !== id));
+  const handleSaveBrand = async () => {
+    if (!newBrand.name) return;
+    try {
+      const res = await brandApi.createBrand(newBrand);
+      if (res.error === false) {
+        setShowBrandModal(false);
+        setNewBrand({ name: "", description: "", image: "" });
+        fetchBrands();
+      } else {
+        notify.error(res.message);
+      }
+    } catch (error) {
+      notify.error("Error creating brand");
     }
   };
 
-  const updateMatrix = (id, field, value) => {
-    setMatrices(matrices.map(m => m.id === id ? { ...m, [field]: value } : m));
-  };
-  
-  const updateMatrixLocation = (id, field, value) => {
-    setMatrices(matrices.map(m => m.id === id ? { ...m, location: { ...m.location, [field]: value } } : m));
-  };
-
-  const validateMatrix = (m) => {
-    const minS = parseFloat(m.minSph);
-    const maxS = parseFloat(m.maxSph);
-    const minC = parseFloat(m.minCyl);
-    const maxC = parseFloat(m.maxCyl);
-    let error = null;
-    if (minS > maxS) error = "Min SPH cannot be greater than Max SPH.";
-    else if (minC > maxC) error = "Min CYL cannot be greater than Max CYL.";
-    return error;
-  };
-
-  const handleGenerateGrid = (id) => {
-    const m = matrices.find(x => x.id === id);
-    if (validateMatrix(m)) return alert("Fix matrix errors before generating.");
-    
-    const minS = parseFloat(m.minSph);
-    const maxS = parseFloat(m.maxSph);
-    const minC = parseFloat(m.minCyl);
-    const maxC = parseFloat(m.maxCyl);
-    
-    const sList = [];
-    for(let i=maxS; i>=minS; i-=0.25) sList.push(i > 0 ? `+${i.toFixed(2)}` : i.toFixed(2));
-    
-    const cList = [];
-    for(let i=maxC; i>=minC; i-=0.25) cList.push(i > 0 ? `+${i.toFixed(2)}` : i.toFixed(2));
-
-    setMatrices(matrices.map(x => x.id === id ? { ...x, grid: { sphList: sList, cylList: cList, values: {} } } : x));
-  };
-
-  const handleCellChange = (matrixId, sph, cyl, val) => {
-    setMatrices(matrices.map(m => {
-      if (m.id !== matrixId) return m;
-      return {
-        ...m,
-        grid: {
-          ...m.grid,
-          values: { ...m.grid.values, [`${sph}_${cyl}`]: val }
+  const handleSaveProduct = async () => {
+    if (!productData.brand || !productData.product_code) return notify.warning("Brand and Product Code are required.");
+    setIsSaving(true);
+    try {
+      const cylMins = rangeConfig.cylBlocks.map(b => parseFloat(b.min));
+      const cylMaxs = rangeConfig.cylBlocks.map(b => parseFloat(b.max));
+      const payload = {
+        ...productData,
+        min_sph: parseFloat(rangeConfig.sph.min),
+        max_sph: parseFloat(rangeConfig.sph.max),
+        min_cyl: cylMins.length > 0 ? Math.min(...cylMins) : 0,
+        max_cyl: cylMaxs.length > 0 ? Math.max(...cylMaxs) : 0,
+        grade: productData.grade || undefined,
+        exclusivity: {
+          city: productData.exclusivity.city || null,
+          customer_id: productData.exclusivity.customer_id || null
         }
       };
-    }));
+
+      const pRes = await productApi.updateProduct(id, payload);
+      if (pRes.error !== false) {
+        notify.error(pRes.message || "Failed to update product");
+      } else {
+        notify.success("Product details updated.");
+      }
+    } catch (error) {
+      notify.error("An error occurred while saving.");
+      console.error(error);
+    }
+    setIsSaving(false);
   };
+
+  if (isLoading) {
+    return <div className="p-10 text-center text-slate-500 text-[13px]">Loading product...</div>;
+  }
 
   return (
     <>
@@ -142,11 +169,11 @@ export function EditProduct() {
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-slate-900">Update Lens Series</h1>
-            <p className="text-[13px] text-slate-500 mt-1">Editing settings for {id}</p>
+            <p className="text-[13px] text-slate-500 mt-1">Editing {productData.product_code || id}</p>
           </div>
         </div>
-        <button className="vw-btn-primary h-10 px-4 gap-2 flex items-center justify-center">
-          <Save size={16} /> Update Product
+        <button onClick={handleSaveProduct} disabled={isSaving} className="vw-btn-primary h-10 px-4 gap-2 flex items-center justify-center disabled:opacity-50">
+          <Save size={16} /> {isSaving ? "Saving..." : "Update Details"}
         </button>
       </div>
 
@@ -154,243 +181,184 @@ export function EditProduct() {
         <div className="flex flex-col gap-6">
           <div className="vw-card p-5">
             <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4 border-b border-slate-100 pb-3"><Settings2 size={16} className="text-blue-600"/> Basic Details</h3>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-5">
               <div>
                 <div className="flex justify-between items-center mb-1.5">
                   <label className="block text-[12px] font-bold text-slate-700">Brand</label>
                   <button onClick={() => setShowBrandModal(true)} className="text-[11px] font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1"><Plus size={12}/> New Brand</button>
                 </div>
-                <select defaultValue="VeriWide" className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-                  {brands.length === 0 ? <option>Loading...</option> : null}
+                <select value={productData.brand} onChange={e => setProductData({...productData, brand: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="">-- Select a Brand --</option>
                   {brands.map(b => (
-                    <option key={b._id || b.id} value={b.name}>{b.name}</option>
+                    <option key={b._id} value={b.name}>{b.name}</option>
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Product Code (SKU) <span className="text-rose-500">*</span></label>
+                <input type="text" placeholder="e.g. AIRSMART-1.61-BCUT-SV--6-4" value={productData.product_code} onChange={e => setProductData({...productData, product_code: e.target.value})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 uppercase" />
+              </div>
+
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Power Type</label>
-                <select defaultValue="Progressive (PG)" className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-                  <option>Single Vision (SV)</option>
-                  <option>Progressive (PG)</option>
-                  <option>Bifocal (KT)</option>
+                <select value={productData.lens_type} onChange={e => setProductData({...productData, lens_type: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="Single Vision">Single Vision (SV)</option>
+                  <option value="Progressive">Progressive (PG)</option>
+                  <option value="KT">Bifocal (KT)</option>
                 </select>
               </div>
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Base Material</label>
-                <select defaultValue="Blue Cut (B.CUT)" className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-                  <option>Hard Coat (HC)</option>
-                  <option>Blue Cut (B.CUT)</option>
-                  <option>Photo Grey</option>
-                  <option>Polycarbonate (POLY)</option>
-                  <option>Blue Cut + Photo Grey</option>
+                <select value={productData.base} onChange={e => setProductData({...productData, base: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="Hard Coat (HC)">Hard Coat (HC)</option>
+                  <option value="Blue Cut (B.CUT)">Blue Cut (B.CUT)</option>
+                  <option value="Photo Grey">Photo Grey</option>
+                  <option value="Polycarbonate (POLY)">Polycarbonate (POLY)</option>
+                  <option value="Blue Cut + Photo Grey">Blue Cut + Photo Grey</option>
                 </select>
               </div>
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Coating</label>
-                <select defaultValue="Opal Blue" className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-                  <option>Opal Blue</option>
-                  <option>Evergreen</option>
-                  <option>KopperX</option>
-                  <option>Volt Blue</option>
-                  <option>Solara Gold</option>
-                  <option>Blue Green</option>
+                <select value={productData.coating} onChange={e => setProductData({...productData, coating: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="Standard">Standard</option>
+                  <option value="Anti-Reflective">Anti-Reflective</option>
+                  <option value="Blue Cut">Blue Cut</option>
+                  <option value="Photochromic">Photochromic</option>
+                  <option value="Opal Blue">Opal Blue</option>
+                  <option value="Evergreen">Evergreen</option>
+                  <option value="Volt Blue">Volt Blue</option>
+                  <option value="Solara Gold">Solara Gold</option>
+                  <option value="Hard Coat">Hard Coat</option>
                 </select>
               </div>
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Index</label>
-                <select defaultValue="1.61" className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-                  <option>1.49</option>
-                  <option>1.56</option>
-                  <option>1.59</option>
-                  <option>1.61</option>
-                  <option>1.67</option>
-                  <option>1.74</option>
+                <select value={productData.index} onChange={e => setProductData({...productData, index: parseFloat(e.target.value)})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="1.49">1.49</option>
+                  <option value="1.56">1.56</option>
+                  <option value="1.59">1.59</option>
+                  <option value="1.61">1.61</option>
+                  <option value="1.67">1.67</option>
+                  <option value="1.74">1.74</option>
                 </select>
               </div>
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Diameter</label>
-                <select defaultValue="70 DIA" className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-                  <option>55 DIA</option>
-                  <option>65 DIA</option>
-                  <option>70 DIA</option>
+                <select value={productData.diameter} onChange={e => setProductData({...productData, diameter: parseInt(e.target.value)})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="55">55 DIA</option>
+                  <option value="65">65 DIA</option>
+                  <option value="70">70 DIA</option>
                 </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Value Tier</label>
+                <select value={productData.value_tier} onChange={e => setProductData({...productData, value_tier: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="commodity">Commodity</option>
+                  <option value="high_value">High Value</option>
+                </select>
+              </div>
+            </div>
+
+            {/* PRICING */}
+            <div className="border-t border-slate-100 pt-5 mt-2">
+              <h4 className="text-[12px] font-bold text-slate-600 mb-3 uppercase">Tier Pricing <span className="text-slate-400 normal-case font-medium">(applies to this product's power range only)</span></h4>
+              <div className="grid grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Courier</label>
+                  <input type="number" value={productData.tier_prices.courier} onChange={e => setProductData({...productData, tier_prices: {...productData.tier_prices, courier: parseInt(e.target.value)}})} className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Stock A</label>
+                  <input type="number" value={productData.tier_prices.stock_a} onChange={e => setProductData({...productData, tier_prices: {...productData.tier_prices, stock_a: parseInt(e.target.value)}})} className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Stock A+</label>
+                  <input type="number" value={productData.tier_prices.stock_a_plus} onChange={e => setProductData({...productData, tier_prices: {...productData.tier_prices, stock_a_plus: parseInt(e.target.value)}})} className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Platinum</label>
+                  <input type="number" value={productData.tier_prices.stock_platinum} onChange={e => setProductData({...productData, tier_prices: {...productData.tier_prices, stock_platinum: parseInt(e.target.value)}})} className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none" />
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <div className="vw-card p-5">
+            <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4 border-b border-slate-100 pb-3"><Tag size={16} className="text-emerald-600"/> Additional Details</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Minimum Selling Price</label>
+                <input type="number" value={productData.min_selling_price} onChange={e => setProductData({...productData, min_selling_price: parseFloat(e.target.value)})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Part Number</label>
+                <input type="text" value={productData.part_number} onChange={e => setProductData({...productData, part_number: e.target.value})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" placeholder="Optional" />
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Sales Grade</label>
+                <select value={productData.grade} onChange={e => setProductData({...productData, grade: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="">-- Not graded --</option>
+                  <option value="A">A</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Purchase Status</label>
+                <select value={productData.purchase_status} onChange={e => setProductData({...productData, purchase_status: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="Stable">Stable</option>
+                  <option value="Growing">Growing</option>
+                  <option value="Risky">Risky</option>
+                  <option value="Stopped">Stopped</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Return Status</label>
+                <select value={productData.return_status} onChange={e => setProductData({...productData, return_status: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="Can Take">Can Take</option>
+                  <option value="Do Not Take">Do Not Take</option>
+                  <option value="Review">Review</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Low Stock Alert Threshold</label>
+                <input type="number" value={productData.low_stock_threshold ?? ""} onChange={e => setProductData({...productData, low_stock_threshold: e.target.value === "" ? null : parseInt(e.target.value)})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" placeholder="Default (10)" />
+              </div>
+            </div>
+
+            <div className="border-t border-slate-100 pt-5 mt-5">
+              <h4 className="text-[12px] font-bold text-slate-600 mb-3 uppercase">City/Customer Exclusivity <span className="text-slate-400 normal-case font-medium">(for high-value, distributor-model products)</span></h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Exclusive City</label>
+                  <input type="text" value={productData.exclusivity.city} onChange={e => setProductData({...productData, exclusivity: {...productData.exclusivity, city: e.target.value}})} className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none" placeholder="e.g. Udaipur" />
+                </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Exclusive Customer</label>
+                  <select value={productData.exclusivity.customer_id} onChange={e => setProductData({...productData, exclusivity: {...productData.exclusivity, customer_id: e.target.value}})} className="w-full h-9 px-2 bg-slate-50 border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none">
+                    <option value="">-- None --</option>
+                    {customers.map(c => (
+                      <option key={c._id} value={c._id}>{c.company_name || c.name}</option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="vw-card p-5">
-          <div className="flex items-center justify-between mb-4 border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-slate-800 flex items-center gap-2"><Grid size={16} className="text-purple-600"/> STEP 1: SELECT POWER RANGE</h3>
-            <button onClick={addMatrix} className="text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
-              <Plus size={14} /> Add Range
-            </button>
-          </div>
-          
-          <p className="text-[12px] text-slate-500 mb-5 leading-relaxed">
-            Update SPH and CYL limits (steps of 0.25 D). The system will use this range to generate customer dropdowns and stock grids.
-          </p>
-          
-          <div className="flex flex-col gap-6">
-            {matrices.map((matrix) => {
-              const error = validateMatrix(matrix);
-              return (
-                <div key={matrix.id} className={`bg-slate-50/50 border rounded-lg p-4 relative transition-colors ${error ? 'border-rose-300' : 'border-slate-200'}`}>
-                  {matrices.length > 1 && (
-                    <button onClick={() => removeMatrix(matrix.id)} className="absolute top-4 right-4 text-slate-400 hover:text-rose-500 transition-colors">
-                      <Trash2 size={16} />
-                    </button>
-                  )}
-                  
-                  <div className="mb-4 pr-8">
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase tracking-wide">Matrix Name</label>
-                    <input 
-                      type="text" 
-                      value={matrix.name} 
-                      onChange={e => updateMatrix(matrix.id, 'name', e.target.value)}
-                      className="w-full h-9 px-3 bg-white border border-slate-200 rounded text-[13px] font-semibold text-slate-800 focus:outline-none focus:border-blue-500" 
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                      <div className="text-[11px] font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">SPH Range</div>
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-slate-500 w-10">Min</span>
-                          <div className="flex-1"><PowerInput value={matrix.minSph} onChange={v => updateMatrix(matrix.id, 'minSph', v)} placeholder="-6.00" /></div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-slate-500 w-10">Max</span>
-                          <div className="flex-1"><PowerInput value={matrix.maxSph} onChange={v => updateMatrix(matrix.id, 'maxSph', v)} placeholder="+4.00" /></div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="bg-white p-3 rounded-lg border border-slate-100 shadow-sm">
-                      <div className="text-[11px] font-bold text-slate-500 uppercase mb-3 flex items-center gap-2">CYL Range</div>
-                      <div className="flex flex-col gap-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-slate-500 w-10">Min</span>
-                          <div className="flex-1"><PowerInput value={matrix.minCyl} onChange={v => updateMatrix(matrix.id, 'minCyl', v)} placeholder="-2.00" /></div>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-[11px] font-medium text-slate-500 w-10">Max</span>
-                          <div className="flex-1"><PowerInput value={matrix.maxCyl} onChange={v => updateMatrix(matrix.id, 'maxCyl', v)} placeholder="0.00" /></div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {error && (
-                    <div className="mt-4 bg-rose-50 text-rose-600 border border-rose-200 p-2.5 rounded text-[12px] flex items-center gap-2 font-medium">
-                      <AlertCircle size={14} />
-                      {error}
-                    </div>
-                  )}
-
-                  {!matrix.grid && !error && (
-                    <button onClick={() => handleGenerateGrid(matrix.id)} className="mt-6 vw-btn-secondary h-10 w-full font-bold bg-purple-600 text-white hover:bg-purple-700">
-                      ⬇️ STEP 2: OPEN GRID TO ENTER STOCK
-                    </button>
-                  )}
-
-                  {matrix.grid && (
-                    <div className="mt-6 pt-6 border-t border-slate-200 animate-in fade-in slide-in-from-top-4 duration-300">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-bold text-slate-800 flex items-center gap-2"><Package size={16} className="text-emerald-600"/> WAREHOUSE LOCATION & STOCK ENTRY</h3>
-                        <button onClick={() => handleGenerateGrid(matrix.id)} className="text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded text-[11px] font-bold inline-flex items-center gap-1 transition-colors">
-                          🔄 Update Grid
-                        </button>
-                      </div>
-                      
-                      <div className="grid grid-cols-4 gap-4 mb-6 p-4 bg-emerald-50/50 border border-emerald-100 rounded-lg">
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase">Floor</label>
-                          <select value={matrix.location.floor} onChange={e => updateMatrixLocation(matrix.id, 'floor', e.target.value)} className="w-full h-9 px-2.5 bg-white border border-slate-200 rounded focus:border-emerald-500 focus:outline-none text-[13px]">
-                            <option>Floor 1 (KT)</option>
-                            <option>Floor 2 (PG)</option>
-                            <option>Floor 3 (SV)</option>
-                            <option>Floor 4 (Reserve)</option>
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase">Rack</label>
-                          <select value={matrix.location.rack} onChange={e => updateMatrixLocation(matrix.id, 'rack', e.target.value)} className="w-full h-9 px-2.5 bg-white border border-slate-200 rounded focus:border-emerald-500 focus:outline-none text-[13px]">
-                            <option value="">Select Rack</option>
-                            {Array.from({length: 26}, (_, i) => String.fromCharCode(65 + i)).map(l => (
-                              <option key={l} value={l}>{l}</option>
-                            ))}
-                            {Array.from({length: 26}, (_, i) => String.fromCharCode(65 + i) + '2').map(l => (
-                              <option key={l} value={l}>{l}</option>
-                            ))}
-                            {Array.from({length: 26}, (_, i) => String.fromCharCode(65 + i) + '3').map(l => (
-                              <option key={l} value={l}>{l}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase">Shelf/Section</label>
-                          <select value={matrix.location.shelf} onChange={e => updateMatrixLocation(matrix.id, 'shelf', e.target.value)} className="w-full h-9 px-2.5 bg-white border border-slate-200 rounded focus:border-emerald-500 focus:outline-none text-[13px]">
-                            <option value="">Select Shelf</option>
-                            {Array.from({length: 100}, (_, i) => i + 1).map(n => (
-                              <option key={n} value={n}>{n}</option>
-                            ))}
-                          </select>
-                        </div>
-                        <div>
-                          <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase">Box Pattern</label>
-                          <select value={matrix.location.box} onChange={e => updateMatrixLocation(matrix.id, 'box', e.target.value)} className="w-full h-9 px-2.5 bg-white border border-slate-200 rounded focus:border-emerald-500 focus:outline-none text-[13px]">
-                            <option value="">Select Box Pattern</option>
-                            <option value="1-32">1-32 (8x4)</option>
-                            <option value="1-24">1-24 (8x3)</option>
-                            <option value="1-40">1-40 (8x5)</option>
-                            <option value="Single Box">Single Box</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-[500px] overflow-y-auto">
-                        <table className="w-full text-center border-collapse text-[12px]">
-                          <thead className="bg-slate-100 sticky top-0 z-10">
-                            <tr>
-                              <th className="p-2 border-b border-r border-slate-200 min-w-[80px] font-bold text-slate-700 bg-slate-200">SPH \ CYL</th>
-                              {matrix.grid.cylList.map(cyl => (
-                                <th key={cyl} className="p-2 border-b border-r border-slate-200 min-w-[60px] font-bold text-slate-700">{cyl}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {matrix.grid.sphList.map(sph => (
-                              <tr key={sph}>
-                                <th className="p-2 border-b border-r border-slate-200 bg-slate-50 font-bold text-slate-700 sticky left-0 z-10">{sph}</th>
-                                {matrix.grid.cylList.map(cyl => (
-                                  <td key={cyl} className="p-1 border-b border-r border-slate-100 hover:bg-emerald-50 transition-colors relative">
-                                    <div className="absolute inset-0 flex items-center justify-center text-[10px] text-slate-300 pointer-events-none select-none z-0">
-                                      {matrix.grid.values[`${sph}_${cyl}`] ? '' : 'Qty'}
-                                    </div>
-                                    <input 
-                                      type="number" 
-                                      min="0"
-                                      value={matrix.grid.values[`${sph}_${cyl}`] || ''}
-                                      onChange={(e) => handleCellChange(matrix.id, sph, cyl, e.target.value)}
-                                      className="w-full text-center h-7 focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 rounded bg-transparent relative z-10"
-                                    />
-                                  </td>
-                                ))}
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <MatrixEditor
+          productId={id}
+          lensType={productData.lens_type}
+          racks={racks}
+          rangeConfig={rangeConfig}
+          onRangeConfigChange={setRangeConfig}
+          autoGenerateIfEmpty={false}
+        />
       </div>
 
       {showBrandModal && (
@@ -400,41 +368,41 @@ export function EditProduct() {
               <h3 className="font-bold text-slate-800 text-[15px]">Add New Brand</h3>
               <button onClick={() => setShowBrandModal(false)} className="text-slate-400 hover:text-slate-600 p-1">✕</button>
             </div>
-            
+
             <div className="p-6 space-y-4">
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Brand Name <span className="text-rose-500">*</span></label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newBrand.name}
                   onChange={e => setNewBrand({...newBrand, name: e.target.value})}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" 
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
                   placeholder="e.g. Vishal HC"
                 />
               </div>
-              
+
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Image URL</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   value={newBrand.image}
                   onChange={e => setNewBrand({...newBrand, image: e.target.value})}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" 
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
                   placeholder="https://example.com/logo.png"
                 />
               </div>
 
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Description</label>
-                <textarea 
+                <textarea
                   value={newBrand.description}
                   onChange={e => setNewBrand({...newBrand, description: e.target.value})}
-                  className="w-full p-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 resize-none h-24" 
+                  className="w-full p-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 resize-none h-24"
                   placeholder="Brand details..."
                 />
               </div>
             </div>
-            
+
             <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
               <button onClick={() => setShowBrandModal(false)} className="px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
                 Cancel

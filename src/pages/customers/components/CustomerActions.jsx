@@ -29,11 +29,7 @@ export function CustomerActions({ customer, onActionComplete }) {
     setIsPending(true);
     
     try {
-      if (actionType === "freeze") {
-        await customerService.freezeCustomer(customer.id);
-      } else {
-        await customerService.unfreezeCustomer(customer.id);
-      }
+      await customerService.toggleCustomerStatus(customer.id, actionType !== "freeze");
       setDialogOpen(false);
       setIsOpen(false);
       if (onActionComplete) onActionComplete();

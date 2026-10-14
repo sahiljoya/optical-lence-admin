@@ -15,16 +15,44 @@ export function Customers() {
   
   const [customers, setCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pendingCount, setPendingCount] = useState(0);
+  const [reviewCount, setReviewCount] = useState(0);
 
   const fetchCustomers = async () => {
     setLoading(true);
-    const res = await customerService.getCustomers();
-    setCustomers(res.data.list.filter(c => c.approval_status === "APPROVED")); // Only approved in this list
-    setLoading(false);
+    try {
+      const res = await customerService.getCustomers({ approval_status: "APPROVED", limit: 500 });
+      setCustomers(res.data.list.map(c => ({ ...c, id: c._id })));
+    } catch (err) {
+      console.error(err);
+      setCustomers([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPendingCount = async () => {
+    try {
+      const res = await customerService.getPendingCustomers({});
+      setPendingCount(res.data.total ?? res.data.list.length);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchReviewCount = async () => {
+    try {
+      const res = await customerService.getReviewQueue();
+      setReviewCount((res.data || []).length);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   useEffect(() => {
     fetchCustomers();
+    fetchPendingCount();
+    fetchReviewCount();
   }, []);
 
   // Filter logic
@@ -82,8 +110,13 @@ export function Customers() {
           </div>
           
           <div className="flex items-center gap-2 w-full md:w-auto justify-between sm:justify-end">
+            {reviewCount > 0 && (
+              <Link to="/review-queue" className="flex items-center justify-center flex-1 sm:flex-none gap-2 vw-btn-secondary h-9 px-4 text-[13px] border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors">
+                <AlertCircle size={14} /> <span className="hidden sm:inline">Review ({reviewCount})</span><span className="sm:hidden">Review</span>
+              </Link>
+            )}
             <Link to="/pending-accounts" className="flex items-center justify-center flex-1 sm:flex-none gap-2 vw-btn-secondary h-9 px-4 text-[13px] border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors">
-              <Clock size={14} /> <span className="hidden sm:inline">Approvals (2)</span><span className="sm:hidden">Pending</span>
+              <Clock size={14} /> <span className="hidden sm:inline">Approvals ({pendingCount})</span><span className="sm:hidden">Pending</span>
             </Link>
             <Link to="/customer-onboard" className="vw-btn-primary h-9 px-4 text-[13px] flex-1 sm:flex-none flex items-center justify-center">
               + <span className="hidden sm:inline">Add Customer</span><span className="sm:hidden">New</span>

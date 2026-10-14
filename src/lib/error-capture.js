@@ -5,6 +5,7 @@ function record(error) {
 }
 const CAUSE_DEPTH_LIMIT = 5;
 const DESCRIPTION_LENGTH_LIMIT = 8e3;
+
 function describeError(error) {
   const parts = [];
   let current = error;
@@ -20,11 +21,13 @@ function describeError(error) {
   }
   return parts.join("\n").slice(0, DESCRIPTION_LENGTH_LIMIT);
 }
+
 function describeStatus(error) {
   const { status, statusCode } = error;
   const value = status ?? statusCode;
   return typeof value === "number" ? ` (status ${value})` : "";
 }
+
 function safeStringify(value) {
   try {
     return JSON.stringify(value) ?? String(value);
@@ -32,9 +35,11 @@ function safeStringify(value) {
     return String(value);
   }
 }
+
 function isErrorLike(value) {
   return value instanceof Error;
 }
+
 const originalConsoleError = console.error.bind(console);
 console.error = (...args) => {
   const expanded = args.map((arg) => {
@@ -51,6 +56,7 @@ if (typeof globalThis.addEventListener === "function") {
     (event) => record(event.reason)
   );
 }
+
 function consumeLastCapturedError() {
   if (!lastCapturedError) return void 0;
   if (Date.now() - lastCapturedError.at > TTL_MS) {
@@ -61,6 +67,7 @@ function consumeLastCapturedError() {
   lastCapturedError = void 0;
   return error;
 }
+
 export {
   consumeLastCapturedError,
   describeError

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Search, Download, Undo2, CheckCircle, XCircle, AlertCircle, RefreshCcw } from "lucide-react";
+import { notify } from "@/lib/notify";
 import "@/styles/veriwide.css";
 
 const INITIAL_MOCK_RETURNS = [
@@ -57,7 +58,7 @@ export function Returns() {
     ));
     
     setShowProcessModal(false);
-    alert(`Return ${selectedReturn.id} has been ${action === "approve" ? "Approved" : "Rejected"}.`);
+    notify.success(`Return ${selectedReturn.id} has been ${action === "approve" ? "Approved" : "Rejected"}.`);
   };
 
   return (
@@ -69,7 +70,7 @@ export function Returns() {
           <p className="text-[13px] text-slate-500 mt-1">Manage customer returns, inspect items, and approve refunds.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button onClick={() => alert("Exporting return logs...")} className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
+          <button onClick={() => notify.success("Exporting return logs...")} className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
             <Download size={16} /> Export Logs
           </button>
         </div>

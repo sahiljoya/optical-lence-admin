@@ -1,6 +1,9 @@
-import { useState } from "react";
-import { Search, Download, FileText, IndianRupee, History, Send, X, ArrowUpRight, ArrowDownLeft, ShieldAlert, CheckCircle, XCircle } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, Download, FileText, IndianRupee, History, Send, X, ArrowUpRight, ArrowDownLeft, ShieldAlert, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
+import { notify } from "@/lib/notify";
+import { customerService } from "@/services/customerService";
+import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
 const INITIAL_MOCK_LEDGERS = [
@@ -17,11 +20,6 @@ const MOCK_LEDGER_ENTRIES = [
   { id: "TXN-103", date: "2026-10-04T09:15", type: "CREDIT", amount: 2500, mode: "Order_Bill", ref: "ORD-9021" },
 ];
 
-const INITIAL_MOCK_LIMIT_REQUESTS = [
-  { id: "REQ-001", customer: "Sunshine Eyewear", city: "Mumbai", current_limit: 50000, requested_amount: 100000, reason: "Festival season bulk orders required", status: "PENDING", date: "2026-10-05T14:30" },
-  { id: "REQ-002", customer: "Clear Optics", city: "Pune", current_limit: 20000, requested_amount: 35000, reason: "Expanding new shop, need more credit", status: "PENDING", date: "2026-10-06T09:15" },
-];
-
 const MOCK_CHART_DATA = [
   { name: "Mon", amount: 12000 },
   { name: "Tue", amount: 18500 },
@@ -34,10 +32,11 @@ const MOCK_CHART_DATA = [
 
 export function Billing() {
   const [ledgers, setLedgers] = useState(INITIAL_MOCK_LEDGERS);
-  const [limitRequests, setLimitRequests] = useState(INITIAL_MOCK_LIMIT_REQUESTS);
+  const [limitRequests, setLimitRequests] = useState([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("dues");
-  
+
   // Modals state
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [showLedgerModal, setShowLedgerModal] = useState(false);
@@ -50,12 +49,32 @@ export function Billing() {
   const [paymentMode, setPaymentMode] = useState("Cash");
   const [approveAmount, setApproveAmount] = useState("");
   const [approveRemarks, setApproveRemarks] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
+
+  const fetchLimitRequests = async () => {
+    setLoadingRequests(true);
+    try {
+      const res = await customerService.getLimitIncreaseQueue();
+      setLimitRequests(res.data || []);
+    } catch (err) {
+      console.error(err);
+      setLimitRequests([]);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const canApproveLimits = hasPermission("APPROVE_CREDIT_LIMIT");
+
+  useEffect(() => {
+    if (canApproveLimits) fetchLimitRequests();
+  }, []);
 
   const tabs = [
     { id: "dues", label: "Outstanding Dues" },
     { id: "all", label: "All Accounts" },
     { id: "hold", label: "Hold / Limit Exceeded" },
-    { id: "limit_requests", label: "Limit Requests", badge: limitRequests.filter(r => r.status === "PENDING").length },
+    ...(canApproveLimits ? [{ id: "limit_requests", label: "Limit Requests", badge: limitRequests.filter(r => r.status === "PENDING").length }] : []),
   ];
 
   const filteredLedgers = ledgers.filter(ledger => {
@@ -67,6 +86,12 @@ export function Billing() {
                           ledger.customer.toLowerCase().includes(search.toLowerCase()) ||
                           ledger.city.toLowerCase().includes(search.toLowerCase());
     return matchesTab && matchesSearch;
+  });
+
+  const filteredRequests = limitRequests.filter(req => {
+    const customerName = req.customer_id?.company_name || req.customer_id?.name || "";
+    const s = search.toLowerCase();
+    return customerName.toLowerCase().includes(s) || (req.reason || "").toLowerCase().includes(s);
   });
 
   const totalOutstanding = ledgers.reduce((sum, item) => sum + item.current_balance, 0);
@@ -94,44 +119,51 @@ export function Billing() {
   const submitPayment = (e) => {
     e.preventDefault();
     const amount = parseFloat(paymentAmount);
-    if (!amount || amount <= 0) return alert("Enter a valid amount");
+    if (!amount || amount <= 0) return notify.warning("Enter a valid amount");
 
-    setLedgers(prev => prev.map(c => 
-      c.id === selectedCustomer.id 
-      ? { ...c, current_balance: Math.max(0, c.current_balance - amount), last_payment: new Date().toISOString().split('T')[0] } 
+    setLedgers(prev => prev.map(c =>
+      c.id === selectedCustomer.id
+      ? { ...c, current_balance: Math.max(0, c.current_balance - amount), last_payment: new Date().toISOString().split('T')[0] }
       : c
     ));
-    
+
     setShowReceiveModal(false);
-    alert(`₹${amount} received from ${selectedCustomer.customer} via ${paymentMode}`);
+    notify.success(`₹${amount} received from ${selectedCustomer.customer} via ${paymentMode}`);
   };
 
-  const submitApproveLimit = (e) => {
+  const submitApproveLimit = async (e) => {
     e.preventDefault();
     const amount = parseFloat(approveAmount);
-    if (!amount || amount <= 0) return alert("Enter a valid amount");
+    if (!amount || amount <= 0) return notify.warning("Enter a valid amount");
 
-    // Update Request status
-    setLimitRequests(prev => prev.map(r => 
-      r.id === selectedRequest.id 
-      ? { ...r, status: "APPROVED", approved_amount: amount } 
-      : r
-    ));
-
-    // Also update Customer credit limit
-    setLedgers(prev => prev.map(c => 
-      c.customer === selectedRequest.customer 
-      ? { ...c, credit_limit: amount, account_status: "Active" } // Set active if they were on hold
-      : c
-    ));
-
-    setShowApproveModal(false);
-    alert(`Credit limit for ${selectedRequest.customer} approved at ₹${amount}`);
+    setActionLoading(true);
+    try {
+      await customerService.actionLimitIncrease({
+        requestId: selectedRequest._id,
+        action: "APPROVED",
+        approvedAmount: amount,
+        remarks: approveRemarks
+      });
+      notify.success(`Credit limit for ${selectedRequest.customer_id?.company_name || selectedRequest.customer_id?.name} approved at ₹${amount}`);
+      setShowApproveModal(false);
+      await fetchLimitRequests();
+    } catch (err) {
+      notify.error(err.message || "Failed to approve limit request.");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
-  const handleRejectLimit = (req) => {
-    if (window.confirm(`Are you sure you want to reject the credit limit request from ${req.customer}?`)) {
-      setLimitRequests(prev => prev.map(r => r.id === req.id ? { ...r, status: "REJECTED" } : r));
+  const handleRejectLimit = async (req) => {
+    const customerName = req.customer_id?.company_name || req.customer_id?.name;
+    if (!window.confirm(`Are you sure you want to reject the credit limit request from ${customerName}?`)) return;
+
+    try {
+      await customerService.actionLimitIncrease({ requestId: req._id, action: "REJECTED" });
+      notify.success(`Request from ${customerName} rejected.`);
+      await fetchLimitRequests();
+    } catch (err) {
+      notify.error(err.message || "Failed to reject limit request.");
     }
   };
 
@@ -156,10 +188,10 @@ export function Billing() {
           <p className="text-[13px] text-slate-500 mt-1">Manage customer khata, limits, and view statements.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button onClick={() => alert("Exporting dues list to CSV...")} className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
+          <button onClick={() => notify.success("Exporting dues list to CSV...")} className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
             <Download size={16} /> Export Dues
           </button>
-          <button onClick={() => alert("Reminders sent to all pending accounts!")} className="flex items-center justify-center gap-2 vw-btn-primary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
+          <button onClick={() => notify.success("Reminders sent to all pending accounts!")} className="flex items-center justify-center gap-2 vw-btn-primary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
             <Send size={16} /> Send Reminders
           </button>
         </div>
@@ -257,7 +289,9 @@ export function Billing() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredRequests.length === 0 ? (
+                {loadingRequests ? (
+                  <tr><td colSpan="5" className="px-5 py-12 text-center text-slate-500">Loading requests...</td></tr>
+                ) : filteredRequests.length === 0 ? (
                   <tr>
                     <td colSpan="5" className="px-5 py-12 text-center">
                       <div className="flex flex-col items-center justify-center">
@@ -270,11 +304,11 @@ export function Billing() {
                     </td>
                   </tr>
                 ) : null}
-                {filteredRequests.map(req => (
-                  <tr key={req.id} className="hover:bg-slate-50/50 transition-colors group">
+                {!loadingRequests && filteredRequests.map(req => (
+                  <tr key={req._id} className="hover:bg-slate-50/50 transition-colors group">
                     <td className="px-5 py-4">
-                      <div className="font-bold text-[14px] text-slate-900">{req.customer}</div>
-                      <div className="text-[12px] text-slate-500 mt-0.5">{req.city} • {new Date(req.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</div>
+                      <div className="font-bold text-[14px] text-slate-900">{req.customer_id?.company_name || req.customer_id?.name}</div>
+                      <div className="text-[12px] text-slate-500 mt-0.5">{req.customer_id?.city}{req.createdAt ? ` • ${new Date(req.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : ""}</div>
                     </td>
                     <td className="px-5 py-4 text-right">
                       <div className="font-semibold text-[13px] text-slate-700">₹{req.current_limit.toLocaleString()}</div>
@@ -490,7 +524,7 @@ export function Billing() {
             <form onSubmit={submitApproveLimit} className="p-5">
               <div className="mb-4">
                 <label className="block text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-1">Customer</label>
-                <div className="font-semibold text-slate-900">{selectedRequest.customer}</div>
+                <div className="font-semibold text-slate-900">{selectedRequest.customer_id?.company_name || selectedRequest.customer_id?.name}</div>
                 <div className="text-[12px] text-slate-500 mt-1">Current Limit: ₹{selectedRequest.current_limit.toLocaleString()}</div>
               </div>
 
@@ -519,7 +553,9 @@ export function Billing() {
 
               <div className="flex gap-3">
                 <button type="button" onClick={() => setShowApproveModal(false)} className="flex-1 vw-btn-secondary h-10">Cancel</button>
-                <button type="submit" className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[13px] rounded-lg h-10 transition-colors">Confirm Approval</button>
+                <button type="submit" disabled={actionLoading} className="flex-1 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-60 text-white font-bold text-[13px] rounded-lg h-10 transition-colors flex items-center justify-center gap-2">
+                  {actionLoading ? <Loader2 size={16} className="animate-spin" /> : "Confirm Approval"}
+                </button>
               </div>
             </form>
           </div>

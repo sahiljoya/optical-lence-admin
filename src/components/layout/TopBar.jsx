@@ -4,6 +4,7 @@ import { Search, Bell, ChevronDown, User, Lock, LogOut, X, Camera } from "lucide
 import { useIst } from "@/hooks/useIst";
 import { getItem } from "@/services/storage";
 import { logout } from "@/config/authService";
+import { notify } from "@/lib/notify";
 
 export function TopBar() {
   const { d, t } = useIst();
@@ -42,16 +43,16 @@ export function TopBar() {
   const handleUpdateProfile = (e) => {
     e.preventDefault();
     setUser(profileForm);
-    alert("Profile updated successfully!");
+    notify.success("Profile updated successfully!");
     setShowProfileModal(false);
   };
 
   const handleUpdatePassword = (e) => {
     e.preventDefault();
     if (passwordForm.new !== passwordForm.confirm) {
-      return alert("New passwords do not match!");
+      return notify.warning("New passwords do not match!");
     }
-    alert("Password updated successfully!");
+    notify.success("Password updated successfully!");
     setPasswordForm({ current: "", new: "", confirm: "" });
     setShowProfileModal(false);
   };
