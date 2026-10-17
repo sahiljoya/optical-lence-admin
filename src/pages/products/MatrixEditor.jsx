@@ -59,7 +59,7 @@ const MatrixCell = memo(function MatrixCell({ cellKey: key, qty, hasOverride, ra
           className={`w-full text-[9px] mt-0.5 rounded px-0.5 py-0.5 truncate border transition-colors ${
             hasOverride ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100" : "bg-white border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-600"
           }`}
-          title="Set a specific box for this cell (default otherwise)"
+          title="Assign warehouse box for this power"
         >
           {hasOverride ? "✓ box set" : "set box"}
         </button>
@@ -81,12 +81,13 @@ const MatrixCell = memo(function MatrixCell({ cellKey: key, qty, hasOverride, ra
 // ADD columns, Cross-sign auto-truncation), then lets staff enter quantities + a warehouse
 // location per cell, and persists that via the separate stock-save endpoint.
 export function MatrixEditor({ productId, lensType, racks, godownId = "running_stock", rangeConfig, onRangeConfigChange, autoGenerateIfEmpty = false }) {
-  const isProgressiveFamily = lensType === "Progressive" || lensType === "KT";
+  // RX is always structurally a Progressive lens (same SPH/CYL/AXIS/ADD fields) per the
+  // client's spec, even though it's shown as its own distinct lens-type card to staff.
+  const isProgressiveFamily = lensType === "Progressive" || lensType === "KT" || lensType === "RX";
 
   const [matrixDoc, setMatrixDoc] = useState(null);
   const [qtyMap, setQtyMap] = useState({});
   const [locOverrideMap, setLocOverrideMap] = useState({});
-  const [defaultLocationId, setDefaultLocationId] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isSavingStock, setIsSavingStock] = useState(false);
@@ -202,7 +203,7 @@ export function MatrixEditor({ productId, lensType, racks, godownId = "running_s
       const powerCells = (matrixDoc.power_cells || []).map(c => {
         const key = cellKey(c);
         const qty = parseInt(qtyMap[key]) || 0;
-        const locId = locOverrideMap[key] || defaultLocationId;
+        const locId = locOverrideMap[key];
         return {
           sph: c.sph, cyl: c.cyl, axis: c.axis, add: c.add,
           locations: (qty > 0 && locId) ? [{ warehouse_location_id: locId, quantity: qty }] : [],
@@ -348,11 +349,6 @@ export function MatrixEditor({ productId, lensType, racks, godownId = "running_s
             <button onClick={handleSaveStock} disabled={isSavingStock} className="vw-btn-primary h-9 px-3 gap-2 flex items-center justify-center disabled:opacity-50 text-[12px]">
               <Save size={14} /> {isSavingStock ? "Saving..." : "Save Stock"}
             </button>
-          </div>
-
-          <div className="mb-4 p-3 bg-emerald-50/50 border border-emerald-100 rounded-lg">
-            <label className="block text-[11px] font-bold text-slate-600 mb-1.5 uppercase">Default Warehouse Location <span className="text-slate-400 normal-case font-medium">(used unless a cell has its own location)</span></label>
-            <LocationPicker racks={racks} onChange={(id) => setDefaultLocationId(id)} />
           </div>
 
           <div className="overflow-x-auto border border-slate-200 rounded-lg max-h-[560px] overflow-y-auto">

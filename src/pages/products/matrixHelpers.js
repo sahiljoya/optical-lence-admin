@@ -83,3 +83,51 @@ export function buildGridFromCells(cells) {
 
   return { flags, rows, cols, rowKeys, colKeys };
 }
+
+export function generateProductCode({
+  brand,
+  index,
+  base,
+  lens_type,
+  diameter,
+  min_sph,
+  max_sph,
+  min_cyl,
+  max_cyl,
+  range_label
+}) {
+  if (!brand) return "";
+
+  const cleanBrand = String(brand).trim().toUpperCase().replace(/[^A-Z0-9]/g, "");
+
+  // Base code
+  let baseCode = "HC";
+  const b = String(base || "");
+  if (b.includes("HC") || b.toLowerCase().includes("hard coat")) baseCode = "HC";
+  else if (b.includes("B.CUT") || b.toLowerCase().includes("blue cut")) baseCode = "BCUT";
+  else if (b.includes("POLY") || b.toLowerCase().includes("polycarbonate")) baseCode = "POLY";
+  else if (b.toLowerCase().includes("photo grey")) baseCode = "PG";
+  else if (b) baseCode = b.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 4);
+
+  // Type code
+  let typeCode = "SV";
+  if (lens_type === "Progressive") typeCode = "PG";
+  else if (lens_type === "KT") typeCode = "KT";
+  else if (lens_type === "RX") typeCode = "RX";
+  else if (lens_type === "Cross") typeCode = "CROSS";
+
+  // Power range code
+  let rangeCode = "";
+  if (range_label && String(range_label).trim()) {
+    rangeCode = String(range_label).trim().toUpperCase().replace(/\s+/g, "");
+  } else {
+    const sphStr = min_sph !== undefined && !isNaN(min_sph) ? (min_sph > 0 ? `+${min_sph}` : `${min_sph}`) : "";
+    const cylBound = min_cyl !== undefined && !isNaN(min_cyl) && min_cyl !== 0 ? min_cyl : (max_cyl || 0);
+    const cylStr = cylBound !== undefined && !isNaN(cylBound) ? (cylBound > 0 ? `+${cylBound}` : `${cylBound}`) : "";
+    rangeCode = `${sphStr}${cylStr}` || "STD";
+  }
+
+  const diaStr = diameter ? `-${diameter}MM` : "";
+
+  return `${cleanBrand}-${index}-${baseCode}-${typeCode}-${rangeCode}${diaStr}`.toUpperCase();
+}

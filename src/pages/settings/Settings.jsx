@@ -1,8 +1,11 @@
 import { useState, useEffect } from "react";
-import { ShieldCheck, UserPlus, Key, Mail, Edit, Trash2, CheckCircle2, ShieldAlert, Plus, X, Lock, Power, Package, Loader2 } from "lucide-react";
+import { ShieldCheck, UserPlus, Key, Mail, Edit, Trash2, CheckCircle2, ShieldAlert, Plus, X, Lock, Power, Package, Loader2, Settings as SettingsIcon, IndianRupee, Truck } from "lucide-react";
 import { notify } from "@/lib/notify";
 import { userService } from "@/services/userService";
 import { warehouseApi } from "@/services/productApi";
+import { settingsService } from "@/services/settingsService";
+import { courierService } from "@/services/courierService";
+import { AddCourierModal } from "@/components/settings/AddCourierModal";
 import "@/styles/veriwide.css";
 
 const formatPermissionLabel = (perm) =>
@@ -37,6 +40,16 @@ export function Settings() {
   // Form States
   const [userForm, setUserForm] = useState({ name: "", phone: "", email: "", password: "", roleId: "" });
   const [roleForm, setRoleForm] = useState({ role: "", desc: "", permissions: [] });
+
+  // Platform Settings (Charges) State
+  const [platformForm, setPlatformForm] = useState({ bulk_cartage_charge: 0, urgent_delivery_charge: 0 });
+  const [loadingPlatformSettings, setLoadingPlatformSettings] = useState(true);
+  const [savingPlatformSettings, setSavingPlatformSettings] = useState(false);
+
+  // Courier Companies State
+  const [couriers, setCouriers] = useState([]);
+  const [loadingCouriers, setLoadingCouriers] = useState(true);
+  const [showAddCourierModal, setShowAddCourierModal] = useState(false);
 
   const fetchUsers = async () => {
     setLoadingUsers(true);
@@ -74,12 +87,80 @@ export function Settings() {
     }
   };
 
+  const fetchPlatformSettings = async () => {
+    setLoadingPlatformSettings(true);
+    try {
+      const res = await settingsService.getPlatformSettings();
+      if (res.error === false) {
+        setPlatformForm({
+          bulk_cartage_charge: res.data?.bulk_cartage_charge ?? 0,
+          urgent_delivery_charge: res.data?.urgent_delivery_charge ?? 0
+        });
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingPlatformSettings(false);
+    }
+  };
+
+  const fetchCouriers = async () => {
+    setLoadingCouriers(true);
+    try {
+      const res = await courierService.getCouriers();
+      setCouriers(res.error === false ? (res.data || []).map(c => ({ ...c, id: c._id })) : []);
+    } catch (err) {
+      console.error(err);
+      setCouriers([]);
+    } finally {
+      setLoadingCouriers(false);
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchRoles();
     fetchPermissions();
     fetchRacks();
+    fetchPlatformSettings();
+    fetchCouriers();
   }, []);
+
+  // ---------------- PLATFORM SETTINGS LOGIC ----------------
+  const handleSavePlatformSettings = async (e) => {
+    e.preventDefault();
+    setSavingPlatformSettings(true);
+    try {
+      const res = await settingsService.updatePlatformSettings({
+        bulk_cartage_charge: Number(platformForm.bulk_cartage_charge) || 0,
+        urgent_delivery_charge: Number(platformForm.urgent_delivery_charge) || 0
+      });
+      if (res.error === false) {
+        notify.success("Platform settings updated successfully!");
+        await fetchPlatformSettings();
+      } else {
+        notify.error(res.message || "Failed to update settings.");
+      }
+    } catch (err) {
+      notify.error(err.message || "Error updating settings.");
+    } finally {
+      setSavingPlatformSettings(false);
+    }
+  };
+
+  // ---------------- COURIER COMPANY LOGIC ----------------
+  const handleToggleCourierStatus = async (courier) => {
+    try {
+      const res = await courierService.updateCourier(courier.id, { is_active: !courier.is_active });
+      if (res.error === false) {
+        await fetchCouriers();
+      } else {
+        notify.error(res.message || "Failed to update courier company.");
+      }
+    } catch (err) {
+      notify.error("Error updating courier company.");
+    }
+  };
 
   // ---------------- USER LOGIC ----------------
   const handleOpenUserModal = (user = null) => {
@@ -426,6 +507,15 @@ export function Settings() {
           Physical Warehouse Storage
           {activeTab === "locations" && <span className="absolute bottom-0 left-0 w-full h-[3px] bg-blue-600 rounded-t-full" />}
         </button>
+        <button
+          onClick={() => setActiveTab("platform")}
+          className={`px-4 py-3 text-[14px] font-semibold transition-colors relative flex items-center gap-2 whitespace-nowrap ${
+            activeTab === "platform" ? "text-blue-600" : "text-slate-500 hover:text-slate-700"
+          }`}
+        >
+          Platform Settings
+          {activeTab === "platform" && <span className="absolute bottom-0 left-0 w-full h-[3px] bg-blue-600 rounded-t-full" />}
+        </button>
       </div>
 
       {/* Content Area */}
@@ -619,7 +709,104 @@ export function Settings() {
             )}
           </div>
         )}
+
+        {/* PLATFORM SETTINGS TAB */}
+        {activeTab === "platform" && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Platform Charges Card */}
+            <div className="vw-card overflow-hidden h-fit">
+              <div className="p-5 border-b border-slate-100 bg-slate-50/50">
+                <h3 className="font-black text-[15px] text-slate-800 flex items-center gap-2">
+                  <IndianRupee size={18} className="text-emerald-600" /> Order Charges
+                </h3>
+                <p className="text-[12px] text-slate-500 mt-1">Platform-wide charges applied on every order — changing these affects all future orders immediately.</p>
+              </div>
+              {loadingPlatformSettings ? (
+                <div className="p-10 text-center text-slate-500 text-[13px] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading settings...</div>
+              ) : (
+                <form onSubmit={handleSavePlatformSettings} className="p-5 flex flex-col gap-5">
+                  <div>
+                    <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Urgent Delivery Charge (₹)</label>
+                    <p className="text-[11px] text-slate-500 mb-2">Added when a customer marks their order as Urgent delivery.</p>
+                    <input
+                      type="number" min="0"
+                      value={platformForm.urgent_delivery_charge}
+                      onChange={e => setPlatformForm({ ...platformForm, urgent_delivery_charge: e.target.value })}
+                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[14px] font-semibold focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Bulk (Stock) Order Cartage Charge (₹)</label>
+                    <p className="text-[11px] text-slate-500 mb-2">Added automatically when an order is placed with type "Stock" (bulk).</p>
+                    <input
+                      type="number" min="0"
+                      value={platformForm.bulk_cartage_charge}
+                      onChange={e => setPlatformForm({ ...platformForm, bulk_cartage_charge: e.target.value })}
+                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[14px] font-semibold focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <button type="submit" disabled={savingPlatformSettings} className="vw-btn-primary h-10 disabled:opacity-50 flex items-center justify-center gap-2">
+                    {savingPlatformSettings ? <Loader2 size={16} className="animate-spin" /> : "Save Settings"}
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* Courier Companies Card */}
+            <div className="vw-card overflow-hidden h-fit">
+              <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-black text-[15px] text-slate-800 flex items-center gap-2">
+                    <Truck size={18} className="text-indigo-600" /> Courier Companies
+                  </h3>
+                  <p className="text-[12px] text-slate-500 mt-1">Customers pick their preferred courier from this list — set once, it applies to their whole account (including sub-customers).</p>
+                </div>
+                <button
+                  onClick={() => setShowAddCourierModal(true)}
+                  className="vw-btn-primary h-9 px-3.5 flex items-center gap-1.5 text-[13px] font-bold whitespace-nowrap shrink-0"
+                >
+                  <Plus size={15} /> Add
+                </button>
+              </div>
+              <div className="divide-y divide-slate-100 max-h-[420px] overflow-y-auto">
+                {loadingCouriers ? (
+                  <div className="p-8 text-center text-slate-500 text-[13px] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading...</div>
+                ) : couriers.length === 0 ? (
+                  <div className="p-8 text-center text-slate-500 text-[13px]">No courier companies added yet.</div>
+                ) : couriers.map(courier => (
+                  <div key={courier.id} className="flex items-center justify-between px-5 py-3 gap-3">
+                    <div className="flex items-center gap-3 min-w-0">
+                      {courier.image ? (
+                        <img src={courier.image} alt={courier.name} className="w-8 h-8 rounded-lg object-contain bg-slate-50 border border-slate-200 shrink-0" />
+                      ) : (
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 flex items-center justify-center shrink-0">
+                          <Truck size={14} className="text-slate-400" />
+                        </div>
+                      )}
+                      <span className="font-semibold text-[13px] text-slate-800 truncate">{courier.name}</span>
+                    </div>
+                    <button
+                      onClick={() => handleToggleCourierStatus(courier)}
+                      className={`inline-flex px-2.5 py-1 rounded text-[10px] font-bold uppercase border transition-colors shrink-0 ${
+                        courier.is_active ? "bg-emerald-100 text-emerald-700 border-emerald-200 hover:bg-rose-50 hover:text-rose-600 hover:border-rose-200" : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200"
+                      }`}
+                      title="Click to toggle status"
+                    >
+                      {courier.is_active ? "Active" : "Inactive"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      <AddCourierModal
+        isOpen={showAddCourierModal}
+        onClose={() => setShowAddCourierModal(false)}
+        onCourierCreated={() => fetchCouriers()}
+      />
 
       {/* 1. ADD / EDIT USER PROFILE MODAL */}
       {showUserModal && (

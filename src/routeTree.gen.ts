@@ -17,6 +17,7 @@ import { Route as AdminCustomerOnboardRouteImport } from './routes/_admin.custom
 import { Route as AdminCustomersRouteImport } from './routes/_admin.customers'
 import { Route as AdminDispatchRouteImport } from './routes/_admin.dispatch'
 import { Route as AdminFindMyLensRouteImport } from './routes/_admin.find-my-lens'
+import { Route as AdminLogsRouteImport } from './routes/_admin.logs'
 import { Route as AdminOrdersRouteImport } from './routes/_admin.orders'
 import { Route as AdminPendingAccountsRouteImport } from './routes/_admin.pending-accounts'
 import { Route as AdminPickListRouteImport } from './routes/_admin.pick-list'
@@ -72,6 +73,11 @@ const AdminDispatchRoute = AdminDispatchRouteImport.update({
 const AdminFindMyLensRoute = AdminFindMyLensRouteImport.update({
   id: '/find-my-lens',
   path: '/find-my-lens',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminLogsRoute = AdminLogsRouteImport.update({
+  id: '/logs',
+  path: '/logs',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminOrdersRoute = AdminOrdersRouteImport.update({
@@ -168,6 +174,7 @@ export interface FileRoutesByFullPath {
   '/customers': typeof AdminCustomersRoute
   '/dispatch': typeof AdminDispatchRoute
   '/find-my-lens': typeof AdminFindMyLensRoute
+  '/logs': typeof AdminLogsRoute
   '/orders': typeof AdminOrdersRoute
   '/pending-accounts': typeof AdminPendingAccountsRoute
   '/pick-list': typeof AdminPickListRoute
@@ -193,6 +200,7 @@ export interface FileRoutesByTo {
   '/customers': typeof AdminCustomersRoute
   '/dispatch': typeof AdminDispatchRoute
   '/find-my-lens': typeof AdminFindMyLensRoute
+  '/logs': typeof AdminLogsRoute
   '/orders': typeof AdminOrdersRoute
   '/pending-accounts': typeof AdminPendingAccountsRoute
   '/pick-list': typeof AdminPickListRoute
@@ -221,6 +229,7 @@ export interface FileRoutesById {
   '/_admin/customers': typeof AdminCustomersRoute
   '/_admin/dispatch': typeof AdminDispatchRoute
   '/_admin/find-my-lens': typeof AdminFindMyLensRoute
+  '/_admin/logs': typeof AdminLogsRoute
   '/_admin/orders': typeof AdminOrdersRoute
   '/_admin/pending-accounts': typeof AdminPendingAccountsRoute
   '/_admin/pick-list': typeof AdminPickListRoute
@@ -250,6 +259,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/dispatch'
     | '/find-my-lens'
+    | '/logs'
     | '/orders'
     | '/pending-accounts'
     | '/pick-list'
@@ -275,6 +285,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/dispatch'
     | '/find-my-lens'
+    | '/logs'
     | '/orders'
     | '/pending-accounts'
     | '/pick-list'
@@ -302,6 +313,7 @@ export interface FileRouteTypes {
     | '/_admin/customers'
     | '/_admin/dispatch'
     | '/_admin/find-my-lens'
+    | '/_admin/logs'
     | '/_admin/orders'
     | '/_admin/pending-accounts'
     | '/_admin/pick-list'
@@ -383,6 +395,13 @@ declare module '@tanstack/react-router' {
       path: '/find-my-lens'
       fullPath: '/find-my-lens'
       preLoaderRoute: typeof AdminFindMyLensRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/_admin/logs': {
+      id: '/_admin/logs'
+      path: '/logs'
+      fullPath: '/logs'
+      preLoaderRoute: typeof AdminLogsRouteImport
       parentRoute: typeof AdminRoute
     }
     '/_admin/orders': {
@@ -513,6 +532,7 @@ interface AdminRouteChildren {
   AdminCustomersRoute: typeof AdminCustomersRoute
   AdminDispatchRoute: typeof AdminDispatchRoute
   AdminFindMyLensRoute: typeof AdminFindMyLensRoute
+  AdminLogsRoute: typeof AdminLogsRoute
   AdminOrdersRoute: typeof AdminOrdersRoute
   AdminPendingAccountsRoute: typeof AdminPendingAccountsRoute
   AdminPickListRoute: typeof AdminPickListRoute
@@ -539,6 +559,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminCustomersRoute: AdminCustomersRoute,
   AdminDispatchRoute: AdminDispatchRoute,
   AdminFindMyLensRoute: AdminFindMyLensRoute,
+  AdminLogsRoute: AdminLogsRoute,
   AdminOrdersRoute: AdminOrdersRoute,
   AdminPendingAccountsRoute: AdminPendingAccountsRoute,
   AdminPickListRoute: AdminPickListRoute,

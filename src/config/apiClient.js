@@ -133,3 +133,40 @@ export const uploadFiles = async ({
     throw new Error(message);
   }
 };
+
+/**
+ * Dedicated single image upload function
+ * Calls POST /uploadImage and returns uploaded image data (imageUrl, imageName)
+ * @param {File} file - Image file object to upload
+ */
+export const uploadImageApi = async (file) => {
+  if (!file) {
+    throw new Error("No image file selected.");
+  }
+
+  const token = getItem("admin_token");
+  if (!token) {
+    throw new Error("Token not found. Please login again.");
+  }
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  try {
+    const response = await axios.post(`${BACKEND_URL}/uploadImage`, formData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    return handleResponse(response.data);
+  } catch (error) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "Image upload failed";
+
+    throw new Error(message);
+  }
+};

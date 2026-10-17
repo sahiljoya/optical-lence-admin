@@ -1,10 +1,12 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { Link, useParams, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Save, Settings2, Plus, Tag } from "lucide-react";
 import { brandApi, productApi, warehouseApi } from "../../services/productApi";
-import { customerService } from "../../services/customerService";
 import { notify } from "@/lib/notify";
 import { MatrixEditor, defaultRangeConfigFromProduct } from "./MatrixEditor";
+import { generateProductCode } from "./matrixHelpers";
+import { DeptBadge } from "@/components/common/DeptBadge";
+import { AddBrandModal } from "@/components/products/AddBrandModal";
 import "@/styles/veriwide.css";
 
 export function EditProduct() {
@@ -15,9 +17,7 @@ export function EditProduct() {
   const [isSaving, setIsSaving] = useState(false);
   const [brands, setBrands] = useState([]);
   const [racks, setRacks] = useState([]);
-  const [customers, setCustomers] = useState([]);
   const [showBrandModal, setShowBrandModal] = useState(false);
-  const [newBrand, setNewBrand] = useState({ name: "", description: "", image: "" });
 
   const [productData, setProductData] = useState({
     brand: "",
@@ -31,12 +31,14 @@ export function EditProduct() {
     value_tier: "commodity",
     tier_prices: { courier: 120, stock_a: 110, stock_a_plus: 105, stock_platinum: 100 },
     range_label: "",
-    grade: "",
+    lens_nature: "Finished",
+    grade_quantity: "",
+    grade_rate: "",
     purchase_status: "Stable",
     return_status: "Can Take",
     part_number: "",
     low_stock_threshold: null,
-    exclusivity: { city: "", customer_id: "" }
+    n_a_flag: false
   });
 
   // A Product document is exactly one priced power range (see CreateProduct.jsx). The actual
@@ -44,22 +46,38 @@ export function EditProduct() {
   // seeds its range-definition form from this product's current min/max boundaries.
   const [rangeConfig, setRangeConfig] = useState(defaultRangeConfigFromProduct(null));
 
+  const autoSku = useMemo(() => {
+    if (productData.product_code) return productData.product_code;
+    const cylMins = rangeConfig?.cylBlocks?.map(b => parseFloat(b.min)) || [];
+    const cylMaxs = rangeConfig?.cylBlocks?.map(b => parseFloat(b.max)) || [];
+    return generateProductCode({
+      brand: productData.brand,
+      index: productData.index,
+      base: productData.base,
+      lens_type: productData.lens_type,
+      diameter: productData.diameter,
+      min_sph: parseFloat(rangeConfig?.sph?.min),
+      max_sph: parseFloat(rangeConfig?.sph?.max),
+      min_cyl: cylMins.length > 0 ? Math.min(...cylMins) : 0,
+      max_cyl: cylMaxs.length > 0 ? Math.max(...cylMaxs) : 0,
+      range_label: productData.range_label
+    });
+  }, [productData.product_code, productData.brand, productData.index, productData.base, productData.lens_type, productData.diameter, productData.range_label, rangeConfig]);
+
   useEffect(() => {
     if (!id) return;
     const init = async () => {
       setIsLoading(true);
       try {
-        const [brandsRes, rackRes, custRes, prodRes] = await Promise.all([
+        const [brandsRes, rackRes, prodRes] = await Promise.all([
           brandApi.getBrands(),
           warehouseApi.getRackSummary(),
-          customerService.getCustomers({ limit: 200 }),
           productApi.getProductDetail(id)
         ]);
 
         const brandsList = brandsRes.error === false ? brandsRes.data : [];
         setBrands(brandsList);
         setRacks(rackRes.error === false ? rackRes.data : []);
-        setCustomers(custRes.error === false ? (custRes.data?.list || []) : []);
 
         if (prodRes.error !== false) {
           notify.error(prodRes.message || "Failed to load product");
@@ -78,15 +96,14 @@ export function EditProduct() {
           value_tier: product.value_tier || "commodity",
           tier_prices: product.tier_prices || { courier: 0, stock_a: 0, stock_a_plus: 0, stock_platinum: 0 },
           range_label: product.range_label || "",
-          grade: product.grade || "",
+          lens_nature: product.lens_nature || "Finished",
+          grade_quantity: product.grade_quantity || "",
+          grade_rate: product.grade_rate || "",
           purchase_status: product.purchase_status || "Stable",
           return_status: product.return_status || "Can Take",
           part_number: product.part_number || "",
           low_stock_threshold: product.low_stock_threshold ?? null,
-          exclusivity: {
-            city: product.exclusivity?.city || "",
-            customer_id: product.exclusivity?.customer_id || ""
-          }
+          n_a_flag: product.n_a_flag || false
         });
 
         setRangeConfig(defaultRangeConfigFromProduct(product));
@@ -108,39 +125,23 @@ export function EditProduct() {
     }
   };
 
-  const handleSaveBrand = async () => {
-    if (!newBrand.name) return;
-    try {
-      const res = await brandApi.createBrand(newBrand);
-      if (res.error === false) {
-        setShowBrandModal(false);
-        setNewBrand({ name: "", description: "", image: "" });
-        fetchBrands();
-      } else {
-        notify.error(res.message);
-      }
-    } catch (error) {
-      notify.error("Error creating brand");
-    }
-  };
-
   const handleSaveProduct = async () => {
-    if (!productData.brand || !productData.product_code) return notify.warning("Brand and Product Code are required.");
+    if (!productData.brand) return notify.warning("Brand is required.");
+    const sku = productData.product_code || autoSku;
+    if (!sku) return notify.warning("Unable to determine Product Code (SKU).");
     setIsSaving(true);
     try {
       const cylMins = rangeConfig.cylBlocks.map(b => parseFloat(b.min));
       const cylMaxs = rangeConfig.cylBlocks.map(b => parseFloat(b.max));
       const payload = {
         ...productData,
+        product_code: sku,
         min_sph: parseFloat(rangeConfig.sph.min),
         max_sph: parseFloat(rangeConfig.sph.max),
         min_cyl: cylMins.length > 0 ? Math.min(...cylMins) : 0,
         max_cyl: cylMaxs.length > 0 ? Math.max(...cylMaxs) : 0,
-        grade: productData.grade || undefined,
-        exclusivity: {
-          city: productData.exclusivity.city || null,
-          customer_id: productData.exclusivity.customer_id || null
-        }
+        grade_quantity: productData.grade_quantity || undefined,
+        grade_rate: productData.grade_rate || undefined
       };
 
       const pRes = await productApi.updateProduct(id, payload);
@@ -197,8 +198,13 @@ export function EditProduct() {
               </div>
 
               <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Product Code (SKU) <span className="text-rose-500">*</span></label>
-                <input type="text" placeholder="e.g. AIRSMART-1.61-BCUT-SV--6-4" value={productData.product_code} onChange={e => setProductData({...productData, product_code: e.target.value})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 uppercase" />
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                  <span>Product Code (SKU)</span>
+                  <span className="text-[10px] uppercase font-semibold tracking-wider text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">Auto Generated</span>
+                </label>
+                <div className="w-full h-10 px-3 bg-slate-100 border border-slate-200 rounded-lg text-[13px] font-mono font-medium text-slate-800 flex items-center truncate select-all">
+                  {productData.product_code || autoSku || <span className="text-slate-400 italic font-sans text-xs">No SKU available</span>}
+                </div>
               </div>
 
               <div>
@@ -207,6 +213,15 @@ export function EditProduct() {
                   <option value="Single Vision">Single Vision (SV)</option>
                   <option value="Progressive">Progressive (PG)</option>
                   <option value="KT">Bifocal (KT)</option>
+                  <option value="Cross">Cross</option>
+                  <option value="RX">RX (Made-to-order)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Lens Nature</label>
+                <select value={productData.lens_nature} onChange={e => setProductData({...productData, lens_nature: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="Finished">Finished</option>
+                  <option value="Raw / Semi-Finished">Raw / Semi-Finished</option>
                 </select>
               </div>
               <div>
@@ -263,7 +278,7 @@ export function EditProduct() {
 
             {/* PRICING */}
             <div className="border-t border-slate-100 pt-5 mt-2">
-              <h4 className="text-[12px] font-bold text-slate-600 mb-3 uppercase">Tier Pricing <span className="text-slate-400 normal-case font-medium">(applies to this product's power range only)</span></h4>
+              <h4 className="text-[12px] font-bold text-slate-600 mb-3 uppercase flex items-center gap-2">Tier Pricing <span className="text-slate-400 normal-case font-medium">(applies to this product's power range only)</span> <DeptBadge dept="sales" /></h4>
               <div className="grid grid-cols-4 gap-3">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 mb-1">Courier</label>
@@ -290,25 +305,35 @@ export function EditProduct() {
             <h3 className="font-bold text-slate-800 flex items-center gap-2 mb-4 border-b border-slate-100 pb-3"><Tag size={16} className="text-emerald-600"/> Additional Details</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
               <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Minimum Selling Price</label>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">Minimum Selling Price <DeptBadge dept="sales" /></label>
                 <input type="number" value={productData.min_selling_price} onChange={e => setProductData({...productData, min_selling_price: parseFloat(e.target.value)})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" />
               </div>
               <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Part Number</label>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">Part Number <DeptBadge dept="purchase" /></label>
                 <input type="text" value={productData.part_number} onChange={e => setProductData({...productData, part_number: e.target.value})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" placeholder="Optional" />
               </div>
               <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Sales Grade</label>
-                <select value={productData.grade} onChange={e => setProductData({...productData, grade: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">Grade — Quantity/Volume <DeptBadge dept="sales" /></label>
+                <select value={productData.grade_quantity} onChange={e => setProductData({...productData, grade_quantity: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
                   <option value="">-- Not graded --</option>
-                  <option value="A">A</option>
+                  <option value="A">A — Super Fast</option>
                   <option value="B">B</option>
                   <option value="C">C</option>
-                  <option value="D">D</option>
+                  <option value="D">D — Dead Stock</option>
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Purchase Status</label>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">Grade — Rate/Value <DeptBadge dept="sales" /></label>
+                <select value={productData.grade_rate} onChange={e => setProductData({...productData, grade_rate: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
+                  <option value="">-- Not graded --</option>
+                  <option value="A">A — High Margin</option>
+                  <option value="B">B</option>
+                  <option value="C">C</option>
+                  <option value="D">D — Low Margin</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">Purchase Status <DeptBadge dept="purchase" /></label>
                 <select value={productData.purchase_status} onChange={e => setProductData({...productData, purchase_status: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
                   <option value="Stable">Stable</option>
                   <option value="Growing">Growing</option>
@@ -317,7 +342,7 @@ export function EditProduct() {
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Return Status</label>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">Return Status <DeptBadge dept="sales" /></label>
                 <select value={productData.return_status} onChange={e => setProductData({...productData, return_status: e.target.value})} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
                   <option value="Can Take">Can Take</option>
                   <option value="Do Not Take">Do Not Take</option>
@@ -325,27 +350,15 @@ export function EditProduct() {
                 </select>
               </div>
               <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Low Stock Alert Threshold</label>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">Low Stock Alert Threshold <DeptBadge dept="purchase" /></label>
                 <input type="number" value={productData.low_stock_threshold ?? ""} onChange={e => setProductData({...productData, low_stock_threshold: e.target.value === "" ? null : parseInt(e.target.value)})} className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" placeholder="Default (10)" />
               </div>
-            </div>
-
-            <div className="border-t border-slate-100 pt-5 mt-5">
-              <h4 className="text-[12px] font-bold text-slate-600 mb-3 uppercase">City/Customer Exclusivity <span className="text-slate-400 normal-case font-medium">(for high-value, distributor-model products)</span></h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Exclusive City</label>
-                  <input type="text" value={productData.exclusivity.city} onChange={e => setProductData({...productData, exclusivity: {...productData.exclusivity, city: e.target.value}})} className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none" placeholder="e.g. Udaipur" />
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 mb-1">Exclusive Customer</label>
-                  <select value={productData.exclusivity.customer_id} onChange={e => setProductData({...productData, exclusivity: {...productData.exclusivity, customer_id: e.target.value}})} className="w-full h-9 px-2 bg-slate-50 border border-slate-200 rounded text-[13px] focus:border-blue-500 focus:outline-none">
-                    <option value="">-- None --</option>
-                    {customers.map(c => (
-                      <option key={c._id} value={c._id}>{c.company_name || c.name}</option>
-                    ))}
-                  </select>
-                </div>
+              <div>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5 flex items-center justify-between">Stock Status <DeptBadge dept="stock" /></label>
+                <label className="flex items-center gap-2 h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] cursor-pointer">
+                  <input type="checkbox" checked={productData.n_a_flag} onChange={e => setProductData({...productData, n_a_flag: e.target.checked})} />
+                  Mark as N/A (Not Available for Sale)
+                </label>
               </div>
             </div>
           </div>
@@ -361,59 +374,16 @@ export function EditProduct() {
         />
       </div>
 
-      {showBrandModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-              <h3 className="font-bold text-slate-800 text-[15px]">Add New Brand</h3>
-              <button onClick={() => setShowBrandModal(false)} className="text-slate-400 hover:text-slate-600 p-1">✕</button>
-            </div>
-
-            <div className="p-6 space-y-4">
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Brand Name <span className="text-rose-500">*</span></label>
-                <input
-                  type="text"
-                  value={newBrand.name}
-                  onChange={e => setNewBrand({...newBrand, name: e.target.value})}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
-                  placeholder="e.g. Vishal HC"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Image URL</label>
-                <input
-                  type="text"
-                  value={newBrand.image}
-                  onChange={e => setNewBrand({...newBrand, image: e.target.value})}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
-                  placeholder="https://example.com/logo.png"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Description</label>
-                <textarea
-                  value={newBrand.description}
-                  onChange={e => setNewBrand({...newBrand, description: e.target.value})}
-                  className="w-full p-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 resize-none h-24"
-                  placeholder="Brand details..."
-                />
-              </div>
-            </div>
-
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
-              <button onClick={() => setShowBrandModal(false)} className="px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-200 rounded-lg transition-colors">
-                Cancel
-              </button>
-              <button onClick={handleSaveBrand} disabled={!newBrand.name} className="px-4 py-2 text-[13px] font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50">
-                Save Brand
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <AddBrandModal
+        isOpen={showBrandModal}
+        onClose={() => setShowBrandModal(false)}
+        onBrandCreated={(createdBrand) => {
+          fetchBrands();
+          if (createdBrand?.name) {
+            setProductData(prev => ({ ...prev, brand: createdBrand.name }));
+          }
+        }}
+      />
     </>
   );
 }

@@ -1,41 +1,24 @@
 import { useState, useEffect } from "react";
+import { useSearch } from "@tanstack/react-router";
 import { Search, Download, FileText, IndianRupee, History, Send, X, ArrowUpRight, ArrowDownLeft, ShieldAlert, CheckCircle, XCircle, Loader2 } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { notify } from "@/lib/notify";
 import { customerService } from "@/services/customerService";
+import { billingService } from "@/services/billingService";
 import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
-const INITIAL_MOCK_LEDGERS = [
-  { id: "CUST-001", customer: "Vision Plus", phone: "+91 9876543210", city: "Delhi", current_balance: 45000, credit_limit: 50000, account_status: "Active", last_payment: "2026-10-01" },
-  { id: "CUST-002", customer: "Clear Optics", phone: "+91 8765432109", city: "Pune", current_balance: 12500, credit_limit: 20000, account_status: "Active", last_payment: "2026-10-04" },
-  { id: "CUST-003", customer: "Sunshine Eyewear", phone: "+91 7654321098", city: "Mumbai", current_balance: 62000, credit_limit: 50000, account_status: "Hold", last_payment: "2026-09-15" }, 
-  { id: "CUST-004", customer: "City Optics", phone: "+91 6543210987", city: "Jaipur", current_balance: 8900, credit_limit: 15000, account_status: "Active", last_payment: "2026-10-05" },
-  { id: "CUST-005", customer: "Rajat Vision", phone: "+91 5432109876", city: "Delhi", current_balance: 0, credit_limit: 30000, account_status: "Active", last_payment: "2026-10-06" }, 
-];
-
-const MOCK_LEDGER_ENTRIES = [
-  { id: "TXN-101", date: "2026-10-01T10:00", type: "CREDIT", amount: 15000, mode: "Order_Bill", ref: "ORD-9005" },
-  { id: "TXN-102", date: "2026-10-02T14:30", type: "DEBIT", amount: 5000, mode: "UPI", ref: "UPI123456" },
-  { id: "TXN-103", date: "2026-10-04T09:15", type: "CREDIT", amount: 2500, mode: "Order_Bill", ref: "ORD-9021" },
-];
-
-const MOCK_CHART_DATA = [
-  { name: "Mon", amount: 12000 },
-  { name: "Tue", amount: 18500 },
-  { name: "Wed", amount: 9400 },
-  { name: "Thu", amount: 22000 },
-  { name: "Fri", amount: 35000 },
-  { name: "Sat", amount: 14000 },
-  { name: "Sun", amount: 8000 },
-];
-
 export function Billing() {
-  const [ledgers, setLedgers] = useState(INITIAL_MOCK_LEDGERS);
+  const routeSearch = useSearch({ strict: false });
+  const [ledgers, setLedgers] = useState([]);
+  const [loadingLedgers, setLoadingLedgers] = useState(true);
+  const [chartData, setChartData] = useState([]);
+  const [ledgerEntries, setLedgerEntries] = useState([]);
+  const [loadingLedgerEntries, setLoadingLedgerEntries] = useState(false);
   const [limitRequests, setLimitRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
   const [search, setSearch] = useState("");
-  const [activeTab, setActiveTab] = useState("dues");
+  const [activeTab, setActiveTab] = useState(routeSearch?.tab || "dues");
 
   // Modals state
   const [showReceiveModal, setShowReceiveModal] = useState(false);
@@ -64,9 +47,34 @@ export function Billing() {
     }
   };
 
+  const fetchLedgers = async () => {
+    setLoadingLedgers(true);
+    try {
+      const res = await billingService.getAccounts();
+      setLedgers((res.data || []).map(l => ({ ...l, id: l.id || l._id })));
+    } catch (err) {
+      console.error(err);
+      setLedgers([]);
+    } finally {
+      setLoadingLedgers(false);
+    }
+  };
+
+  const fetchChartData = async () => {
+    try {
+      const res = await billingService.getWeeklyCollections();
+      setChartData(res.data || []);
+    } catch (err) {
+      console.error(err);
+      setChartData([]);
+    }
+  };
+
   const canApproveLimits = hasPermission("APPROVE_CREDIT_LIMIT");
 
   useEffect(() => {
+    fetchLedgers();
+    fetchChartData();
     if (canApproveLimits) fetchLimitRequests();
   }, []);
 
@@ -104,9 +112,19 @@ export function Billing() {
     setShowReceiveModal(true);
   };
 
-  const handleLedgerClick = (customer) => {
+  const handleLedgerClick = async (customer) => {
     setSelectedCustomer(customer);
     setShowLedgerModal(true);
+    setLoadingLedgerEntries(true);
+    try {
+      const res = await customerService.getCustomerLedger(customer.id);
+      setLedgerEntries(res.data?.passbook || []);
+    } catch (err) {
+      console.error(err);
+      setLedgerEntries([]);
+    } finally {
+      setLoadingLedgerEntries(false);
+    }
   };
 
   const handleApproveClick = (req) => {
@@ -116,19 +134,26 @@ export function Billing() {
     setShowApproveModal(true);
   };
 
-  const submitPayment = (e) => {
+  const submitPayment = async (e) => {
     e.preventDefault();
     const amount = parseFloat(paymentAmount);
     if (!amount || amount <= 0) return notify.warning("Enter a valid amount");
 
-    setLedgers(prev => prev.map(c =>
-      c.id === selectedCustomer.id
-      ? { ...c, current_balance: Math.max(0, c.current_balance - amount), last_payment: new Date().toISOString().split('T')[0] }
-      : c
-    ));
-
-    setShowReceiveModal(false);
-    notify.success(`₹${amount} received from ${selectedCustomer.customer} via ${paymentMode}`);
+    setActionLoading(true);
+    try {
+      await billingService.addPayment({
+        customerId: selectedCustomer.id,
+        amount,
+        payment_mode: paymentMode
+      });
+      notify.success(`₹${amount} received from ${selectedCustomer.customer} via ${paymentMode}`);
+      setShowReceiveModal(false);
+      await fetchLedgers();
+    } catch (err) {
+      notify.error(err.message || "Failed to record payment.");
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const submitApproveLimit = async (e) => {
@@ -219,11 +244,11 @@ export function Billing() {
           <div className="md:col-span-2 vw-card p-5">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-[13px] font-bold text-slate-700 uppercase tracking-wider">Payments Collected (Last 7 Days)</h3>
-              <span className="text-[18px] font-black text-emerald-600">₹1,18,900</span>
+              <span className="text-[18px] font-black text-emerald-600">₹{chartData.reduce((sum, d) => sum + (d.amount || 0), 0).toLocaleString()}</span>
             </div>
             <div className="h-32 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={MOCK_CHART_DATA} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
+                <BarChart data={chartData} margin={{ top: 0, right: 0, left: -25, bottom: 0 }}>
                   <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} dy={10} />
                   <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 11, fill: '#94a3b8' }} />
                   <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9' }} />
@@ -339,7 +364,9 @@ export function Billing() {
           <>
             {/* Mobile View */}
             <div className="block md:hidden">
-              {filteredLedgers.length === 0 ? (
+              {loadingLedgers ? (
+                <div className="px-5 py-12 text-center text-slate-500 text-[13px]">Loading accounts...</div>
+              ) : filteredLedgers.length === 0 ? (
                 <div className="px-5 py-12 text-center flex flex-col items-center justify-center">
                   <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
                     <FileText size={20} className="text-slate-400" />
@@ -401,7 +428,9 @@ export function Billing() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredLedgers.length === 0 ? (
+                  {loadingLedgers ? (
+                    <tr><td colSpan="5" className="px-5 py-12 text-center text-slate-500 text-[13px]">Loading accounts...</td></tr>
+                  ) : filteredLedgers.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="px-5 py-12 text-center">
                         <div className="flex flex-col items-center justify-center">
@@ -439,7 +468,7 @@ export function Billing() {
                       </td>
                       <td className="px-5 py-4 text-right">
                         <div className="font-bold text-[16px] text-rose-600">₹{ledger.current_balance.toLocaleString()}</div>
-                        <div className="text-[11px] text-slate-500 font-medium">Last Pay: {new Date(ledger.last_payment).toLocaleDateString()}</div>
+                        <div className="text-[11px] text-slate-500 font-medium">Last Pay: {ledger.last_payment ? new Date(ledger.last_payment).toLocaleDateString() : "—"}</div>
                       </td>
                       <td className="px-5 py-4 text-center">
                         <div className="flex items-center justify-center gap-2">
@@ -529,15 +558,18 @@ export function Billing() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Approve Amount (₹)</label>
-                <p className="text-[11px] text-blue-600 mb-2 font-medium">Customer requested ₹{selectedRequest.requested_amount.toLocaleString()}</p>
-                <input 
-                  type="number" 
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Approve Increase Amount (₹)</label>
+                <p className="text-[11px] text-blue-600 mb-2 font-medium">Customer requested an increase of ₹{selectedRequest.requested_amount.toLocaleString()}</p>
+                <input
+                  type="number"
                   value={approveAmount}
                   onChange={e => setApproveAmount(e.target.value)}
                   className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[14px] focus:outline-none focus:border-emerald-500 font-semibold"
                   autoFocus
                 />
+                <p className="text-[11px] text-slate-500 mt-2">
+                  New Credit Limit will be: <span className="font-bold text-emerald-700">₹{((selectedRequest.customer_id?.credit_limit ?? selectedRequest.current_limit) + (parseFloat(approveAmount) || 0)).toLocaleString()}</span>
+                </p>
               </div>
 
               <div className="mb-6">
@@ -590,21 +622,25 @@ export function Billing() {
             <div className="flex-1 overflow-y-auto p-5">
               <h3 className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-4">Recent Transactions</h3>
               <div className="space-y-4">
-                {MOCK_LEDGER_ENTRIES.map(txn => (
-                  <div key={txn.id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors">
+                {loadingLedgerEntries ? (
+                  <div className="text-center py-8 text-slate-500 text-[13px]">Loading transactions...</div>
+                ) : ledgerEntries.length === 0 ? (
+                  <div className="text-center py-8 text-slate-500 text-[13px]">No transactions recorded yet.</div>
+                ) : ledgerEntries.map(txn => (
+                  <div key={txn._id} className="flex items-start gap-3 p-3 rounded-lg border border-slate-100 hover:border-slate-200 transition-colors">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${txn.type === 'DEBIT' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'}`}>
                       {txn.type === 'DEBIT' ? <ArrowDownLeft size={18} /> : <ArrowUpRight size={18} />}
                     </div>
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
-                        <div className="font-bold text-[14px] text-slate-800">{txn.type === 'DEBIT' ? 'Payment Received' : 'Order Bill Generated'}</div>
+                        <div className="font-bold text-[14px] text-slate-800">{txn.type === 'DEBIT' ? 'Payment Received' : 'Order Bill Generated'}{txn.staff_id?.name ? ` • ${txn.staff_id.name}` : ""}</div>
                         <div className={`font-bold text-[14px] ${txn.type === 'DEBIT' ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {txn.type === 'DEBIT' ? '-' : '+'}₹{txn.amount.toLocaleString()}
                         </div>
                       </div>
                       <div className="flex justify-between items-end mt-1">
-                        <div className="text-[12px] text-slate-500">Ref: {txn.ref} • {txn.mode}</div>
-                        <div className="text-[11px] text-slate-400 font-medium">{new Date(txn.date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</div>
+                        <div className="text-[12px] text-slate-500">{txn.reference_number ? `Ref: ${txn.reference_number} • ` : ""}{txn.payment_mode}{txn.remarks ? ` • ${txn.remarks}` : ""}</div>
+                        <div className="text-[11px] text-slate-400 font-medium">{new Date(txn.payment_date).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}</div>
                       </div>
                     </div>
                   </div>

@@ -3,6 +3,7 @@ import { RefreshCw, AlertTriangle, Loader2, X, Lock } from "lucide-react";
 import { inventoryApi } from "../../services/inventoryApi";
 import { productApi, warehouseApi } from "../../services/productApi";
 import { PowerInput } from "@/components/common/PowerInput";
+import { LocationPicker } from "@/components/common/LocationPicker";
 import { notify } from "@/lib/notify";
 import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
@@ -20,35 +21,52 @@ function powerLabel(p) {
 function ProductPicker({ value, onSelect }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [open, setOpen] = useState(false);
   const timer = useRef(null);
+  const wrapperRef = useRef(null);
 
+  // No query yet -> browse the active product list directly (nobody remembers SKUs).
+  // Once the user types, it narrows down via the same search the rest of the app uses.
   useEffect(() => {
-    if (!query) { setResults([]); return; }
     clearTimeout(timer.current);
     timer.current = setTimeout(async () => {
+      setLoading(true);
       try {
-        const res = await productApi.getProducts({ search: query, size: 10 });
+        const res = await productApi.getProducts(query ? { search: query, size: 20 } : { size: 20 });
         if (res.error === false) setResults(res.data.list || []);
       } catch (e) { console.error(e); }
-    }, 300);
+      setLoading(false);
+    }, query ? 300 : 0);
     return () => clearTimeout(timer.current);
   }, [query]);
 
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   return (
-    <div className="relative">
+    <div className="relative" ref={wrapperRef}>
       <input
         type="text"
         value={value ? `${value.brand} — ${value.product_code}` : query}
         onChange={e => { setQuery(e.target.value); onSelect(null); setOpen(true); }}
         onFocus={() => setOpen(true)}
-        placeholder="Search by brand or SKU..."
+        placeholder="Click to browse active products, or search by brand / SKU..."
         className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500"
       />
-      {open && results.length > 0 && (
-        <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-56 overflow-y-auto">
-          {results.map(p => (
-            <button key={p._id} type="button" onClick={() => { onSelect(p); setQuery(""); setResults([]); setOpen(false); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 text-[13px] border-b border-slate-50 last:border-0">
+      {open && (
+        <div className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
+          {loading ? (
+            <div className="px-3 py-4 text-center text-[12px] text-slate-400">Loading...</div>
+          ) : results.length === 0 ? (
+            <div className="px-3 py-4 text-center text-[12px] text-slate-400">No active products found.</div>
+          ) : results.map(p => (
+            <button key={p._id} type="button" onClick={() => { onSelect(p); setQuery(""); setOpen(false); }} className="w-full text-left px-3 py-2 hover:bg-slate-50 text-[13px] border-b border-slate-50 last:border-0">
               <div className="font-bold text-slate-800">{p.brand} <span className="text-slate-400 font-normal">{p.product_code}</span></div>
               <div className="text-[11px] text-slate-500">{p.lens_type} · SPH {p.min_sph} to {p.max_sph}</div>
             </button>
@@ -59,11 +77,10 @@ function ProductPicker({ value, onSelect }) {
   );
 }
 
-function LowStockAlertsTab() {
+function LowStockAlertsTab({ racks }) {
   const [alerts, setAlerts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refillTarget, setRefillTarget] = useState(null);
-  const [locations, setLocations] = useState([]);
   const [fromLocationId, setFromLocationId] = useState("");
   const [toLocationId, setToLocationId] = useState("");
   const [qty, setQty] = useState("");
@@ -79,10 +96,7 @@ function LowStockAlertsTab() {
     setLoading(false);
   };
 
-  useEffect(() => {
-    fetchAlerts();
-    warehouseApi.getLocations({}).then(res => { if (res.error === false) setLocations(res.data); }).catch(e => console.error(e));
-  }, []);
+  useEffect(() => { fetchAlerts(); }, []);
 
   const openRefill = (alert) => {
     setRefillTarget(alert);
@@ -198,12 +212,7 @@ function LowStockAlertsTab() {
               </div>
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">To (Running stock box)</label>
-                <select value={toLocationId} onChange={e => setToLocationId(e.target.value)} required className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-                  <option value="">-- Choose box --</option>
-                  {locations.map(loc => (
-                    <option key={loc._id} value={loc._id}>{loc.location_code} (Floor {loc.floor}, Rack {loc.rack})</option>
-                  ))}
-                </select>
+                <LocationPicker racks={racks} onChange={(id) => setToLocationId(id)} />
               </div>
               <div>
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Quantity</label>
@@ -221,18 +230,14 @@ function LowStockAlertsTab() {
   );
 }
 
-function ReceiveStockTab() {
+function ReceiveStockTab({ racks }) {
   const [product, setProduct] = useState(null);
   const [power, setPower] = useState({ sph: "0.00", cyl: "", axis: "", add: "" });
   const [qty, setQty] = useState("");
   const [locationId, setLocationId] = useState("");
-  const [locations, setLocations] = useState([]);
+  const [pickerKey, setPickerKey] = useState(0);
   const [isSaving, setIsSaving] = useState(false);
   const canManage = hasPermission("MANAGE_INVENTORY");
-
-  useEffect(() => {
-    warehouseApi.getLocations({}).then(res => { if (res.error === false) setLocations(res.data); }).catch(e => console.error(e));
-  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -254,6 +259,8 @@ function ReceiveStockTab() {
       if (res.error === false) {
         notify.success(`${qty} unit(s) received into Reserve.`);
         setQty("");
+        setLocationId("");
+        setPickerKey(k => k + 1);
       } else {
         notify.error(res.message || "Failed to receive stock");
       }
@@ -297,48 +304,55 @@ function ReceiveStockTab() {
         </div>
         <div>
           <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Reserve Box Location</label>
-          <select value={locationId} onChange={e => setLocationId(e.target.value)} required className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-            <option value="">-- Choose box --</option>
-            {locations.map(loc => (
-              <option key={loc._id} value={loc._id}>{loc.location_code} (Floor {loc.floor}, Rack {loc.rack})</option>
-            ))}
-          </select>
+          <LocationPicker key={pickerKey} racks={racks} onChange={(id) => setLocationId(id)} />
         </div>
         <div>
           <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Quantity</label>
           <input type="number" min="1" value={qty} onChange={e => setQty(e.target.value)} required className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500" />
         </div>
-        <button type="submit" disabled={isSaving} className="vw-btn-primary h-10 disabled:opacity-50">{isSaving ? "Saving..." : "Receive into Reserve"}</button>
+        <button type="submit" disabled={isSaving || !locationId} className="vw-btn-primary h-10 disabled:opacity-50">{isSaving ? "Saving..." : "Receive into Reserve"}</button>
       </form>
     </div>
   );
 }
 
-function StockCountTab() {
+function StockCountTab({ racks }) {
   const [product, setProduct] = useState(null);
   const [godownId, setGodownId] = useState("running_stock");
-  const [power, setPower] = useState({ sph: "0.00", cyl: "", axis: "", add: "" });
+  const [cells, setCells] = useState([]);
+  const [loadingCells, setLoadingCells] = useState(false);
+  const [selectedCell, setSelectedCell] = useState(null);
   const [locationId, setLocationId] = useState("");
-  const [locations, setLocations] = useState([]);
+  const [pickerKey, setPickerKey] = useState(0);
   const [isFrozen, setIsFrozen] = useState(false);
   const [countedQty, setCountedQty] = useState("");
   const [pendingConfirm, setPendingConfirm] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
   const canManage = hasPermission("MANAGE_INVENTORY");
 
+  // Only let the user pick from power cells that actually exist for this product/godown —
+  // freezing or counting a power that was never stocked here throws "Power cell not found."
   useEffect(() => {
-    warehouseApi.getLocations({}).then(res => { if (res.error === false) setLocations(res.data); }).catch(e => console.error(e));
-  }, []);
+    setSelectedCell(null);
+    setIsFrozen(false);
+    if (!product) { setCells([]); return; }
+    setLoadingCells(true);
+    productApi.updateMatrix({ productId: product._id, godownId })
+      .then(res => setCells(res.error === false ? (res.data?.power_cells || []) : []))
+      .catch(() => setCells([]))
+      .finally(() => setLoadingCells(false));
+  }, [product, godownId]);
 
   const buildPower = () => ({
-    sph: parseFloat(power.sph),
-    cyl: power.cyl !== "" ? parseFloat(power.cyl) : null,
-    axis: power.axis !== "" ? parseInt(power.axis) : null,
-    add: power.add !== "" ? parseFloat(power.add) : null
+    sph: selectedCell.sph,
+    cyl: selectedCell.cyl ?? null,
+    axis: selectedCell.axis ?? null,
+    add: selectedCell.add ?? null
   });
 
   const handleFreeze = async () => {
     if (!product) return notify.warning("Select a product.");
+    if (!selectedCell) return notify.warning("Select a power to count.");
     setIsSaving(true);
     try {
       const res = await inventoryApi.freezeForCount({ productId: product._id, godownId, power: buildPower() });
@@ -374,6 +388,8 @@ function StockCountTab() {
           setPendingConfirm(null);
           setIsFrozen(false);
           setCountedQty("");
+          setLocationId("");
+          setPickerKey(k => k + 1);
         }
       } else {
         notify.error(res.message || "Failed to submit count");
@@ -404,36 +420,37 @@ function StockCountTab() {
             {Object.entries(GODOWN_LABEL).map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
         </div>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        {product && (
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">SPH</label>
-            <PowerInput value={power.sph} onChange={v => { setPower({ ...power, sph: v }); setIsFrozen(false); }} />
+            <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Power (pick what's actually stocked here)</label>
+            {loadingCells ? (
+              <div className="text-[12px] text-slate-400 py-2">Loading powers...</div>
+            ) : cells.length === 0 ? (
+              <div className="text-[12px] text-rose-500 py-2">Nothing stocked for this product in {GODOWN_LABEL[godownId]} yet.</div>
+            ) : (
+              <div className="flex flex-col gap-1.5 max-h-56 overflow-y-auto border border-slate-200 rounded-lg p-2">
+                {cells.map((c, idx) => (
+                  <button
+                    type="button"
+                    key={idx}
+                    onClick={() => { setSelectedCell(c); setIsFrozen(false); }}
+                    className={`w-full text-left px-3 py-2 rounded-lg text-[13px] border transition-colors flex items-center justify-between ${selectedCell === c ? "bg-blue-50 border-blue-400" : "border-transparent hover:bg-slate-50"}`}
+                  >
+                    <span className="font-mono font-semibold text-slate-800">{powerLabel(c)}</span>
+                    <span className="text-[11px] text-slate-500">Current: <span className="font-bold text-slate-700">{c.total_quantity}</span></span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">CYL</label>
-            <PowerInput value={power.cyl} onChange={v => { setPower({ ...power, cyl: v }); setIsFrozen(false); }} placeholder="optional" />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">Axis</label>
-            <PowerInput value={power.axis} onChange={v => { setPower({ ...power, axis: v }); setIsFrozen(false); }} placeholder="optional" step={1} decimals={0} signed={false} />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">Add</label>
-            <PowerInput value={power.add} onChange={v => { setPower({ ...power, add: v }); setIsFrozen(false); }} placeholder="optional" />
-          </div>
-        </div>
+        )}
         <div>
           <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Box Location</label>
-          <select value={locationId} onChange={e => setLocationId(e.target.value)} className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500">
-            <option value="">-- Choose box --</option>
-            {locations.map(loc => (
-              <option key={loc._id} value={loc._id}>{loc.location_code} (Floor {loc.floor}, Rack {loc.rack})</option>
-            ))}
-          </select>
+          <LocationPicker key={pickerKey} racks={racks} onChange={(id) => setLocationId(id)} />
         </div>
 
         {!isFrozen ? (
-          <button onClick={handleFreeze} disabled={isSaving} className="vw-btn-secondary h-10 font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 flex items-center justify-center gap-2">
+          <button onClick={handleFreeze} disabled={isSaving || !selectedCell} className="vw-btn-secondary h-10 font-bold bg-amber-500 text-white hover:bg-amber-600 disabled:opacity-50 flex items-center justify-center gap-2">
             <Lock size={14} /> {isSaving ? "Freezing..." : "Freeze for Count"}
           </button>
         ) : (
@@ -476,6 +493,13 @@ function StockCountTab() {
 
 export function Replenishment() {
   const [tab, setTab] = useState("alerts");
+  const [racks, setRacks] = useState([]);
+
+  useEffect(() => {
+    // Lightweight rack summary (~50 rows), never the full box-level location list —
+    // every box picker on this page resolves its exact location from floor/rack/shelf/box.
+    warehouseApi.getRackSummary().then(res => { if (res.error === false) setRacks(res.data); }).catch(e => console.error(e));
+  }, []);
 
   return (
     <>
@@ -492,9 +516,9 @@ export function Replenishment() {
         ))}
       </div>
 
-      {tab === "alerts" && <LowStockAlertsTab />}
-      {tab === "receive" && <ReceiveStockTab />}
-      {tab === "count" && <StockCountTab />}
+      {tab === "alerts" && <LowStockAlertsTab racks={racks} />}
+      {tab === "receive" && <ReceiveStockTab racks={racks} />}
+      {tab === "count" && <StockCountTab racks={racks} />}
     </>
   );
 }

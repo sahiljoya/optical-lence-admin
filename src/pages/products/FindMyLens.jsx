@@ -15,7 +15,9 @@ export function FindMyLens() {
   const [results, setResults] = useState(null);
   const [isSearching, setIsSearching] = useState(false);
 
-  const isProgressiveFamily = query.lens_type === "Progressive" || query.lens_type === "KT";
+  // RX is always structurally a Progressive lens (same SPH/CYL/AXIS/ADD fields) per the
+  // client's spec, even though it's its own distinct lens-type option.
+  const isProgressiveFamily = query.lens_type === "Progressive" || query.lens_type === "KT" || query.lens_type === "RX";
 
   useEffect(() => {
     brandApi.getBrands().then(res => {
@@ -71,6 +73,7 @@ export function FindMyLens() {
               <option value="Progressive">Progressive</option>
               <option value="KT">Bifocal (KT)</option>
               <option value="RX">RX</option>
+              <option value="Cross">Cross</option>
             </select>
           </div>
           <div>

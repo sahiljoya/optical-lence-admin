@@ -1,8 +1,9 @@
-import { makeRequestAuth } from "@/config/apiClient";
+import { makeRequestAuth, uploadImageApi } from "@/config/apiClient";
 
 export const brandApi = {
   getBrands: () => makeRequestAuth("get", "/admin/brand/list"),
   createBrand: (data) => makeRequestAuth("post", "/admin/brand/create", data),
+  uploadImage: (file) => uploadImageApi(file),
 };
 
 export const productApi = {

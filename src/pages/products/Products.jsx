@@ -1,13 +1,17 @@
 import { useState, useEffect } from "react";
 import { Link } from "@tanstack/react-router";
-import { Search, Plus, Filter, Package, Grid } from "lucide-react";
+import { Search, Plus, Filter, Package, Power } from "lucide-react";
 import { productApi } from "../../services/productApi";
+import { notify } from "@/lib/notify";
+import { useConfirm } from "@/hooks/useConfirm";
 import "@/styles/veriwide.css";
 
 export function Products() {
   const [searchTerm, setSearchTerm] = useState("");
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [togglingId, setTogglingId] = useState(null);
+  const { confirm, confirmDialog } = useConfirm();
 
   useEffect(() => {
     fetchProducts();
@@ -24,6 +28,33 @@ export function Products() {
       console.error(e);
     }
     setLoading(false);
+  };
+
+  // Inactive products are excluded from the customer-facing catalog (getProductList /
+  // getPopularLenses / getCustomerCatalog all query is_active: true), so this is the real
+  // on/off switch for whether customers can see or order a product at all.
+  const handleToggleActive = async (prod) => {
+    const goingInactive = prod.is_active;
+    if (goingInactive) {
+      const ok = await confirm(
+        `Deactivate ${prod.brand} ${prod.product_code}? It will disappear from the customer-facing catalog immediately.`,
+        { title: "Deactivate Product", acceptLabel: "Deactivate", danger: true }
+      );
+      if (!ok) return;
+    }
+    setTogglingId(prod._id);
+    try {
+      const res = await productApi.updateProduct(prod._id, { is_active: !prod.is_active });
+      if (res.error === false) {
+        setProducts(prev => prev.map(p => p._id === prod._id ? { ...p, is_active: !p.is_active } : p));
+        notify.success(goingInactive ? "Product deactivated — hidden from customers." : "Product activated — visible to customers again.");
+      } else {
+        notify.error(res.message || "Failed to update product status.");
+      }
+    } catch (e) {
+      notify.error("Error updating product status.");
+    }
+    setTogglingId(null);
   };
 
   const filteredProducts = products.filter(p => p.brand.toLowerCase().includes(searchTerm.toLowerCase()) || p.product_code?.toLowerCase().includes(searchTerm.toLowerCase()));
@@ -111,6 +142,18 @@ export function Products() {
                         <Link to={`/products/${prod._id}`} className="vw-btn-secondary h-8 px-3 text-[12px] gap-1 inline-flex items-center rounded">
                           <Package size={14} /> View Matrix
                         </Link>
+                        <button
+                          onClick={() => handleToggleActive(prod)}
+                          disabled={togglingId === prod._id}
+                          title={prod.is_active ? "Deactivate (hide from customers)" : "Activate (show to customers)"}
+                          className={`h-8 px-3 text-[12px] gap-1 inline-flex items-center rounded border transition-colors disabled:opacity-50 ${
+                            prod.is_active
+                              ? "border-rose-200 text-rose-600 bg-rose-50 hover:bg-rose-100"
+                              : "border-emerald-200 text-emerald-700 bg-emerald-50 hover:bg-emerald-100"
+                          }`}
+                        >
+                          <Power size={14} /> {prod.is_active ? "Deactivate" : "Activate"}
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -120,6 +163,7 @@ export function Products() {
           </table>
         </div>
       </div>
+      {confirmDialog}
     </>
   );
 }

@@ -34,19 +34,19 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
       )}
 
       {/* Dynamic 1-Click Quick Action Buttons */}
-      {order.status === "pending" && (
+      {(order.status === "pending" || order.status === "PLACED" || order.status === "CONFIRMED") && (
         <button 
-          onClick={() => onUpdate({ ...order, status: "processing" })}
+          onClick={() => onUpdate({ ...order, status: "PICKING" })}
           className={`${btnClass} bg-amber-500 hover:bg-amber-600 border-amber-600`}
         >
           <RefreshCw size={iconSize} /> Start Picking
         </button>
       )}
 
-      {order.status === "processing" && (
+      {(order.status === "processing" || order.status === "PICKING" || order.status === "PACKING") && (
         <button 
           onClick={() => {
-            setStatus("shipped");
+            setStatus("DISPATCHED");
             setModalOpen(true);
           }}
           className={`${btnClass} bg-purple-600 hover:bg-purple-700 border-purple-700`}
@@ -55,9 +55,9 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
         </button>
       )}
 
-      {order.status === "shipped" && (
+      {(order.status === "shipped" || order.status === "DISPATCHED") && (
         <button 
-          onClick={() => onUpdate({ ...order, status: "delivered" })}
+          onClick={() => onUpdate({ ...order, status: "DELIVERED" })}
           className={`${btnClass} bg-emerald-600 hover:bg-emerald-700 border-emerald-700`}
         >
           Mark Delivered

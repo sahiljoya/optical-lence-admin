@@ -17,6 +17,8 @@ export const customerService = {
 
   approveOwner: (customerId) => makeRequestAuth("post", "/admin/customer/approve-owner", { customerId }),
 
+  rejectCustomer: (data) => makeRequestAuth("post", "/admin/customer/reject", data),
+
   toggleCustomerStatus: (customerId, is_active) =>
     makeRequestAuth("post", "/admin/customer/toggle-status", { customerId, is_active }),
 
@@ -58,4 +60,11 @@ export const customerService = {
   getOrderVolume: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/order-volume`),
 
   getCart: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/cart`),
+  getCustomerNegotiatedPrices: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/negotiated-prices`),
+  setNegotiatedPrice: (customerId, productId, negotiatedPrice) => makeRequestAuth("post", "/admin/product/set-negotiated-price", { customerId, productId, negotiatedPrice }),
+  deleteNegotiatedPrice: (customerId, productId) => makeRequestAuth("post", "/admin/product/delete-negotiated-price", { customerId, productId }),
+
+  getCustomerLimitRequests: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/limit-requests`),
+  getCustomerDiscountRequests: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/discount-requests`),
+  actionDiscountRequest: (data) => makeRequestAuth("post", "/admin/discount-request/action", data),
 };

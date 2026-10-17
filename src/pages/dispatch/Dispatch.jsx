@@ -9,6 +9,12 @@ const INITIAL_MOCK_DISPATCH = [
   { id: "ORD-9052", customer: "Clear Optics", city: "Pune", items: 120, status: "PACKING", delivery_partner: "Delhivery", tracking_id: "", date: "2026-10-06T15:00", type: "stock", urgent: false },
   { id: "ORD-9048", customer: "Sunshine Eyewear", city: "Mumbai", items: 30, status: "DISPATCHED", delivery_partner: "Blue Dart", tracking_id: "BLD-9988221", date: "2026-10-05T11:20", type: "priority", urgent: true },
   { id: "ORD-9045", customer: "City Optics", city: "Jaipur", items: 80, status: "DELIVERED", delivery_partner: "DTDC", tracking_id: "DTD-1122334", date: "2026-10-04T09:15", type: "parcel", urgent: false },
+  { id: "ORD-9055", customer: "Lenskart Hub", city: "Bengaluru", items: 60, status: "PACKING", delivery_partner: "Ecom Express", tracking_id: "", date: "2026-10-07T10:05", type: "stock", urgent: false },
+  { id: "ORD-9056", customer: "Royal Opticals", city: "Chennai", items: 15, status: "PACKING", delivery_partner: "DTDC", tracking_id: "", date: "2026-10-07T11:40", type: "priority", urgent: true },
+  { id: "ORD-9050", customer: "Vision Plus", city: "Delhi", items: 25, status: "DISPATCHED", delivery_partner: "Delhivery", tracking_id: "DLV-7765443", date: "2026-10-06T09:00", type: "parcel", urgent: false },
+  { id: "ORD-9049", customer: "Netra Eyewear", city: "Hyderabad", items: 50, status: "DISPATCHED", delivery_partner: "Blue Dart", tracking_id: "BLD-9988550", date: "2026-10-05T16:45", type: "stock", urgent: true },
+  { id: "ORD-9044", customer: "Sunshine Eyewear", city: "Mumbai", items: 90, status: "DELIVERED", delivery_partner: "Ecom Express", tracking_id: "ECM-3321998", date: "2026-10-03T13:10", type: "stock", urgent: false },
+  { id: "ORD-9041", customer: "City Optics", city: "Jaipur", items: 40, status: "DELIVERED", delivery_partner: "DTDC", tracking_id: "DTD-1120876", date: "2026-10-02T08:30", type: "parcel", urgent: false },
 ];
 
 const MOCK_DISPATCH_TREND = [

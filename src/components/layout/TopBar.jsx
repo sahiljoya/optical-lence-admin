@@ -1,17 +1,126 @@
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { Search, Bell, ChevronDown, User, Lock, LogOut, X, Camera } from "lucide-react";
+import { Search, Bell, ChevronDown, User, Lock, LogOut, X, Camera, Menu, CheckCheck, Loader2 } from "lucide-react";
 import { useIst } from "@/hooks/useIst";
 import { getItem } from "@/services/storage";
 import { logout } from "@/config/authService";
 import { notify } from "@/lib/notify";
+import { notificationService } from "@/services/notificationService";
 
-export function TopBar() {
+const NOTIF_POLL_MS = 45000;
+
+const notifTargetPath = (n) => {
+  switch (n.entity_type) {
+    case "Customer":
+      return n.entity_id ? `/customer/${n.entity_id}` : null;
+    case "CreditLimitRequest":
+      return "/billing";
+    case "Order":
+      return n.entity_id ? `/orders/${n.entity_id}` : "/orders";
+    case "SupportTicket":
+      return "/support";
+    default:
+      return null;
+  }
+};
+
+const formatRelativeTime = (dateStr) => {
+  const date = new Date(dateStr);
+  const diffMs = Date.now() - date.getTime();
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 1) return "Just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.floor(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
+};
+
+export function TopBar({ onOpenMobileMenu }) {
   const { d, t } = useIst();
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
   const dropdownRef = useRef(null);
+
+  // Notifications
+  const [showNotifDropdown, setShowNotifDropdown] = useState(false);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifs, setLoadingNotifs] = useState(false);
+  const notifDropdownRef = useRef(null);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const res = await notificationService.getUnreadCount();
+      setUnreadCount(res.data?.unread_count || 0);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const fetchNotifications = async () => {
+    setLoadingNotifs(true);
+    try {
+      const res = await notificationService.getNotifications({ size: 15 });
+      setNotifications(res.data?.list || []);
+      setUnreadCount(res.data?.unread_count ?? unreadCount);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoadingNotifs(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, NOTIF_POLL_MS);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    const handleClickOutsideNotif = (event) => {
+      if (notifDropdownRef.current && !notifDropdownRef.current.contains(event.target)) {
+        setShowNotifDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutsideNotif);
+    return () => document.removeEventListener("mousedown", handleClickOutsideNotif);
+  }, []);
+
+  const handleToggleNotifDropdown = () => {
+    const opening = !showNotifDropdown;
+    setShowNotifDropdown(opening);
+    if (opening) fetchNotifications();
+  };
+
+  const handleNotificationClick = async (n) => {
+    if (!n.is_read) {
+      setNotifications(prev => prev.map(x => x._id === n._id ? { ...x, is_read: true } : x));
+      setUnreadCount(prev => Math.max(0, prev - 1));
+      try {
+        await notificationService.markAsRead(n._id);
+      } catch (err) {
+        console.error(err);
+      }
+    }
+    const path = notifTargetPath(n);
+    setShowNotifDropdown(false);
+    if (path) navigate({ to: path });
+  };
+
+  const handleMarkAllRead = async () => {
+    const hadUnread = notifications.some(n => !n.is_read);
+    if (!hadUnread && unreadCount === 0) return;
+    setNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+    try {
+      await notificationService.markAllAsRead();
+    } catch (err) {
+      notify.error("Failed to mark notifications as read.");
+    }
+  };
 
   const storedUser = getItem("admin_user");
 
@@ -58,24 +167,101 @@ export function TopBar() {
   };
 
   return (
-    <div className="flex items-center gap-4" style={{ height: 64 }}>
-      <label className="flex items-center gap-2 flex-1" style={{ maxWidth: 640, height: 44, background: "var(--search-bg)", border: "1px solid var(--card-border)", borderRadius: 999, padding: "0 16px" }}>
-        <Search size={18} style={{ color: "var(--faint)" }} />
-        <input className="flex-1 bg-transparent outline-none" style={{ fontSize: 14 }} placeholder="Search customers, orders, products, invoices..." />
+    <div className="flex items-center gap-2 sm:gap-4 h-14 sm:h-16 w-full">
+      {/* Mobile Hamburger Menu Button */}
+      <button 
+        type="button"
+        onClick={onOpenMobileMenu}
+        className="lg:hidden p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors shrink-0 border border-slate-200 bg-white shadow-sm"
+        aria-label="Open navigation menu"
+      >
+        <Menu size={20} />
+      </button>
+
+      <label className="flex items-center gap-2 flex-1 max-w-[640px] h-10 sm:h-11 bg-[var(--search-bg)] border border-[var(--card-border)] rounded-full px-3 sm:px-4 min-w-0 shadow-sm">
+        <Search size={18} className="shrink-0 text-slate-400" />
+        <input className="flex-1 bg-transparent outline-none text-[13px] sm:text-[14px] min-w-0" placeholder="Search customers, orders, products..." />
       </label>
       
-      <div className="ml-auto flex items-center gap-3">
-        <button aria-label="Notifications" className="relative grid place-items-center rounded-full transition-colors hover:bg-slate-100" style={{ width: 40, height: 40, background: "var(--card)", border: "1px solid var(--card-border)" }}>
-          <Bell size={18} /><span className="absolute rounded-full" style={{ top: 8, right: 9, width: 8, height: 8, background: "var(--t-pink-ic)" }} />
-        </button>
-        
+      <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
+        <div className="relative" ref={notifDropdownRef}>
+          <button
+            aria-label="Notifications"
+            onClick={handleToggleNotifDropdown}
+            className="relative grid place-items-center rounded-full transition-colors hover:bg-slate-100 w-9 h-9 sm:w-10 sm:h-10 bg-white border border-[var(--card-border)] shrink-0 shadow-sm"
+          >
+            <Bell size={17} />
+            {unreadCount > 0 && (
+              <span
+                className="absolute flex items-center justify-center rounded-full text-white font-bold"
+                style={{
+                  top: unreadCount > 9 ? 2 : 5,
+                  right: unreadCount > 9 ? 0 : 5,
+                  minWidth: 16,
+                  height: 16,
+                  fontSize: 10,
+                  padding: "0 3px",
+                  background: "var(--t-pink-ic, #e11d48)"
+                }}
+              >
+                {unreadCount > 99 ? "99+" : unreadCount}
+              </span>
+            )}
+          </button>
+
+          {showNotifDropdown && (
+            <div className="absolute top-[110%] right-0 w-[340px] sm:w-[380px] max-h-[70vh] flex flex-col bg-white rounded-xl shadow-lg border border-slate-100 overflow-hidden z-50 animate-in slide-in-from-top-2 duration-200">
+              <div className="p-3.5 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between shrink-0">
+                <p className="font-bold text-[14px] text-slate-800">Notifications</p>
+                <button
+                  onClick={handleMarkAllRead}
+                  className="flex items-center gap-1 text-[11px] font-semibold text-blue-600 hover:text-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                  disabled={unreadCount === 0}
+                >
+                  <CheckCheck size={13} /> Mark all read
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1">
+                {loadingNotifs ? (
+                  <div className="flex items-center justify-center py-10 text-slate-400">
+                    <Loader2 size={18} className="animate-spin" />
+                  </div>
+                ) : notifications.length === 0 ? (
+                  <div className="py-10 text-center text-[13px] text-slate-500">No notifications yet.</div>
+                ) : (
+                  notifications.map(n => (
+                    <button
+                      key={n._id}
+                      onClick={() => handleNotificationClick(n)}
+                      className={`w-full text-left px-4 py-3 border-b border-slate-50 hover:bg-slate-50 transition-colors flex gap-2.5 items-start ${!n.is_read ? "bg-blue-50/40" : ""}`}
+                    >
+                      <span
+                        className="mt-1.5 w-2 h-2 rounded-full shrink-0"
+                        style={{ background: n.is_read ? "transparent" : "#2563eb" }}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <p className={`text-[13px] leading-snug ${!n.is_read ? "font-bold text-slate-900" : "font-medium text-slate-700"}`}>
+                          {n.title}
+                        </p>
+                        <p className="text-[12px] text-slate-500 mt-0.5 leading-snug line-clamp-2">{n.message}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">{formatRelativeTime(n.created_at)}</p>
+                      </div>
+                    </button>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Profile Dropdown Container */}
-        <div className="relative flex items-center gap-2 cursor-pointer p-1 rounded-full hover:bg-slate-50 transition-colors" ref={dropdownRef} onClick={() => setShowDropdown(!showDropdown)}>
-          <span className="grid place-items-center rounded-full" style={{ width: 36, height: 36, background: "var(--primary-gradient)", color: "var(--on-primary)", fontSize: 13, fontWeight: 600 }}>
+        <div className="relative flex items-center gap-1.5 sm:gap-2 cursor-pointer p-1 rounded-full hover:bg-slate-50 transition-colors" ref={dropdownRef} onClick={() => setShowDropdown(!showDropdown)}>
+          <span className="grid place-items-center rounded-full w-8 h-8 sm:w-9 sm:h-9 text-[12px] sm:text-[13px] font-semibold text-white bg-blue-600 shrink-0 shadow-sm">
             {user.name.charAt(0).toUpperCase()}
           </span>
-          <button className="flex items-center gap-1 outline-none" style={{ fontSize: 14, fontWeight: 500 }}>
-            {user.role} <ChevronDown size={16} className={`transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''}`} />
+          <button className="hidden sm:flex items-center gap-1 outline-none text-[13px] sm:text-[14px] font-medium text-slate-800">
+            {user.role} <ChevronDown size={15} className={`transition-transform duration-200 ${showDropdown ? 'rotate-180' : ''}`} />
           </button>
 
           {/* Dropdown Menu */}
@@ -103,8 +289,12 @@ export function TopBar() {
           )}
         </div>
         
-        <span style={{ width: 1, height: 32, background: "var(--card-border)" }} />
-        <div className="text-right"><div style={{ fontSize: 14, fontWeight: 600 }}>{d}</div><div style={{ fontSize: 12, color: "var(--muted)" }}>{t}</div></div>
+        {/* Date and Time (hidden on mobile) */}
+        <span className="hidden md:block w-px h-8 bg-slate-200" />
+        <div className="text-right hidden md:block">
+          <div className="text-[13px] sm:text-[14px] font-semibold text-slate-800">{d}</div>
+          <div className="text-[11px] sm:text-[12px] text-slate-500">{t}</div>
+        </div>
       </div>
 
       {/* Profile Modal */}
