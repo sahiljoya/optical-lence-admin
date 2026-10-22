@@ -1,76 +1,10 @@
-import { useState, Fragment } from "react";
+import { useState, useEffect, Fragment } from "react";
 import { useParams, Link } from "@tanstack/react-router";
-import { ArrowLeft, Printer, Download, MapPin, Phone, Mail, Package, Truck, User, Calendar, CheckCircle2, Clock, AlertCircle } from "lucide-react";
+import { ArrowLeft, Printer, MapPin, Phone, Package, Truck, User, AlertCircle, CheckCircle2, Clock } from "lucide-react";
 import { OrderActions } from "./components/OrderActions";
+import { orderApi } from "@/services/orderApi";
+import { notify } from "@/lib/notify";
 import "@/styles/veriwide.css";
-
-const MOCK_ORDER = {
-  id: "ORD-9021",
-  date: "2026-10-06T18:30:00Z",
-  status: "processing", // pending, blocked, processing, shipped, delivered
-  isUrgent: true,
-  trackingId: "",
-  customer: {
-    name: "Vishal Optical Co.",
-    phone: "+91 9876543210",
-    email: "contact@vishaloptical.com",
-    gst: "27AABCU9603R1ZX",
-    tier: "Stock A+",
-  },
-  placedBy: {
-    name: "Ramesh Kumar",
-    role: "Staff (Sub-customer)",
-    phone: "+91 8888888888",
-  },
-  shipping: {
-    address: "Shop No. 12, Main Market, MG Road",
-    city: "Delhi",
-    state: "Delhi",
-    pincode: "110001",
-    transport: "VRL Logistics (Default)"
-  },
-  items: [
-    {
-      id: 1,
-      brand: "VisionPlus",
-      lens_type: "Progressive",
-      coating: "Blue Cut + ARC",
-      index: "1.56",
-      patientName: "Amit Sharma (Customer)",
-      location: { floor: "Ground Floor", rack: "A-12", box: "Bin 42" },
-      powers: {
-        right: { sph: "-1.50", cyl: "-0.50", axis: "90", add: "+2.00" },
-        left: { sph: "-1.75", cyl: "-0.75", axis: "180", add: "+2.00" }
-      },
-      qty: 1,
-      unitPrice: 850,
-      total: 850
-    },
-    {
-      id: 2,
-      brand: "ClearLens",
-      lens_type: "Single Vision",
-      coating: "ARC",
-      index: "1.61",
-      patientName: "Stock / Regular",
-      location: { floor: "1st Floor", rack: "C-05", box: "Shelf 2" },
-      powers: {
-        right: { sph: "-3.00", cyl: "0", axis: "0", add: "" },
-        left: { sph: "-3.00", cyl: "0", axis: "0", add: "" }
-      },
-      qty: 5, // 5 pairs
-      unitPrice: 400,
-      total: 2000
-    }
-  ],
-  summary: {
-    subtotal: 2850,
-    urgentSurcharge: 100,
-    cartez: { count: 3, unitPrice: 50, total: 150 },
-    gstAmount: 147.5, // 5%
-    total: 3247.5
-  }
-};
 
 const TIMELINE_STAGES = [
   { id: "pending", label: "Order Placed", icon: Package },
@@ -79,12 +13,122 @@ const TIMELINE_STAGES = [
   { id: "delivered", label: "Delivered", icon: CheckCircle2 }
 ];
 
+// Maps the real Order.status enum onto the 4 visual timeline stages above.
+const STAGE_INDEX = {
+  PLACED: 0, RECEIVED: 0, AWAITING_STOCK: 0, AVAILABILITY_CHECKED: 0, CONFIRMED: 0,
+  PICKING: 1, PACKING: 1,
+  DISPATCHED: 2,
+  DELIVERED: 3,
+  CANCELLED: -1,
+};
+
+function mapOrder(raw) {
+  const customer = raw.customer_id || {};
+  const placedByCust = raw.placed_by;
+  const isOwner = !placedByCust || String(placedByCust._id) === String(customer._id);
+
+  const items = (raw.items || []).map((it, i) => {
+    const product = it.product_id || {};
+    const boxLoc = Array.isArray(it.box_locations) ? it.box_locations.find(bl => bl.warehouse_location_id) : null;
+    const whLoc = boxLoc?.warehouse_location_id;
+    return {
+      id: i,
+      brand: product.brand || "—",
+      lens_type: product.lens_type || "—",
+      coating: product.coating || "—",
+      index: product.index || "—",
+      // Real orders don't record which eye a line item is for — only one power set exists per item.
+      powers: {
+        right: { sph: it.sph, cyl: it.cyl, axis: it.axis, add: it.add },
+        left: { sph: "", cyl: "", axis: "", add: "" }
+      },
+      qty: it.requested_quantity || 0,
+      unitPrice: it.unit_price || 0,
+      total: (it.unit_price || 0) * (it.requested_quantity || 0),
+      location: whLoc ? { floor: whLoc.floor, rack: whLoc.rack, box: whLoc.box_no } : null
+    };
+  });
+
+  return {
+    id: raw.order_number || raw._id,
+    date: raw.createdAt ? Number(raw.createdAt) : Date.now(),
+    status: raw.status,
+    isUrgent: !!raw.is_urgent,
+    trackingId: raw.tracking_number || "",
+    items,
+    placedBy: {
+      name: isOwner ? (customer.company_name || customer.name || "Owner") : (placedByCust.name || "Staff"),
+      role: isOwner ? "Owner" : "Staff (Sub-customer)",
+      phone: isOwner ? (customer.phone || "—") : (placedByCust.phone || "—"),
+    },
+    customer: {
+      name: customer.company_name || customer.name || "—",
+      tier: customer.pricing_tier || "—",
+      phone: customer.phone || "—",
+      gst: customer.gst_no || "—",
+    },
+    shipping: {
+      address: customer.address || "—",
+      city: customer.city || "—",
+      pincode: customer.pincode || "",
+      transport: raw.delivery_partner || "—",
+    },
+    summary: {
+      subtotal: raw.subtotal || 0,
+      urgentSurcharge: raw.urgent_surcharge || 0,
+      cartageCharge: raw.cartage_charge || 0,
+      cartonsCount: raw.cartons_count || 0,
+      isCartageFree: !!raw.is_cartage_free,
+      gstRate: raw.gst_rate || 0,
+      gstAmount: raw.gst_amount || 0,
+      total: raw.total_amount || 0,
+    },
+  };
+}
+
 export function OrderDetails() {
   const { id } = useParams({ strict: false });
-  const [order, setOrder] = useState(MOCK_ORDER);
+  const [order, setOrder] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [expandedItem, setExpandedItem] = useState(null);
 
-  const currentStageIndex = TIMELINE_STAGES.findIndex(s => s.id === order.status);
+  const fetchOrder = async () => {
+    setLoading(true);
+    try {
+      const res = await orderApi.getPickList(id);
+      setOrder(mapOrder(res.data));
+    } catch (err) {
+      notify.error(err.message || "Could not load order");
+      setOrder(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { if (id) fetchOrder(); }, [id]);
+
+  if (loading) {
+    return <div className="py-24 text-center text-slate-400 text-[14px]">Loading order…</div>;
+  }
+
+  if (!order) {
+    return (
+      <div className="py-24 text-center">
+        <p className="text-slate-500 text-[14px] mb-2">Order not found.</p>
+        <Link to="/orders" className="text-blue-600 hover:underline text-[13px] font-semibold">Back to Orders</Link>
+      </div>
+    );
+  }
+
+  const currentStageIndex = STAGE_INDEX[order.status] ?? -1;
+  const orderForActions = { 
+    id: order.id, 
+    dbId: id, 
+    status: order.status, 
+    trackingId: order.trackingId, 
+    isUrgent: order.isUrgent, 
+    deliveryPartner: (order.shipping?.transport && order.shipping.transport !== "—") ? order.shipping.transport : "DTDC" 
+  };
 
   return (
     <>
@@ -103,7 +147,7 @@ export function OrderDetails() {
           </p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <OrderActions order={order} onUpdate={setOrder} hideView={true} size="md" />
+          <OrderActions order={orderForActions} onUpdate={fetchOrder} hideView={true} size="md" />
           <button className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 flex-1 sm:flex-none">
             <Printer size={16} /> Print Invoice
           </button>
@@ -165,7 +209,7 @@ export function OrderDetails() {
                 <tbody className="divide-y divide-slate-100">
                   {order.items.map((item, i) => (
                     <Fragment key={i}>
-                      <tr 
+                      <tr
                         className={`hover:bg-slate-50/50 cursor-pointer transition-colors ${expandedItem === item.id ? "bg-slate-50/80" : ""}`}
                         onClick={() => setExpandedItem(expandedItem === item.id ? null : item.id)}
                         title="Click to view location"
@@ -174,7 +218,7 @@ export function OrderDetails() {
                           <div className="font-bold text-slate-800">{item.brand}</div>
                           <div className="text-[12px] text-slate-500">{item.lens_type} • {item.coating}</div>
                           <div className="text-[11px] font-mono text-slate-400 mt-0.5">Index: {item.index}</div>
-                          
+
                           {item.patientName && (
                             <div className="mt-2 text-[10px] text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded-sm inline-flex items-center gap-1 font-semibold uppercase tracking-wide">
                               <User size={10} /> For: {item.patientName}
@@ -256,14 +300,18 @@ export function OrderDetails() {
                   <span className="font-bold text-rose-600">+ ₹{order.summary.urgentSurcharge}</span>
                 </div>
               )}
-              {order.summary.cartez && (
+              {(order.summary.cartageCharge > 0 || order.summary.cartonsCount > 0) && (
                 <div className="flex justify-between">
-                  <span className="text-slate-500 flex items-center gap-1"><Package size={12} /> Packaging (Cartez x{order.summary.cartez.count})</span>
-                  <span className="font-bold text-slate-700">+ ₹{order.summary.cartez.total}</span>
+                  <span className="text-slate-500 flex items-center gap-1">
+                    <Package size={12} /> Packaging (Cartez{order.summary.cartonsCount > 0 ? ` - ${order.summary.cartonsCount} Cartons` : ""})
+                  </span>
+                  <span className={`font-bold ${order.summary.isCartageFree ? "text-emerald-600" : "text-slate-700"}`}>
+                    {order.summary.isCartageFree ? "FREE (₹0)" : `+ ₹${order.summary.cartageCharge}`}
+                  </span>
                 </div>
               )}
               <div className="flex justify-between">
-                <span className="text-slate-500">GST (5%)</span>
+                <span className="text-slate-500">GST ({order.summary.gstRate}%)</span>
                 <span className="font-bold text-slate-700">₹{order.summary.gstAmount}</span>
               </div>
 
@@ -305,7 +353,7 @@ export function OrderDetails() {
               <div className="flex items-center gap-2 text-[12px] text-slate-600"><Phone size={14} className="text-slate-400" /> {order.customer.phone}</div>
               <div className="flex items-start gap-2 text-[12px] text-slate-600"><MapPin size={14} className="text-slate-400 shrink-0 mt-0.5" /> {order.shipping.address}, {order.shipping.city}, {order.shipping.pincode}</div>
               <div className="flex items-center gap-2 text-[12px] text-purple-700 bg-purple-50 px-2 py-1.5 rounded-md border border-purple-100 font-medium mt-1">
-                <Truck size={14} className="text-purple-500" /> 
+                <Truck size={14} className="text-purple-500" />
                 Transport: {order.shipping.transport}
               </div>
               <div className="text-[11px] text-slate-500 font-mono mt-1">GSTIN: {order.customer.gst}</div>

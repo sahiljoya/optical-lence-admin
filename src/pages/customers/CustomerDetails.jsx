@@ -55,12 +55,21 @@ export function CustomerDetails() {
   });
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [transferData, setTransferData] = useState({ subId: null, newParentId: "" });
+  const [subDeviceModalSub, setSubDeviceModalSub] = useState(null);
 
   // Credit Limit Request & Account Status modals
   const [showLimitModal, setShowLimitModal] = useState(false);
   const [limitForm, setLimitForm] = useState({ amount: "", reason: "" });
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [newStatus, setNewStatus] = useState("Credit");
+  const [showGstModal, setShowGstModal] = useState(false);
+  const [newGstRate, setNewGstRate] = useState("");
+
+  // CRM Notes (visit/call log)
+  const [notes, setNotes] = useState([]);
+  const [loadingNotes, setLoadingNotes] = useState(true);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [noteForm, setNoteForm] = useState({ type: "Call", note: "", next_call_date: "" });
 
   // Edit Profile Modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -81,6 +90,7 @@ export function CustomerDetails() {
     credit_limit: 0,
     payment_term: "cash",
     stock_grade: "",
+    payment_grade: "Normal",
     assigned_salesperson: "",
     preferred_courier: "",
     account_status: "Credit"
@@ -162,6 +172,8 @@ export function CustomerDetails() {
 
   useEffect(() => {
     fetchData();
+    fetchNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   // Freeze / Unfreeze Handler
@@ -215,6 +227,36 @@ export function CustomerDetails() {
     }
   };
 
+  // Reset Sub-Customer App / Web Device Lock
+  const handleResetSubDevice = async (subId, platform) => {
+    const label = platform === "web" ? "Web" : platform === "app" ? "Mobile App" : "All";
+    const ok = await confirm(`Are you sure you want to reset the ${label} login device lock for this staff account?`, {
+      title: "Reset Staff Device Lock",
+      acceptLabel: "Reset Device",
+    });
+    if (!ok) return;
+
+    setActionLoading(`sub-device-${platform || "all"}`);
+    try {
+      await customerService.resetDevice(subId, platform);
+      notify.success(`${label} device lock reset successfully! Staff can now log in from a new device.`);
+
+      // Update local modal state immediately
+      setSubDeviceModalSub(prev => {
+        if (!prev) return null;
+        if (platform === "web") return { ...prev, web_device_id: "", web_device_name: "" };
+        if (platform === "app") return { ...prev, device_id: "", device_name: "" };
+        return { ...prev, device_id: "", device_name: "", web_device_id: "", web_device_name: "" };
+      });
+
+      await fetchData();
+    } catch (err) {
+      notify.error(err.message || "Failed to reset device lock.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   // Open Edit Profile Modal
   const handleOpenEditModal = () => {
     setEditForm({
@@ -234,6 +276,7 @@ export function CustomerDetails() {
       credit_limit: data.credit_limit || 0,
       payment_term: data.payment_term || "cash",
       stock_grade: data.stock_grade || "",
+      payment_grade: data.payment_grade || "Normal",
       assigned_salesperson: data.assigned_salesperson?._id || data.assigned_salesperson || "",
       preferred_courier: data.preferred_courier || "",
       account_status: data.account_status || "Credit"
@@ -390,6 +433,61 @@ export function CustomerDetails() {
       await fetchData();
     } catch (err) {
       notify.error(err.message || "Failed to update account status.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleOpenGstModal = () => {
+    setNewGstRate(data.negotiated_gst_rate ?? "");
+    setShowGstModal(true);
+  };
+
+  const handleChangeGstRate = async (e) => {
+    e.preventDefault();
+    if (newGstRate === "" || Number(newGstRate) < 0) return notify.warning("Enter a valid GST rate.");
+    setActionLoading("gst-rate");
+    try {
+      await customerService.updateCustomerGstRate(id, Number(newGstRate));
+      notify.success(`Negotiated GST rate updated to ${newGstRate}%.`);
+      setShowGstModal(false);
+      await fetchData();
+    } catch (err) {
+      notify.error(err.message || "Failed to update GST rate.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const fetchNotes = async () => {
+    setLoadingNotes(true);
+    try {
+      const res = await customerService.getCustomerNotes(id);
+      setNotes(res.data || []);
+    } catch (err) {
+      console.error(err);
+      setNotes([]);
+    } finally {
+      setLoadingNotes(false);
+    }
+  };
+
+  const handleAddNote = async (e) => {
+    e.preventDefault();
+    if (!noteForm.note.trim()) return notify.warning("Please enter a note.");
+    setActionLoading("note");
+    try {
+      await customerService.createCustomerNote(id, {
+        type: noteForm.type,
+        note: noteForm.note,
+        next_call_date: noteForm.next_call_date || null
+      });
+      notify.success("Note added.");
+      setShowNoteModal(false);
+      setNoteForm({ type: "Call", note: "", next_call_date: "" });
+      await fetchNotes();
+    } catch (err) {
+      notify.error(err.message || "Failed to add note.");
     } finally {
       setActionLoading(null);
     }
@@ -666,7 +764,10 @@ export function CustomerDetails() {
             <div className="space-y-4 text-[13px]">
               <div className="pb-3 border-b border-slate-100 flex items-center justify-between">
                 <div>
-                  <span className="text-slate-500 block text-[11px] uppercase mb-0.5">Assigned Salesperson</span>
+                  <span className="text-slate-500 flex items-center gap-1.5 text-[11px] uppercase mb-0.5">
+                    Assigned Salesperson
+                    <span className="normal-case text-[9px] font-bold px-1.5 py-0.5 rounded-sm bg-slate-100 text-slate-500 border border-slate-200">Staff Entered</span>
+                  </span>
                   <span className="font-semibold text-slate-800">
                     {data.assigned_salesperson?.name || "Direct / Self-Registered"}
                   </span>
@@ -675,6 +776,7 @@ export function CustomerDetails() {
                   <span className="text-[12px] text-blue-600 font-medium">📞 {data.assigned_salesperson.phone}</span>
                 )}
               </div>
+              <div className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Submitted by Customer</div>
               <div>
                 <span className="text-slate-500 block text-[11px] uppercase mb-1">Owner / Contact Name</span>
                 <span className="font-semibold text-slate-800">{data.name}</span>
@@ -784,6 +886,33 @@ export function CustomerDetails() {
                   <span className="font-semibold text-slate-800 capitalize">{data.payment_term}</span>
                 </div>
               </div>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <div>
+                  <span className="text-slate-500 block text-[11px] uppercase mb-1">Stock Grading</span>
+                  <span className="font-bold text-slate-700 px-2.5 py-1 bg-slate-50 border border-slate-200 rounded-md uppercase text-[11px] tracking-wide">
+                    {data.stock_grade || "Not Graded"}
+                  </span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-500 block text-[11px] uppercase mb-1">Payment Grading</span>
+                  <span className={`font-bold px-2.5 py-1 border rounded-md uppercase text-[11px] tracking-wide ${
+                    data.payment_grade === "Defaulter" ? "bg-rose-50 text-rose-700 border-rose-200" :
+                    data.payment_grade === "Risky" ? "bg-amber-50 text-amber-700 border-amber-200" :
+                    "bg-emerald-50 text-emerald-700 border-emerald-200"
+                  }`}>
+                    {data.payment_grade || "Normal"}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                <div>
+                  <span className="text-slate-500 block text-[11px] uppercase mb-1">Negotiated GST Rate</span>
+                  <span className="font-semibold text-slate-800">{data.negotiated_gst_rate != null ? `${data.negotiated_gst_rate}%` : "Standard"}</span>
+                </div>
+                {hasPermission("EDIT_CUSTOMER") && (
+                  <button onClick={handleOpenGstModal} className="text-[12px] font-semibold text-blue-600 hover:underline">Change</button>
+                )}
+              </div>
               <div className="pt-4 border-t border-slate-100">
                 {hasPermission("REQUEST_CREDIT_LIMIT") && (
                   <button onClick={handleOpenLimitModal} className="w-full h-9 flex items-center justify-center gap-2 text-[13px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
@@ -875,7 +1004,7 @@ export function CustomerDetails() {
               <div className="flex-1 flex flex-col justify-center">
                 {(() => {
                   const limit = data.credit_limit || 0;
-                  const used = data.current_balance || 0;
+                  const used = data.used_balance || 0;
                   const available = limit - used;
                   const percent = limit > 0 ? (used / limit) * 100 : 0;
                   
@@ -1217,6 +1346,12 @@ export function CustomerDetails() {
                       <td className="py-3 px-5 text-center"><StatusPill status={sub.is_active ? "active" : "frozen"} /></td>
                       <td className="py-3 px-5 text-right">
                         <div className="flex items-center justify-end gap-2">
+                          <button onClick={() => setSubDeviceModalSub(sub)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-colors relative" title="Staff Device Lock & Security">
+                            <MonitorSmartphone size={16} />
+                            {(sub.device_id || sub.web_device_id) && (
+                              <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-amber-500 rounded-full" />
+                            )}
+                          </button>
                           <button onClick={() => {
                             setTransferData({ subId: sub.id, newParentId: "" });
                             setShowTransferModal(true);
@@ -1256,6 +1391,11 @@ export function CustomerDetails() {
                         {[item.product_id?.brand, item.product_id?.index, item.product_id?.base, item.product_id?.coating].filter(Boolean).join(" ") || "Product"}
                       </div>
                       <div className="text-[11px] text-slate-500 mt-1">SPH {item.sph} / CYL {item.cyl}{item.axis != null ? ` / AXIS ${item.axis}` : ""}{item.add != null ? ` / ADD ${item.add}` : ""}</div>
+                      {item.added_by && (item.added_by._id?.toString() !== id?.toString()) && (
+                        <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-1.5 py-0.5 inline-block mt-1.5 font-semibold uppercase tracking-wide">
+                          Added by: {item.added_by.name}
+                        </div>
+                      )}
                     </div>
                     <div className="text-right">
                       <div className="font-bold text-[14px] text-slate-900">₹{item.unit_price}</div>
@@ -1292,6 +1432,35 @@ export function CustomerDetails() {
               </div>
             </div>
 
+          </div>
+
+          {/* CRM Visit & Call Notes */}
+          <div className="bg-white rounded-xl border border-border shadow-sm flex flex-col">
+            <div className="p-5 border-b border-border bg-slate-50/50 flex items-center justify-between">
+              <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2"><History size={16} className="text-purple-500"/> Visit & Call Notes</h3>
+              <button onClick={() => setShowNoteModal(true)} className="text-[12px] text-blue-600 hover:underline font-semibold flex items-center gap-1"><Plus size={14}/> Add Note</button>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {loadingNotes ? (
+                <div className="text-center py-8 text-slate-500 text-[13px]">Loading notes...</div>
+              ) : notes.length > 0 ? notes.map(n => (
+                <div key={n._id} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-sm bg-purple-50 text-purple-700 border border-purple-200">{n.type}</span>
+                      <span className="text-[12px] font-semibold text-slate-700">{n.staff_id?.name || "Staff"}</span>
+                    </div>
+                    <span className="text-[11px] text-slate-400">{new Date(n.createdAt ? Number(n.createdAt) : Date.now()).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</span>
+                  </div>
+                  <p className="text-[13px] text-slate-700 mt-1.5">{n.note}</p>
+                  {n.next_call_date && (
+                    <div className="text-[11px] text-amber-700 font-medium mt-1.5">Next call: {new Date(n.next_call_date).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</div>
+                  )}
+                </div>
+              )) : (
+                <div className="text-center py-8 text-slate-500 text-[13px]">No visit or call notes logged yet.</div>
+              )}
+            </div>
           </div>
 
         </div>
@@ -1419,6 +1588,27 @@ export function CustomerDetails() {
                   <div>
                     <label className="block text-[12px] font-semibold text-slate-700 mb-1">Preferred Courier</label>
                     <input value={editForm.preferred_courier} onChange={e => setEditForm({...editForm, preferred_courier: e.target.value})} className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-slate-50/50 focus:bg-white focus:outline-none focus:border-blue-500" placeholder="e.g. DTDC, Blue Dart, Delivery" />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-slate-700 mb-1">Stock Grading</label>
+                    <select value={editForm.stock_grade} onChange={e => setEditForm({...editForm, stock_grade: e.target.value})} className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none focus:border-blue-500">
+                      <option value="">-- Not Graded --</option>
+                      <option value="Very Big">Very Big</option>
+                      <option value="Big">Big</option>
+                      <option value="Medium">Medium</option>
+                      <option value="Small">Small</option>
+                      <option value="Very Small">Very Small</option>
+                      <option value="Big Retailer">Big Retailer</option>
+                      <option value="Small Retailer">Small Retailer</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-semibold text-slate-700 mb-1">Payment Grading</label>
+                    <select value={editForm.payment_grade} onChange={e => setEditForm({...editForm, payment_grade: e.target.value})} className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none focus:border-blue-500">
+                      <option value="Normal">Normal</option>
+                      <option value="Risky">Risky</option>
+                      <option value="Defaulter">Defaulter</option>
+                    </select>
                   </div>
                 </div>
               </div>
@@ -1603,6 +1793,67 @@ export function CustomerDetails() {
         </div>
       )}
 
+      {/* Change Negotiated GST Rate Modal */}
+      {showGstModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm my-4 sm:my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex justify-between items-center">
+              <h2 className="text-md font-bold text-slate-900 flex items-center gap-2">Change Negotiated GST Rate</h2>
+              <button onClick={() => setShowGstModal(false)} className="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-xl transition-colors"><X size={16}/></button>
+            </div>
+            <form onSubmit={handleChangeGstRate} className="p-5 space-y-4">
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">GST Rate (%) <span className="text-red-500">*</span></label>
+                <input required type="number" min="0" step="0.01" value={newGstRate} onChange={e => setNewGstRate(e.target.value)} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-slate-50/50 focus:bg-white" />
+                <p className="text-[11px] text-slate-500 mt-1.5">This directly affects every invoice for this customer going forward. The change is logged.</p>
+              </div>
+              <div className="pt-2 flex flex-col-reverse sm:flex-row justify-end gap-2 mt-2">
+                <button type="button" onClick={() => setShowGstModal(false)} className="w-full sm:w-auto h-9 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
+                <button disabled={actionLoading === "gst-rate"} type="submit" className="w-full sm:w-auto h-9 px-4 flex items-center justify-center gap-2 text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all">
+                  {actionLoading === "gst-rate" ? <Loader2 size={14} className="animate-spin" /> : "Update Rate"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add CRM Note (Visit / Call Log) Modal */}
+      {showNoteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm my-4 sm:my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex justify-between items-center">
+              <h2 className="text-md font-bold text-slate-900 flex items-center gap-2">Add Visit / Call Note</h2>
+              <button onClick={() => setShowNoteModal(false)} className="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-xl transition-colors"><X size={16}/></button>
+            </div>
+            <form onSubmit={handleAddNote} className="p-5 space-y-4">
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Type</label>
+                <select value={noteForm.type} onChange={e => setNoteForm({...noteForm, type: e.target.value})} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-white">
+                  <option value="Call">Call</option>
+                  <option value="Visit">Visit</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Note <span className="text-red-500">*</span></label>
+                <textarea required value={noteForm.note} onChange={e => setNoteForm({...noteForm, note: e.target.value})} rows={3} placeholder="Call/visit details, feedback, etc." className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-slate-50/50 focus:bg-white" />
+              </div>
+              <div>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Next Call Date (Optional)</label>
+                <input type="date" value={noteForm.next_call_date} onChange={e => setNoteForm({...noteForm, next_call_date: e.target.value})} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-white" />
+              </div>
+              <div className="pt-2 flex flex-col-reverse sm:flex-row justify-end gap-2 mt-2">
+                <button type="button" onClick={() => setShowNoteModal(false)} className="w-full sm:w-auto h-9 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
+                <button disabled={actionLoading === "note"} type="submit" className="w-full sm:w-auto h-9 px-4 flex items-center justify-center gap-2 text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-all">
+                  {actionLoading === "note" ? <Loader2 size={14} className="animate-spin" /> : "Save Note"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Approve Credit Limit Request Modal */}
       {showApproveLimitModal && selectedLimitRequest && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
@@ -1634,6 +1885,130 @@ export function CustomerDetails() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Sub-Customer Bound Devices & Reset Modal */}
+      {subDeviceModalSub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-4 sm:my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-amber-50/70 via-slate-50 to-white flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shadow-sm">
+                  <MonitorSmartphone size={18} />
+                </div>
+                <div>
+                  <h2 className="text-[15px] font-bold text-slate-900 leading-tight">Staff Device Security</h2>
+                  <p className="text-[12px] text-slate-500 font-medium">{subDeviceModalSub.name} ({subDeviceModalSub.phone})</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setSubDeviceModalSub(null)} 
+                className="text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 p-1.5 rounded-xl transition-colors"
+              >
+                <X size={16}/>
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              {/* Mobile App Device Card */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+                    <Smartphone size={15} className="text-amber-600" /> Mobile App Device
+                  </div>
+                  {subDeviceModalSub.device_id ? (
+                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Bound
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full text-[10px] font-medium">
+                      Not Bound
+                    </span>
+                  )}
+                </div>
+                <div className="mb-3">
+                  <p className="text-[13px] font-semibold text-slate-800">
+                    {subDeviceModalSub.device_name || (subDeviceModalSub.device_id ? "Active Mobile App" : <span className="text-slate-400 font-normal italic">No mobile app bound</span>)}
+                  </p>
+                  {subDeviceModalSub.device_id && (
+                    <p className="text-[11px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200 mt-1 truncate select-all">
+                      {subDeviceModalSub.device_id}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleResetSubDevice(subDeviceModalSub.id, "app")}
+                  disabled={!subDeviceModalSub.device_id || actionLoading === "sub-device-app"}
+                  className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  {actionLoading === "sub-device-app" ? <Loader2 size={13} className="animate-spin" /> : "Reset Mobile Device Lock"}
+                </button>
+              </div>
+
+              {/* Web Browser Device Card */}
+              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition-colors">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2 text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+                    <Globe size={15} className="text-blue-600" /> Web Browser Device
+                  </div>
+                  {subDeviceModalSub.web_device_id ? (
+                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-semibold flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Bound
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full text-[10px] font-medium">
+                      Not Bound
+                    </span>
+                  )}
+                </div>
+                <div className="mb-3">
+                  <p className="text-[13px] font-semibold text-slate-800">
+                    {subDeviceModalSub.web_device_name || (subDeviceModalSub.web_device_id ? "Active Web Browser" : <span className="text-slate-400 font-normal italic">No web browser bound</span>)}
+                  </p>
+                  {subDeviceModalSub.web_device_id && (
+                    <p className="text-[11px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200 mt-1 truncate select-all">
+                      {subDeviceModalSub.web_device_id}
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleResetSubDevice(subDeviceModalSub.id, "web")}
+                  disabled={!subDeviceModalSub.web_device_id || actionLoading === "sub-device-web"}
+                  className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+                >
+                  {actionLoading === "sub-device-web" ? <Loader2 size={13} className="animate-spin" /> : "Reset Web Browser Lock"}
+                </button>
+              </div>
+
+              {/* Reset Both Shortcut */}
+              {(subDeviceModalSub.device_id || subDeviceModalSub.web_device_id) && (
+                <button
+                  type="button"
+                  onClick={() => handleResetSubDevice(subDeviceModalSub.id, null)}
+                  disabled={actionLoading === "sub-device-all"}
+                  className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-medium text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors"
+                >
+                  {actionLoading === "sub-device-all" ? <Loader2 size={13} className="animate-spin" /> : "Reset All Devices (Both App & Web)"}
+                </button>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setSubDeviceModalSub(null)}
+                className="h-8 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors"
+              >
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

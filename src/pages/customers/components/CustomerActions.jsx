@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { Link } from "@tanstack/react-router";
 import { MoreHorizontal, Lock, Unlock, Loader2, Edit, AlertTriangle } from "lucide-react";
 import { customerService } from "@/services/customerService";
 
@@ -51,12 +52,13 @@ export function CustomerActions({ customer, onActionComplete }) {
 
       {isOpen && (
         <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg py-1 z-10">
-          <button 
+          <Link
+            to={`/customer/${customer.id}`}
             className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2"
             onClick={() => setIsOpen(false)}
           >
             <Edit size={14} /> Edit
-          </button>
+          </Link>
           
           <button 
             className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 flex items-center gap-2 border-t border-slate-100"

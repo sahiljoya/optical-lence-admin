@@ -159,12 +159,13 @@ export function Dashboard() {
   const lensMix = useMemo(() => lensMixFor(curr), [curr]);
   const lensMixAlt = useMemo(() => lensMixFor(prev), [prev]);
 
-  const accountsWithBalance = billingAccounts.filter((a) => (a.current_balance || 0) > 0);
-  const totalOutstanding = accountsWithBalance.reduce((s, a) => s + (a.current_balance || 0), 0);
+  // used_balance = debt actually owed; current_balance now means remaining available credit.
+  const accountsWithBalance = billingAccounts.filter((a) => (a.used_balance || 0) > 0);
+  const totalOutstanding = accountsWithBalance.reduce((s, a) => s + (a.used_balance || 0), 0);
   const now = Date.now();
   const SIXTY_DAYS = 60 * 24 * 60 * 60 * 1000;
   const overdueAccounts = accountsWithBalance.filter((a) => !a.last_payment || now - new Date(a.last_payment).getTime() >= SIXTY_DAYS);
-  const overdueAmount = overdueAccounts.reduce((s, a) => s + (a.current_balance || 0), 0);
+  const overdueAmount = overdueAccounts.reduce((s, a) => s + (a.used_balance || 0), 0);
   const paidAccounts = billingAccounts.filter((a) => a.last_payment);
   const avgPaymentDays = paidAccounts.length
     ? Math.round(paidAccounts.reduce((s, a) => s + (now - new Date(a.last_payment).getTime()) / (24 * 60 * 60 * 1000), 0) / paidAccounts.length)

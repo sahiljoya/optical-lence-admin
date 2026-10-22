@@ -736,8 +736,8 @@ export function Settings() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Bulk (Stock) Order Cartage Charge (₹)</label>
-                    <p className="text-[11px] text-slate-500 mb-2">Added automatically when an order is placed with type "Stock" (bulk).</p>
+                    <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Default Cartage Rate per Carton (₹)</label>
+                    <p className="text-[11px] text-slate-500 mb-2">Default packaging charge per carton applied during order dispatch.</p>
                     <input
                       type="number" min="0"
                       value={platformForm.bulk_cartage_charge}

@@ -39,6 +39,7 @@ export function Dispatch() {
   // Form State
   const [trackingId, setTrackingId] = useState("");
   const [deliveryPartner, setDeliveryPartner] = useState("DTDC");
+  const [isChangingCourier, setIsChangingCourier] = useState(false);
 
   const pendingCount = orders.filter(o => o.status === "PACKING" || o.status === "PICKING").length;
   const transitCount = orders.filter(o => o.status === "DISPATCHED").length;
@@ -66,6 +67,7 @@ export function Dispatch() {
   const handleDispatchClick = (order) => {
     setSelectedOrder(order);
     setDeliveryPartner(order.delivery_partner || "DTDC");
+    setIsChangingCourier(false);
     setTrackingId("");
     setShowDispatchModal(true);
   };
@@ -303,17 +305,52 @@ export function Dispatch() {
 
               <div className="mb-4">
                 <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Delivery Partner</label>
-                <select 
-                  value={deliveryPartner}
-                  onChange={e => setDeliveryPartner(e.target.value)}
-                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 font-medium"
-                >
-                  <option value="DTDC">DTDC</option>
-                  <option value="Blue Dart">Blue Dart</option>
-                  <option value="Delhivery">Delhivery</option>
-                  <option value="Trackon">Trackon</option>
-                  <option value="Self Pickup">Self Pickup</option>
-                </select>
+                {!isChangingCourier ? (
+                  <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Truck size={16} className="text-slate-500 shrink-0" />
+                      <span className="font-semibold text-slate-800 text-[13px] truncate">{deliveryPartner}</span>
+                      <span className="text-[10px] bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded-full border border-blue-200 shrink-0">
+                        Customer Selected
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsChangingCourier(true)}
+                      className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 hover:underline shrink-0 ml-2"
+                    >
+                      Change Company
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-medium text-slate-500">Select alternative courier:</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeliveryPartner(selectedOrder.delivery_partner || "DTDC");
+                          setIsChangingCourier(false);
+                        }}
+                        className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 hover:underline"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <select 
+                      value={deliveryPartner}
+                      onChange={e => setDeliveryPartner(e.target.value)}
+                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 font-medium"
+                      autoFocus
+                    >
+                      <option value="DTDC">DTDC</option>
+                      <option value="Blue Dart">Blue Dart</option>
+                      <option value="Delhivery">Delhivery</option>
+                      <option value="Trackon">Trackon</option>
+                      <option value="Self Pickup">Self Pickup</option>
+                    </select>
+                  </div>
+                )}
               </div>
 
               <div className="mb-6">

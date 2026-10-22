@@ -22,7 +22,10 @@ export function handleResponse(data) {
     if (data.code === 401) {
       onErrorLogout();
     }
-    throw new Error(data.message || "An error occurred");
+    const err = new Error(data.message || "An error occurred");
+    err.data = data.data;
+    err.code = data.code;
+    throw err;
   }
 
   return data;

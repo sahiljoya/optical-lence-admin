@@ -8,24 +8,8 @@ import { Link } from "@tanstack/react-router";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { OrderActions } from "./components/OrderActions";
 import { orderApi } from "@/services/orderApi";
+import { notify } from "@/lib/notify";
 import "@/styles/veriwide.css";
-
-const INITIAL_MOCK_ORDERS = [
-  { id: "ORD-9025", customer: "Vision Plus", city: "Delhi", date: "2026-10-17T11:45:00Z", amount: 4500, status: "PLACED", items: 5, totalQty: 45, isUrgent: true, placedBy: "B2B Portal", trackingId: "" },
-  { id: "ORD-9024-BO", customer: "Vision Plus", city: "Delhi", date: "2026-10-17T11:45:00Z", amount: 1850, status: "AWAITING_STOCK", items: 2, totalQty: 10, isUrgent: false, isBackorder: true, backorderReason: "Pending -3.50 Sph Stock Arrival", placedBy: "Auto-Split BO", trackingId: "" },
-  { id: "ORD-9023", customer: "Clear Optics", city: "Pune", date: "2026-10-17T09:15:00Z", amount: 6200, status: "CONFIRMED", items: 4, totalQty: 28, isUrgent: false, placedBy: "Owner", trackingId: "" },
-  { id: "ORD-9022", customer: "Sunshine Eyewear", city: "Mumbai", date: "2026-10-16T14:20:00Z", amount: 12400, status: "PICKING", items: 12, totalQty: 120, isUrgent: true, placedBy: "Ramesh (Staff)", trackingId: "" },
-  { id: "ORD-9021", customer: "Metro Vision", city: "Bangalore", date: "2026-10-16T12:00:00Z", amount: 3900, status: "PACKING", items: 3, totalQty: 15, isUrgent: false, placedBy: "Owner", trackingId: "" },
-  { id: "ORD-9020", customer: "Clear Optics", city: "Pune", date: "2026-10-15T10:15:00Z", amount: 1200, status: "HOLD", items: 2, totalQty: 12, isUrgent: false, placedBy: "Owner", blockReason: "Credit Limit Exceeded", trackingId: "" },
-  { id: "ORD-9019-BO", customer: "Eye Trends", city: "Hyderabad", date: "2026-10-15T08:30:00Z", amount: 2400, status: "AWAITING_STOCK", items: 2, totalQty: 8, isUrgent: true, isBackorder: true, backorderReason: "Zero Stock in Running Warehouse", placedBy: "Auto-Split BO", trackingId: "" },
-  { id: "ORD-9018", customer: "Sunshine Eyewear", city: "Mumbai", date: "2026-10-14T14:20:00Z", amount: 18900, status: "DISPATCHED", items: 15, totalQty: 140, isUrgent: true, placedBy: "Owner", trackingId: "BLUEDART8921" },
-  { id: "ORD-9015", customer: "City Optics", city: "Jaipur", date: "2026-10-13T09:00:00Z", amount: 8900, status: "DISPATCHED", items: 8, totalQty: 80, isUrgent: false, placedBy: "Suresh (Staff)", trackingId: "DELHIVERY445" },
-  { id: "ORD-9012", customer: "OptiCare Clinic", city: "Surat", date: "2026-10-12T17:10:00Z", amount: 5100, status: "CONFIRMED", items: 6, totalQty: 32, isUrgent: false, placedBy: "Staff", trackingId: "" },
-  { id: "ORD-9010", customer: "Rajat Vision", city: "Delhi", date: "2026-10-11T16:45:00Z", amount: 3200, status: "DELIVERED", items: 3, totalQty: 30, isUrgent: false, placedBy: "Owner", trackingId: "DELHIVERY445" },
-  { id: "ORD-9005", customer: "Vision Plus", city: "Delhi", date: "2026-10-10T11:30:00Z", amount: 15600, status: "DELIVERED", items: 14, totalQty: 150, isUrgent: false, placedBy: "Owner", trackingId: "BLUEDART8900" },
-  { id: "ORD-9002", customer: "Prime Eyecare", city: "Ahmedabad", date: "2026-10-09T15:20:00Z", amount: 2800, status: "DELIVERED", items: 2, totalQty: 18, isUrgent: false, placedBy: "Owner", trackingId: "DTDC7712" },
-  { id: "ORD-9001", customer: "Apex Lenses", city: "Chennai", date: "2026-10-08T10:00:00Z", amount: 950, status: "CANCELLED", items: 1, totalQty: 5, isUrgent: false, placedBy: "Owner", trackingId: "" }
-];
 
 const STATUS_CONFIG = {
   pending: { label: "New Order", bg: "bg-blue-100", text: "text-blue-700", border: "border-blue-200" },
@@ -75,42 +59,47 @@ function StatusBadge({ status, reason, trackingId, isBackorder, backorderReason 
 }
 
 export function Orders() {
-  const [orders, setOrders] = useState(INITIAL_MOCK_ORDERS);
-  const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [filterDate, setFilterDate] = useState("all_time");
   const [urgentOnly, setUrgentOnly] = useState(false);
-  
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Fetch real orders from API with graceful fallback to mock data
   const fetchOrders = async () => {
     setLoading(true);
     try {
       const res = await orderApi.getRecentOrders();
-      if (res && res.error === false && Array.isArray(res.data) && res.data.length > 0) {
-        const mapped = res.data.map(o => ({
+      const mapped = (res?.data || []).map(o => {
+        const ownerId = o.customer_id?._id ? String(o.customer_id._id) : null;
+        const placerId = o.placed_by?._id ? String(o.placed_by._id) : null;
+        const placedBy = placerId && placerId !== ownerId ? o.placed_by.name : "Owner";
+        return {
           id: o.order_number || o._id,
           dbId: o._id,
           customer: o.customer_id?.company_name || o.customer_id?.name || "Customer",
-          city: o.customer_id?.city || "Delhi",
+          city: o.customer_id?.city || "N/A",
           date: o.createdAt,
           amount: o.total_amount || 0,
           status: o.status,
           items: Array.isArray(o.items) ? o.items.length : 0,
-          totalQty: Array.isArray(o.items) ? o.items.reduce((s, it) => s + (it.quantity || 1), 0) : 0,
+          totalQty: Array.isArray(o.items) ? o.items.reduce((s, it) => s + (it.requested_quantity || 1), 0) : 0,
           isUrgent: !!o.is_urgent,
-          isBackorder: !!o.is_backorder || (o.order_number && o.order_number.endsWith("-BO")),
-          placedBy: o.order_type === "stock" ? "Stock Order" : "B2B Portal",
-          trackingId: o.tracking_number || ""
-        }));
-        setOrders(mapped);
-      }
+          isBackorder: !!o.is_stock_wait || (Array.isArray(o.items) && o.items.some(it => it.is_backorder)),
+          placedBy,
+          trackingId: o.tracking_number || "",
+          deliveryPartner: o.delivery_partner || "DTDC"
+        };
+      });
+      setOrders(mapped);
     } catch (err) {
-      console.warn("Could not load real orders from API, using mock orders:", err);
+      console.error("Could not load orders:", err);
+      notify.error(err.message || "Could not load orders");
+      setOrders([]);
     } finally {
       setLoading(false);
     }
@@ -125,9 +114,9 @@ export function Orders() {
     setCurrentPage(1);
   }, [search, activeTab, filterDate, urgentOnly, pageSize]);
 
-  // Counts for tabs & KPI summary
+  // Counts for tabs & KPI summary (cancelled orders are hidden from "All Orders")
   const counts = useMemo(() => {
-    const total = orders.length;
+    const total = orders.filter(o => o.status !== "CANCELLED").length;
     const awaiting = orders.filter(o => o.status === "AWAITING_STOCK" || o.status === "awaiting_stock").length;
     const newOrConfirmed = orders.filter(o => ["PLACED", "pending", "CONFIRMED", "confirmed"].includes(o.status)).length;
     const pickingPacking = orders.filter(o => ["PICKING", "processing", "PACKING", "packing"].includes(o.status)).length;
@@ -135,7 +124,8 @@ export function Orders() {
     const delivered = orders.filter(o => ["DELIVERED", "delivered"].includes(o.status)).length;
     const hold = orders.filter(o => ["HOLD", "blocked"].includes(o.status)).length;
     const urgent = orders.filter(o => o.isUrgent).length;
-    return { total, awaiting, newOrConfirmed, pickingPacking, dispatched, delivered, hold, urgent };
+    const cancelled = orders.filter(o => o.status === "CANCELLED" || o.status === "cancelled").length;
+    return { total, awaiting, newOrConfirmed, pickingPacking, dispatched, delivered, hold, urgent, cancelled };
   }, [orders]);
 
   const tabs = [
@@ -146,6 +136,7 @@ export function Orders() {
     { id: "shipped", label: "Dispatched", count: counts.dispatched },
     { id: "blocked", label: "On Hold", count: counts.hold },
     { id: "delivered", label: "Delivered", count: counts.delivered },
+    { id: "cancelled", label: "Cancelled", count: counts.cancelled },
   ];
 
   // Filtering Logic
@@ -153,7 +144,9 @@ export function Orders() {
     return orders.filter(o => {
       // Tab matching
       let matchesTab = true;
-      if (activeTab === "AWAITING_STOCK") {
+      if (activeTab === "all") {
+        matchesTab = o.status !== "CANCELLED";
+      } else if (activeTab === "AWAITING_STOCK") {
         matchesTab = o.status === "AWAITING_STOCK" || o.status === "awaiting_stock";
       } else if (activeTab === "pending") {
         matchesTab = ["PLACED", "pending", "CONFIRMED", "confirmed"].includes(o.status);
@@ -165,6 +158,8 @@ export function Orders() {
         matchesTab = ["HOLD", "blocked"].includes(o.status);
       } else if (activeTab === "delivered") {
         matchesTab = ["DELIVERED", "delivered"].includes(o.status);
+      } else if (activeTab === "cancelled") {
+        matchesTab = o.status === "CANCELLED" || o.status === "cancelled";
       }
 
       // Urgent toggle
@@ -196,7 +191,7 @@ export function Orders() {
       }
 
       return matchesTab && matchesSearch && matchesDate;
-    });
+    }).sort((a, b) => (b.isUrgent ? 1 : 0) - (a.isUrgent ? 1 : 0));
   }, [orders, activeTab, search, filterDate, urgentOnly]);
 
   // Pagination Slice
@@ -204,10 +199,6 @@ export function Orders() {
   const startIndex = (currentPage - 1) * pageSize;
   const endIndex = startIndex + pageSize;
   const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
-
-  const handleUpdateOrder = (updatedOrder) => {
-    setOrders(orders.map(o => o.id === updatedOrder.id ? updatedOrder : o));
-  };
 
   return (
     <>
@@ -436,7 +427,7 @@ export function Orders() {
                 <th className="py-3 px-4 font-bold text-slate-500 tracking-wide uppercase text-[11px]">Stock / Items</th>
                 <th className="py-3 px-4 font-bold text-slate-500 tracking-wide uppercase text-[11px] text-center">Status</th>
                 <th className="py-3 px-4 font-bold text-slate-500 tracking-wide uppercase text-[11px] text-right">Amount</th>
-                <th className="py-3 px-4 font-bold text-slate-500 tracking-wide uppercase text-[11px] w-14 text-center">Action</th>
+                <th className="py-3 px-4 font-bold text-slate-500 tracking-wide uppercase text-[11px] text-right">Action</th>
               </tr>
             </thead>
             <tbody>
@@ -456,7 +447,7 @@ export function Orders() {
                     {/* Order & Type */}
                     <td className="py-3.5 px-4">
                       <div className="font-bold text-blue-600 hover:underline cursor-pointer flex items-center gap-1.5 flex-wrap">
-                        <Link to={`/orders/${o.id}`} className="hover:underline font-mono text-[13px]">
+                        <Link to={`/orders/${o.dbId || o.id}`} className="hover:underline font-mono text-[13px]">
                           {o.id}
                         </Link>
                         {o.isUrgent && (
@@ -523,9 +514,9 @@ export function Orders() {
                     </td>
 
                     {/* Action */}
-                    <td className="py-3.5 px-4 text-center">
-                      <div className="flex items-center justify-center opacity-100 sm:opacity-90 group-hover:opacity-100 transition-opacity">
-                        <OrderActions order={o} onUpdate={handleUpdateOrder} />
+                    <td className="py-3.5 px-4 whitespace-nowrap">
+                      <div className="flex items-center justify-end opacity-100 sm:opacity-90 group-hover:opacity-100 transition-opacity">
+                        <OrderActions order={o} onUpdate={fetchOrders} />
                       </div>
                     </td>
                   </tr>

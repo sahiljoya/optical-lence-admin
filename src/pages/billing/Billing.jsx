@@ -17,6 +17,8 @@ export function Billing() {
   const [loadingLedgerEntries, setLoadingLedgerEntries] = useState(false);
   const [limitRequests, setLimitRequests] = useState([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+  const [discountRequests, setDiscountRequests] = useState([]);
+  const [loadingDiscountRequests, setLoadingDiscountRequests] = useState(true);
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState(routeSearch?.tab || "dues");
 
@@ -47,6 +49,19 @@ export function Billing() {
     }
   };
 
+  const fetchDiscountRequests = async () => {
+    setLoadingDiscountRequests(true);
+    try {
+      const res = await customerService.getDiscountRequestsQueue({ status: "PENDING" });
+      setDiscountRequests(res.data?.list || []);
+    } catch (err) {
+      console.error(err);
+      setDiscountRequests([]);
+    } finally {
+      setLoadingDiscountRequests(false);
+    }
+  };
+
   const fetchLedgers = async () => {
     setLoadingLedgers(true);
     try {
@@ -71,11 +86,13 @@ export function Billing() {
   };
 
   const canApproveLimits = hasPermission("APPROVE_CREDIT_LIMIT");
+  const canApproveDiscounts = hasPermission("APPROVE_DISCOUNT");
 
   useEffect(() => {
     fetchLedgers();
     fetchChartData();
     if (canApproveLimits) fetchLimitRequests();
+    if (canApproveDiscounts) fetchDiscountRequests();
   }, []);
 
   const tabs = [
@@ -83,12 +100,13 @@ export function Billing() {
     { id: "all", label: "All Accounts" },
     { id: "hold", label: "Hold / Limit Exceeded" },
     ...(canApproveLimits ? [{ id: "limit_requests", label: "Limit Requests", badge: limitRequests.filter(r => r.status === "PENDING").length }] : []),
+    ...(canApproveDiscounts ? [{ id: "discount_requests", label: "Discount Requests", badge: discountRequests.length }] : []),
   ];
 
   const filteredLedgers = ledgers.filter(ledger => {
     let matchesTab = true;
-    if (activeTab === "dues") matchesTab = ledger.current_balance > 0;
-    if (activeTab === "hold") matchesTab = ledger.account_status === "Hold" || ledger.current_balance > ledger.credit_limit;
+    if (activeTab === "dues") matchesTab = ledger.used_balance > 0;
+    if (activeTab === "hold") matchesTab = ledger.account_status === "Hold" || ledger.used_balance > ledger.credit_limit;
     
     const matchesSearch = ledger.id.toLowerCase().includes(search.toLowerCase()) || 
                           ledger.customer.toLowerCase().includes(search.toLowerCase()) ||
@@ -102,13 +120,20 @@ export function Billing() {
     return customerName.toLowerCase().includes(s) || (req.reason || "").toLowerCase().includes(s);
   });
 
-  const totalOutstanding = ledgers.reduce((sum, item) => sum + item.current_balance, 0);
-  const totalHoldDue = ledgers.filter(l => l.account_status === "Hold" || l.current_balance > l.credit_limit).reduce((sum, item) => sum + item.current_balance, 0);
+  const filteredDiscountRequests = discountRequests.filter(req => {
+    const customerName = req.customer_id?.company_name || req.customer_id?.name || "";
+    const productName = req.product_id?.brand || "";
+    const s = search.toLowerCase();
+    return customerName.toLowerCase().includes(s) || productName.toLowerCase().includes(s);
+  });
+
+  const totalOutstanding = ledgers.reduce((sum, item) => sum + item.used_balance, 0);
+  const totalHoldDue = ledgers.filter(l => l.account_status === "Hold" || l.used_balance > l.credit_limit).reduce((sum, item) => sum + item.used_balance, 0);
   const totalActiveDue = totalOutstanding - totalHoldDue;
 
   const handleReceiveClick = (customer) => {
     setSelectedCustomer(customer);
-    setPaymentAmount(customer.current_balance.toString());
+    setPaymentAmount(customer.used_balance.toString());
     setShowReceiveModal(true);
   };
 
@@ -192,6 +217,33 @@ export function Billing() {
     }
   };
 
+  const handleApproveDiscount = async (req) => {
+    const customerName = req.customer_id?.company_name || req.customer_id?.name;
+    if (!window.confirm(`Approve the special price of ₹${req.requested_price} for ${req.product_id?.brand || "this product"} for ${customerName}?`)) return;
+
+    try {
+      await customerService.actionDiscountRequest({ requestId: req._id, action: "APPROVE" });
+      notify.success(`Discount request for ${customerName} approved. Special price is now active.`);
+      await fetchDiscountRequests();
+    } catch (err) {
+      notify.error(err.message || "Failed to approve discount request.");
+    }
+  };
+
+  const handleRejectDiscount = async (req) => {
+    const customerName = req.customer_id?.company_name || req.customer_id?.name;
+    if (!window.confirm(`Reject the discount request from ${customerName}?`)) return;
+    const rejectionReason = window.prompt("Reason for rejection (optional):") || "";
+
+    try {
+      await customerService.actionDiscountRequest({ requestId: req._id, action: "REJECT", rejectionReason });
+      notify.success(`Discount request from ${customerName} rejected.`);
+      await fetchDiscountRequests();
+    } catch (err) {
+      notify.error(err.message || "Failed to reject discount request.");
+    }
+  };
+
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -223,7 +275,7 @@ export function Billing() {
       </div>
 
       {/* Stats Summary with Charts */}
-      {activeTab !== "limit_requests" && (
+      {activeTab !== "limit_requests" && activeTab !== "discount_requests" && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
           <div className="vw-card p-5 border-l-4 border-l-rose-500 flex flex-col justify-center bg-gradient-to-br from-white to-rose-50/30">
             <p className="text-[13px] font-bold text-slate-500 uppercase tracking-wider">Total Outstanding Due</p>
@@ -359,6 +411,64 @@ export function Billing() {
               </tbody>
             </table>
           </div>
+        ) : activeTab === "discount_requests" ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/80 border-b border-slate-100 text-[12px] uppercase tracking-wider text-slate-500">
+                  <th className="px-5 py-4 font-bold">Request Details</th>
+                  <th className="px-5 py-4 font-bold text-right">Standard Rate</th>
+                  <th className="px-5 py-4 font-bold text-right">Requested Rate</th>
+                  <th className="px-5 py-4 font-bold">Reason</th>
+                  <th className="px-5 py-4 font-bold text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loadingDiscountRequests ? (
+                  <tr><td colSpan="5" className="px-5 py-12 text-center text-slate-500">Loading requests...</td></tr>
+                ) : filteredDiscountRequests.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-5 py-12 text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                          <ShieldAlert size={20} className="text-slate-400" />
+                        </div>
+                        <h3 className="text-[14px] font-bold text-slate-700">No pending requests</h3>
+                        <p className="text-[13px] text-slate-500 mt-1">All discount requests have been processed.</p>
+                      </div>
+                    </td>
+                  </tr>
+                ) : null}
+                {!loadingDiscountRequests && filteredDiscountRequests.map(req => (
+                  <tr key={req._id} className="hover:bg-slate-50/50 transition-colors group">
+                    <td className="px-5 py-4">
+                      <div className="font-bold text-[14px] text-slate-900">{req.customer_id?.company_name || req.customer_id?.name}</div>
+                      <div className="text-[12px] text-slate-500 mt-0.5">{req.product_id?.brand} {req.product_id?.product_code} • {req.salesperson_id?.name}{req.createdAt ? ` • ${new Date(req.createdAt).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' })}` : ""}</div>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="font-semibold text-[13px] text-slate-700">₹{req.standard_tier_price?.toLocaleString()}</div>
+                    </td>
+                    <td className="px-5 py-4 text-right">
+                      <div className="font-bold text-[15px] text-blue-600">₹{req.requested_price?.toLocaleString()}</div>
+                    </td>
+                    <td className="px-5 py-4">
+                      <p className="text-[12px] text-slate-600 max-w-xs">{req.reason}</p>
+                    </td>
+                    <td className="px-5 py-4 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <button onClick={() => handleApproveDiscount(req)} className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-colors rounded font-bold text-[12px] border border-emerald-200">
+                          <CheckCircle size={14} /> Approve
+                        </button>
+                        <button onClick={() => handleRejectDiscount(req)} className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-colors rounded font-bold text-[12px] border border-rose-200">
+                          <XCircle size={14} /> Reject
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : (
           /* Ledgers View */
           <>
@@ -393,11 +503,11 @@ export function Billing() {
                       <div className="flex justify-between items-end">
                         <div>
                           <div className="text-[11px] text-slate-500">Credit Limit: ₹{ledger.credit_limit.toLocaleString()}</div>
-                          {ledger.current_balance > ledger.credit_limit && <div className="text-[11px] font-bold text-rose-600">Limit Exceeded</div>}
+                          {ledger.used_balance > ledger.credit_limit && <div className="text-[11px] font-bold text-rose-600">Limit Exceeded</div>}
                         </div>
                         <div className="text-right">
                           <div className="text-[11px] text-slate-500">Pending Due</div>
-                          <div className="font-bold text-[16px] text-rose-600">₹{ledger.current_balance.toLocaleString()}</div>
+                          <div className="font-bold text-[16px] text-rose-600">₹{ledger.used_balance.toLocaleString()}</div>
                         </div>
                       </div>
 
@@ -462,12 +572,12 @@ export function Billing() {
                       </td>
                       <td className="px-5 py-4">
                         <div className="font-semibold text-[13px] text-slate-700">₹{ledger.credit_limit.toLocaleString()}</div>
-                        {ledger.current_balance > ledger.credit_limit && (
+                        {ledger.used_balance > ledger.credit_limit && (
                           <div className="text-[11px] font-bold text-rose-600 mt-1">Limit Exceeded</div>
                         )}
                       </td>
                       <td className="px-5 py-4 text-right">
-                        <div className="font-bold text-[16px] text-rose-600">₹{ledger.current_balance.toLocaleString()}</div>
+                        <div className="font-bold text-[16px] text-rose-600">₹{ledger.used_balance.toLocaleString()}</div>
                         <div className="text-[11px] text-slate-500 font-medium">Last Pay: {ledger.last_payment ? new Date(ledger.last_payment).toLocaleDateString() : "—"}</div>
                       </td>
                       <td className="px-5 py-4 text-center">
@@ -503,7 +613,7 @@ export function Billing() {
               <div className="mb-4">
                 <label className="block text-[12px] font-bold text-slate-500 uppercase tracking-wider mb-1">Customer</label>
                 <div className="font-semibold text-slate-900">{selectedCustomer.customer}</div>
-                <div className="text-[12px] text-rose-600 font-bold mt-1">Pending Due: ₹{selectedCustomer.current_balance.toLocaleString()}</div>
+                <div className="text-[12px] text-rose-600 font-bold mt-1">Pending Due: ₹{selectedCustomer.used_balance.toLocaleString()}</div>
               </div>
 
               <div className="mb-4">
@@ -611,7 +721,7 @@ export function Billing() {
             <div className="p-5 bg-slate-50 border-b border-slate-100 grid grid-cols-2 gap-4">
               <div>
                 <p className="text-[11px] font-bold text-slate-500 uppercase">Current Balance</p>
-                <div className="text-[18px] font-bold text-rose-600">₹{selectedCustomer.current_balance.toLocaleString()}</div>
+                <div className="text-[18px] font-bold text-rose-600">₹{selectedCustomer.used_balance.toLocaleString()}</div>
               </div>
               <div>
                 <p className="text-[11px] font-bold text-slate-500 uppercase">Credit Limit</p>
@@ -633,7 +743,7 @@ export function Billing() {
                     </div>
                     <div className="flex-1">
                       <div className="flex justify-between items-start">
-                        <div className="font-bold text-[14px] text-slate-800">{txn.type === 'DEBIT' ? 'Payment Received' : 'Order Bill Generated'}{txn.staff_id?.name ? ` • ${txn.staff_id.name}` : ""}</div>
+                        <div className="font-bold text-[14px] text-slate-800">{txn.title || (txn.type === 'DEBIT' ? 'Payment Received' : 'Order Bill Generated')}{txn.staff_id?.name ? ` • ${txn.staff_id.name}` : ""}</div>
                         <div className={`font-bold text-[14px] ${txn.type === 'DEBIT' ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {txn.type === 'DEBIT' ? '-' : '+'}₹{txn.amount.toLocaleString()}
                         </div>
