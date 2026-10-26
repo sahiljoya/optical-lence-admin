@@ -5,7 +5,7 @@ export function useIst() {
   
   useEffect(() => { 
     setNow(new Date()); 
-    const id = setInterval(() => setNow(new Date()), 30000); 
+    const id = setInterval(() => setNow(new Date()), 1000); 
     return () => clearInterval(id); 
   }, []);
   
@@ -22,6 +22,7 @@ export function useIst() {
     timeZone: "Asia/Kolkata", 
     hour: "2-digit", 
     minute: "2-digit", 
+    second: "2-digit",
     hour12: true 
   }).format(now);
   

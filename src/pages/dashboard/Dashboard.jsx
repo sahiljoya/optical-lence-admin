@@ -45,7 +45,7 @@ function Spark({ data, color }) {
 
 function Kpis({ kpis }) {
   return (
-    <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
       {kpis.map((k) => {
         const I = ICONS[k.icon];
         const color = `var(--t-${k.theme}-ic)`;

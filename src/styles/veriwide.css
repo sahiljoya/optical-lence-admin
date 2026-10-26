@@ -50,21 +50,63 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  --sidebar-width: 236px;
   background:
     radial-gradient(circle at 8% 12%, rgba(147, 197, 253, 0.35), transparent 40%),
     radial-gradient(circle at 92% 8%, rgba(191, 219, 254, 0.45), transparent 35%),
     linear-gradient(180deg, #eaf2fd 0%, #f5f9ff 45%, #ffffff 100%);
 }
 
+/* Mobile, Tablet, and Zoomed-in screens (< 1024px): Desktop rail is strictly hidden immediately */
+.vw-rail {
+  display: none !important;
+}
+
 @media (min-width: 1024px) {
   .veriwide-root {
     display: grid;
-    grid-template-columns: 224px minmax(0, 1fr);
+    grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  }
+
+  .veriwide-root.sidebar-collapsed {
+    --sidebar-width: 72px;
+  }
+
+  .vw-rail {
+    display: flex !important;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    background: var(--rail-bg);
+    backdrop-filter: blur(10px);
+    border-right: 1px solid var(--card-border);
+    padding: 20px 12px;
+    flex-direction: column;
+    width: var(--sidebar-width, 236px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    flex-shrink: 0;
+  }
+
+  .vw-rail-collapsed {
+    padding: 20px 8px;
   }
 }
 .veriwide-root *:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.vw-search-box:focus-within,
+.vw-search-box:focus-visible,
+.vw-search-input:focus,
+.vw-search-input:focus-visible {
+  outline: none !important;
+  outline-offset: 0 !important;
+  box-shadow: none !important;
+  border-color: var(--card-border) !important;
+}
 .vw-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; box-shadow: var(--shadow); }
-.vw-rail { position: sticky; top: 0; height: 100vh; background: var(--rail-bg); backdrop-filter: blur(10px); border-right: 1px solid var(--card-border); padding: 20px 14px; display: flex; flex-direction: column; }
+.vw-nav-collapsed { justify-content: center !important; padding: 0 !important; width: 44px !important; height: 44px !important; margin: 0 auto 4px auto !important; }
+.vw-rail::-webkit-scrollbar { width: 4px; }
+.vw-rail::-webkit-scrollbar-thumb { background: rgba(148, 163, 184, 0.25); border-radius: 4px; }
+.vw-rail::-webkit-scrollbar-thumb:hover { background: rgba(148, 163, 184, 0.45); }
 .vw-nav { display: flex; align-items: center; gap: 12px; height: 44px; padding: 0 12px; border-radius: 12px; margin-bottom: 4px; font-size: 14px; font-weight: 500; color: var(--muted); }
 .vw-nav:hover { background: var(--soft-bg); color: var(--ink); }
 .vw-nav.active { background: var(--primary-tint); color: var(--primary-pressed); font-weight: 600; }

@@ -37,11 +37,12 @@ const formatRelativeTime = (dateStr) => {
   return date.toLocaleDateString("en-IN", { day: "2-digit", month: "short" });
 };
 
-export function TopBar({ onOpenMobileMenu }) {
+export function TopBar({ onOpenMobileMenu, onToggleSidebar, sidebarOpen = false, desktopCollapsed = false }) {
   const { d, t } = useIst();
   const navigate = useNavigate();
   const [showDropdown, setShowDropdown] = useState(false);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
   const dropdownRef = useRef(null);
 
   // Notifications
@@ -167,23 +168,57 @@ export function TopBar({ onOpenMobileMenu }) {
   };
 
   return (
-    <div className="flex items-center gap-2 sm:gap-4 h-14 sm:h-16 w-full">
-      {/* Mobile Hamburger Menu Button */}
-      <button 
-        type="button"
-        onClick={onOpenMobileMenu}
-        className="lg:hidden p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors shrink-0 border border-slate-200 bg-white shadow-sm"
-        aria-label="Open navigation menu"
-      >
-        <Menu size={20} />
-      </button>
+    <>
+      <header className="flex items-center gap-2 sm:gap-4 h-14 sm:h-16 w-full">
+        {/* Sidebar Toggle Button (Desktop, Laptop, Tablet, Mobile) */}
+        <button 
+          type="button"
+          onClick={onToggleSidebar || onOpenMobileMenu}
+          className="p-2 text-slate-700 hover:text-slate-900 hover:bg-slate-100 rounded-xl transition-colors shrink-0 border border-slate-200 bg-white shadow-xs flex items-center justify-center cursor-pointer"
+          aria-label="Toggle navigation menu"
+          title={desktopCollapsed ? "Expand sidebar" : "Toggle navigation menu"}
+        >
+          <Menu size={20} />
+        </button>
 
-      <label className="flex items-center gap-2 flex-1 max-w-[640px] h-10 sm:h-11 bg-[var(--search-bg)] border border-[var(--card-border)] rounded-full px-3 sm:px-4 min-w-0 shadow-sm">
-        <Search size={18} className="shrink-0 text-slate-400" />
-        <input className="flex-1 bg-transparent outline-none text-[13px] sm:text-[14px] min-w-0" placeholder="Search customers, orders, products..." />
-      </label>
+        {/* Brand logo & title (Visible on mobile/tablet/zoom < 1024px OR when desktop sidebar is collapsed) */}
+        <div className={`items-center gap-2.5 shrink-0 select-none ${desktopCollapsed ? "flex" : "flex lg:hidden"}`}>
+          <svg width="30" height="17" viewBox="0 0 36 20" fill="none" style={{ stroke: "var(--ink)" }} strokeWidth="2.2" className="shrink-0">
+            <rect x="1" y="3" width="13" height="13" rx="5" /><rect x="22" y="3" width="13" height="13" rx="5" />
+            <path d="M14 8 q4 -3 8 0" />
+          </svg>
+          <div className="flex flex-col leading-tight">
+            <span className="font-bold text-[15px] sm:text-[16px] tracking-tight text-slate-900">VOC ERP</span>
+            <span className="text-[10px] text-slate-400 hidden sm:inline leading-none">Vishal Optical Co.</span>
+          </div>
+        </div>
+
+        {/* Desktop Search Bar (Hidden on mobile < 640px) */}
+        <label className="hidden sm:flex vw-search-box items-center gap-2 flex-1 max-w-[500px] h-10 sm:h-11 bg-[var(--search-bg)] border border-[var(--card-border)] rounded-full px-3 sm:px-4 min-w-0 shadow-xs focus-within:outline-none focus-within:ring-0 focus-within:border-[var(--card-border)]">
+          <Search size={18} className="shrink-0 text-slate-400" />
+          <input className="vw-search-input flex-1 bg-transparent outline-none focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0 border-none text-[13px] sm:text-[14px] min-w-0 placeholder:text-slate-400" placeholder="Search customers, orders, products..." />
+        </label>
       
       <div className="ml-auto flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* Mobile Search Button (Visible only on mobile < 640px) */}
+        <button
+          type="button"
+          onClick={() => setShowMobileSearch(true)}
+          className="sm:hidden grid place-items-center rounded-full transition-colors hover:bg-slate-100 w-9 h-9 bg-white border border-[var(--card-border)] shrink-0 shadow-xs text-slate-600 cursor-pointer"
+          aria-label="Open search"
+          title="Search"
+        >
+          <Search size={17} />
+        </button>
+
+        {/* Date and Time (Time with seconds on top, Date below) */}
+        <div className="text-right hidden md:block mr-1 select-none tabular-nums">
+          <div className="text-[13px] sm:text-[14px] font-semibold text-slate-800 leading-tight">{t}</div>
+          <div className="text-[11px] sm:text-[12px] text-slate-500 leading-tight mt-0.5">{d}</div>
+        </div>
+        <span className="hidden md:block w-px h-7 bg-slate-200 mr-1" />
+
+        {/* Notifications */}
         <div className="relative" ref={notifDropdownRef}>
           <button
             aria-label="Notifications"
@@ -288,16 +323,35 @@ export function TopBar({ onOpenMobileMenu }) {
             </div>
           )}
         </div>
-        
-        {/* Date and Time (hidden on mobile) */}
-        <span className="hidden md:block w-px h-8 bg-slate-200" />
-        <div className="text-right hidden md:block">
-          <div className="text-[13px] sm:text-[14px] font-semibold text-slate-800">{d}</div>
-          <div className="text-[11px] sm:text-[12px] text-slate-500">{t}</div>
-        </div>
       </div>
+    </header>
 
-      {/* Profile Modal */}
+    {/* Mobile Search Popup Modal */}
+    {showMobileSearch && (
+      <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex flex-col p-3 sm:hidden animate-in fade-in duration-150">
+        <div className="bg-white rounded-2xl p-2.5 shadow-xl border border-slate-200 flex items-center gap-2 animate-in slide-in-from-top-3 duration-200">
+          <Search size={18} className="shrink-0 text-slate-400 ml-1.5" />
+          <input
+            autoFocus
+            className="vw-search-input flex-1 bg-transparent outline-none border-none text-[14px] min-w-0 placeholder:text-slate-400"
+            placeholder="Search customers, orders, products..."
+          />
+          <button
+            type="button"
+            onClick={() => setShowMobileSearch(false)}
+            className="p-1.5 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+            aria-label="Close search"
+            title="Close search"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        {/* Click outside to close */}
+        <div className="flex-1" onClick={() => setShowMobileSearch(false)} />
+      </div>
+    )}
+
+    {/* Profile Modal */}
       {showProfileModal && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" style={{ background: "rgba(15, 23, 42, 0.6)", backdropFilter: "blur(8px)" }}>
           <div className="bg-white rounded-[24px] shadow-2xl w-full max-w-3xl overflow-hidden animate-in zoom-in-[0.98] fade-in duration-200 flex flex-col max-h-[90vh] relative border border-slate-200/50">
@@ -449,6 +503,6 @@ export function TopBar({ onOpenMobileMenu }) {
           </div>
         </div>
       )}
-    </div>
+    </>
   );
 }
