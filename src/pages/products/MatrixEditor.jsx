@@ -932,10 +932,10 @@ export function MatrixGridView({
 }
 
 export function defaultRangeConfigFromProduct(product) {
-  const minS = product?.min_sph ?? -6;
-  const maxS = product?.max_sph ?? 4;
-  const minC = product?.min_cyl ?? -2;
-  const maxC = product?.max_cyl ?? 0;
+  const minS = product?.min_sph ?? 0;
+  const maxS = product?.max_sph ?? -4;
+  const minC = product?.min_cyl ?? 0;
+  const maxC = product?.max_cyl ?? -2;
   return {
     sph: { min: formatPower(minS), max: formatPower(maxS), step: "0.25" },
     cylBlocks: [{ min: formatPower(minC), max: formatPower(maxC), step: "0.25", axis: "" }],

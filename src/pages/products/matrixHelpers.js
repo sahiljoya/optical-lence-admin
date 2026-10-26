@@ -182,7 +182,8 @@ export function buildGridFromCells(cells) {
     if (!cols.has(ck)) {
       cols.set(ck, {
         label: colLabelOf(cell, flags),
-        sortVal: flags.hasAdd ? (cell.add ?? 0) : (cell.cyl ?? 0)
+        sortVal: flags.hasAdd ? (cell.add ?? 0) : (cell.cyl ?? 0),
+        firstSeenIndex: cols.size
       });
     }
   });
@@ -206,10 +207,9 @@ export function buildGridFromCells(cells) {
       }
       return ra.firstSeenIndex - rb.firstSeenIndex;
     }
-    if (rb.sortCyl !== ra.sortCyl) return rb.sortCyl - ra.sortCyl;
-    return rb.sortSph - ra.sortSph;
+    return ra.firstSeenIndex - rb.firstSeenIndex;
   });
-  const colKeys = Array.from(cols.keys()).sort((a, b) => cols.get(a).sortVal - cols.get(b).sortVal);
+  const colKeys = Array.from(cols.keys()).sort((a, b) => cols.get(a).firstSeenIndex - cols.get(b).firstSeenIndex);
 
   return { flags, rows, cols, rowKeys, colKeys };
 }
@@ -251,9 +251,10 @@ export function generateProductCode({
   if (range_label && String(range_label).trim()) {
     rangeCode = String(range_label).trim().toUpperCase().replace(/\s+/g, "");
   } else {
-    const sphStr = min_sph !== undefined && !isNaN(min_sph) ? (min_sph > 0 ? `+${min_sph}` : `${min_sph}`) : "";
-    const cylBound = min_cyl !== undefined && !isNaN(min_cyl) && min_cyl !== 0 ? min_cyl : (max_cyl || 0);
-    const cylStr = cylBound !== undefined && !isNaN(cylBound) ? (cylBound > 0 ? `+${cylBound}` : `${cylBound}`) : "";
+    const sphBound = min_sph !== undefined && min_sph !== null && !isNaN(min_sph) && min_sph !== 0 ? min_sph : (max_sph || 0);
+    const sphStr = sphBound !== undefined && sphBound !== null && !isNaN(sphBound) ? (sphBound > 0 ? `+${sphBound}` : `${sphBound}`) : "";
+    const cylBound = min_cyl !== undefined && min_cyl !== null && !isNaN(min_cyl) && min_cyl !== 0 ? min_cyl : (max_cyl || 0);
+    const cylStr = cylBound !== undefined && cylBound !== null && !isNaN(cylBound) ? (cylBound > 0 ? `+${cylBound}` : `${cylBound}`) : "";
     rangeCode = `${sphStr}${cylStr}` || "STD";
   }
 
@@ -296,11 +297,34 @@ export function validatePowerRange(min, max, step, fieldName = "Power") {
     return { valid: false, error: `${fieldName} step must be greater than 0.` };
   }
 
-  if (minInt > maxInt) {
-    return { valid: false, error: `${fieldName} Min (${minNum > 0 ? "+" + minNum : minNum}) cannot be greater than Max (${maxNum > 0 ? "+" + maxNum : maxNum}).` };
+  // Optical Rule: A range cannot cross zero between negative and positive
+  if ((minInt < 0 && maxInt > 0) || (minInt > 0 && maxInt < 0)) {
+    return {
+      valid: false,
+      error: `${fieldName} range cannot cross zero between negative and positive (${minNum > 0 ? "+" + minNum : minNum} to ${maxNum > 0 ? "+" + maxNum : maxNum}). Optical series must be purely minus (e.g. 0.00 to -4.00) or purely plus (e.g. 0.00 to +4.00).`
+    };
   }
 
-  const spanInt = maxInt - minInt;
+  // Optical Rule: Min is start power, Max is end power.
+  // For negative ranges (minInt <= 0 && maxInt <= 0): magnitude must progress outward (|min| <= |max|)
+  if (minInt <= 0 && maxInt <= 0) {
+    if (Math.abs(minInt) > Math.abs(maxInt)) {
+      return {
+        valid: false,
+        error: `${fieldName} Min (${minNum > 0 ? "+" + minNum : minNum}) magnitude cannot be greater than Max (${maxNum > 0 ? "+" + maxNum : maxNum}). Progression starts at Min and moves outward to Max (e.g. 0.00 to -4.00 or -1.00 to -3.00).`
+      };
+    }
+  } else {
+    // For positive ranges (minInt >= 0 && maxInt >= 0): minInt <= maxInt
+    if (minInt > maxInt) {
+      return {
+        valid: false,
+        error: `${fieldName} Min (${minNum > 0 ? "+" + minNum : minNum}) cannot be greater than Max (${maxNum > 0 ? "+" + maxNum : maxNum}). Progression starts at Min and moves up to Max (e.g. 0.00 to +4.00).`
+      };
+    }
+  }
+
+  const spanInt = Math.abs(maxInt - minInt);
   if (spanInt % stepInt !== 0) {
     return {
       valid: false,
@@ -362,8 +386,14 @@ export function generateMatrixCellsClient({ lensType, rangeConfig, hasCyl }) {
     const endInt = Math.round(Number(end) * 100);
     const stepInt = Math.round(Number(step) * 100);
 
-    for (let val = startInt; val <= endInt; val += stepInt) {
-      values.push(val / 100);
+    if (startInt <= endInt) {
+      for (let val = startInt; val <= endInt; val += stepInt) {
+        values.push(val === 0 ? 0 : val / 100);
+      }
+    } else {
+      for (let val = startInt; val >= endInt; val -= stepInt) {
+        values.push(val === 0 ? 0 : val / 100);
+      }
     }
     return values;
   };

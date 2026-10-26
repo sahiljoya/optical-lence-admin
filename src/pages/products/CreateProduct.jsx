@@ -72,8 +72,9 @@ export function CreateProduct() {
     productData.lens_type === "RX";
 
   const autoSku = useMemo(() => {
-    const cylMins = hasCyl ? rangeConfig?.cylBlocks?.map((b) => parseFloat(b.min)) || [] : [];
-    const cylMaxs = hasCyl ? rangeConfig?.cylBlocks?.map((b) => parseFloat(b.max)) || [] : [];
+    const primaryCyl = hasCyl && rangeConfig?.cylBlocks?.length > 0 ? rangeConfig.cylBlocks[0] : null;
+    const minCyl = primaryCyl && primaryCyl.min !== undefined && primaryCyl.min !== null && !isNaN(parseFloat(primaryCyl.min)) ? parseFloat(primaryCyl.min) : 0;
+    const maxCyl = primaryCyl && primaryCyl.max !== undefined && primaryCyl.max !== null && !isNaN(parseFloat(primaryCyl.max)) ? parseFloat(primaryCyl.max) : 0;
     const hasSph =
       rangeConfig?.sph?.min !== undefined &&
       rangeConfig?.sph?.min !== null &&
@@ -89,8 +90,8 @@ export function CreateProduct() {
       diameter: productData.diameter,
       min_sph: hasSph ? parseFloat(rangeConfig.sph.min) : undefined,
       max_sph: hasSph ? parseFloat(rangeConfig.sph.max) : undefined,
-      min_cyl: cylMins.length > 0 ? Math.min(...cylMins) : 0,
-      max_cyl: cylMaxs.length > 0 ? Math.max(...cylMaxs) : 0,
+      min_cyl: minCyl,
+      max_cyl: maxCyl,
       range_label: productData.range_label,
     });
   }, [
@@ -188,7 +189,7 @@ export function CreateProduct() {
     if (checked && (!rangeConfig.cylBlocks || rangeConfig.cylBlocks.length === 0)) {
       setRangeConfig((prev) => ({
         ...prev,
-        cylBlocks: [{ min: "-2.00", max: "0.00", step: "0.25", axis: isProgressiveFamily ? "90" : "" }],
+        cylBlocks: [{ min: "0.00", max: "-2.00", step: "0.25", axis: isProgressiveFamily ? "90" : "" }],
       }));
     }
   };
@@ -353,8 +354,9 @@ export function CreateProduct() {
 
     setIsSaving(true);
     try {
-      const cylMins = hasCyl ? rangeConfig.cylBlocks.map((b) => parseFloat(b.min)) : [];
-      const cylMaxs = hasCyl ? rangeConfig.cylBlocks.map((b) => parseFloat(b.max)) : [];
+      const primaryCyl = hasCyl && rangeConfig?.cylBlocks?.length > 0 ? rangeConfig.cylBlocks[0] : null;
+      const minCyl = primaryCyl && primaryCyl.min !== undefined && primaryCyl.min !== null && !isNaN(parseFloat(primaryCyl.min)) ? parseFloat(primaryCyl.min) : 0;
+      const maxCyl = primaryCyl && primaryCyl.max !== undefined && primaryCyl.max !== null && !isNaN(parseFloat(primaryCyl.max)) ? parseFloat(primaryCyl.max) : 0;
       const hasSph =
         rangeConfig?.sph?.min !== undefined &&
         rangeConfig?.sph?.min !== null &&
@@ -367,8 +369,8 @@ export function CreateProduct() {
         product_code: sku,
         min_sph: hasSph ? parseFloat(rangeConfig.sph.min) : 0,
         max_sph: hasSph ? parseFloat(rangeConfig.sph.max) : 0,
-        min_cyl: cylMins.length > 0 ? Math.min(...cylMins) : 0,
-        max_cyl: cylMaxs.length > 0 ? Math.max(...cylMaxs) : 0,
+        min_cyl: minCyl,
+        max_cyl: maxCyl,
       };
 
       // 1. Create Product
