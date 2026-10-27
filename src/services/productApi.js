@@ -23,4 +23,5 @@ export const warehouseApi = {
   getRackSummary: () => makeRequestAuth("get", "/admin/warehouse-location/racks-summary"),
   setRackStatus: (data) => makeRequestAuth("post", "/admin/warehouse-location/rack-status", data),
   deleteRack: (data) => makeRequestAuth("post", "/admin/warehouse-location/rack-delete", data),
+  findOrCreateShelf: (data) => makeRequestAuth("post", "/admin/warehouse-location/find-or-create-shelf", data),
 };

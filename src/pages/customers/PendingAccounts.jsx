@@ -68,6 +68,10 @@ export function PendingAccounts() {
   const handleReject = async (e) => {
     e.preventDefault();
     if (!selectedCustomer) return;
+    if (!rejectReason || !rejectReason.trim()) {
+      notify.error("Rejection reason is mandatory.");
+      return;
+    }
     setIsRejecting(true);
     try {
       await customerService.rejectCustomer({
@@ -451,8 +455,11 @@ export function PendingAccounts() {
             </div>
             <form onSubmit={handleReject} className="p-5 space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">Reason for Rejection (Optional)</label>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1.5">
+                  Reason for Rejection <span className="text-rose-500">*</span>
+                </label>
                 <textarea
+                  required
                   rows={3}
                   placeholder="e.g. Incomplete GST certificate, unverified shop location, fake details..."
                   value={rejectReason}

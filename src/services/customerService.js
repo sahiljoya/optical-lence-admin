@@ -19,6 +19,8 @@ export const customerService = {
 
   rejectCustomer: (data) => makeRequestAuth("post", "/admin/customer/reject", data),
 
+  getRejectedCustomers: (params = {}) => makeRequestAuth("post", "/admin/customer/rejected-list", params),
+
   toggleCustomerStatus: (customerId, is_active) =>
     makeRequestAuth("post", "/admin/customer/toggle-status", { customerId, is_active }),
 
