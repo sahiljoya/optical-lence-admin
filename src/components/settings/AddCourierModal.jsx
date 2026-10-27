@@ -7,6 +7,8 @@ export function AddCourierModal({ isOpen, onClose, onCourierCreated }) {
   const [name, setName] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [imageMode, setImageMode] = useState("upload"); // 'upload' | 'url'
+  const [ratePerKg, setRatePerKg] = useState("");
+  const [rateHalfKg, setRateHalfKg] = useState("");
   const [isUploading, setIsUploading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -61,11 +63,18 @@ export function AddCourierModal({ isOpen, onClose, onCourierCreated }) {
 
     setIsSaving(true);
     try {
-      const res = await courierService.createCourier(name.trim(), imageUrl.trim());
+      const res = await courierService.createCourier(
+        name.trim(),
+        imageUrl.trim(),
+        Number(ratePerKg) || 0,
+        Number(rateHalfKg) || 0
+      );
       if (res.error === false) {
         notify.success("Courier company added successfully!");
         setName("");
         setImageUrl("");
+        setRatePerKg("");
+        setRateHalfKg("");
         setImageMode("upload");
         if (onCourierCreated) onCourierCreated(res.data);
         onClose();
@@ -257,6 +266,40 @@ export function AddCourierModal({ isOpen, onClose, onCourierCreated }) {
                 )}
               </div>
             )}
+          </div>
+
+          {/* Billing Rates (Section 11) */}
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div>
+              <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                Rate per Kg (₹)
+              </label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                value={ratePerKg}
+                onChange={e => setRatePerKg(e.target.value)}
+                placeholder="e.g. 60"
+                className="w-full h-10 px-3 bg-slate-50/50 border border-slate-200 rounded-xl text-[13px] font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500"
+              />
+              <span className="text-[10px] text-slate-400 mt-0.5 block">Standard 1st Kg</span>
+            </div>
+            <div>
+              <label className="block text-[12px] font-bold text-slate-700 mb-1">
+                Rate / 0.5 Kg (₹)
+              </label>
+              <input
+                type="number"
+                step="1"
+                min="0"
+                value={rateHalfKg}
+                onChange={e => setRateHalfKg(e.target.value)}
+                placeholder="e.g. 35"
+                className="w-full h-10 px-3 bg-slate-50/50 border border-slate-200 rounded-xl text-[13px] font-bold text-slate-800 focus:bg-white focus:outline-none focus:border-blue-500"
+              />
+              <span className="text-[10px] text-slate-400 mt-0.5 block">Half-Kg increment</span>
+            </div>
           </div>
 
           {/* Footer Actions */}

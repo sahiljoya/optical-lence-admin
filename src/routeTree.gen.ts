@@ -13,6 +13,7 @@ import { Route as AdminRouteImport } from './routes/_admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminIndexRouteImport } from './routes/_admin.index'
 import { Route as AdminBillingRouteImport } from './routes/_admin.billing'
+import { Route as AdminCourierReconciliationRouteImport } from './routes/_admin.courier-reconciliation'
 import { Route as AdminCustomerOnboardRouteImport } from './routes/_admin.customer-onboard'
 import { Route as AdminCustomersRouteImport } from './routes/_admin.customers'
 import { Route as AdminDispatchRouteImport } from './routes/_admin.dispatch'
@@ -55,6 +56,12 @@ const AdminBillingRoute = AdminBillingRouteImport.update({
   path: '/billing',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminCourierReconciliationRoute =
+  AdminCourierReconciliationRouteImport.update({
+    id: '/courier-reconciliation',
+    path: '/courier-reconciliation',
+    getParentRoute: () => AdminRoute,
+  } as any)
 const AdminCustomerOnboardRoute = AdminCustomerOnboardRouteImport.update({
   id: '/customer-onboard',
   path: '/customer-onboard',
@@ -170,6 +177,7 @@ export interface FileRoutesByFullPath {
   '/': typeof AdminIndexRoute
   '/login': typeof LoginRoute
   '/billing': typeof AdminBillingRoute
+  '/courier-reconciliation': typeof AdminCourierReconciliationRoute
   '/customer-onboard': typeof AdminCustomerOnboardRoute
   '/customers': typeof AdminCustomersRoute
   '/dispatch': typeof AdminDispatchRoute
@@ -196,6 +204,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/billing': typeof AdminBillingRoute
+  '/courier-reconciliation': typeof AdminCourierReconciliationRoute
   '/customer-onboard': typeof AdminCustomerOnboardRoute
   '/customers': typeof AdminCustomersRoute
   '/dispatch': typeof AdminDispatchRoute
@@ -225,6 +234,7 @@ export interface FileRoutesById {
   '/_admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
   '/_admin/billing': typeof AdminBillingRoute
+  '/_admin/courier-reconciliation': typeof AdminCourierReconciliationRoute
   '/_admin/customer-onboard': typeof AdminCustomerOnboardRoute
   '/_admin/customers': typeof AdminCustomersRoute
   '/_admin/dispatch': typeof AdminDispatchRoute
@@ -255,6 +265,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/billing'
+    | '/courier-reconciliation'
     | '/customer-onboard'
     | '/customers'
     | '/dispatch'
@@ -281,6 +292,7 @@ export interface FileRouteTypes {
   to:
     | '/login'
     | '/billing'
+    | '/courier-reconciliation'
     | '/customer-onboard'
     | '/customers'
     | '/dispatch'
@@ -309,6 +321,7 @@ export interface FileRouteTypes {
     | '/_admin'
     | '/login'
     | '/_admin/billing'
+    | '/_admin/courier-reconciliation'
     | '/_admin/customer-onboard'
     | '/_admin/customers'
     | '/_admin/dispatch'
@@ -367,6 +380,13 @@ declare module '@tanstack/react-router' {
       path: '/billing'
       fullPath: '/billing'
       preLoaderRoute: typeof AdminBillingRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/_admin/courier-reconciliation': {
+      id: '/_admin/courier-reconciliation'
+      path: '/courier-reconciliation'
+      fullPath: '/courier-reconciliation'
+      preLoaderRoute: typeof AdminCourierReconciliationRouteImport
       parentRoute: typeof AdminRoute
     }
     '/_admin/customer-onboard': {
@@ -528,6 +548,7 @@ declare module '@tanstack/react-router' {
 
 interface AdminRouteChildren {
   AdminBillingRoute: typeof AdminBillingRoute
+  AdminCourierReconciliationRoute: typeof AdminCourierReconciliationRoute
   AdminCustomerOnboardRoute: typeof AdminCustomerOnboardRoute
   AdminCustomersRoute: typeof AdminCustomersRoute
   AdminDispatchRoute: typeof AdminDispatchRoute
@@ -555,6 +576,7 @@ interface AdminRouteChildren {
 
 const AdminRouteChildren: AdminRouteChildren = {
   AdminBillingRoute: AdminBillingRoute,
+  AdminCourierReconciliationRoute: AdminCourierReconciliationRoute,
   AdminCustomerOnboardRoute: AdminCustomerOnboardRoute,
   AdminCustomersRoute: AdminCustomersRoute,
   AdminDispatchRoute: AdminDispatchRoute,

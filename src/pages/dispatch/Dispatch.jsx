@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Search, Download, Truck, PackageCheck, Send, Navigation, Clock, CheckCircle, Package } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Search, Download, Truck, PackageCheck, Send, Navigation, Clock, CheckCircle, Package, FileSpreadsheet } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { notify } from "@/lib/notify";
 import "@/styles/veriwide.css";
@@ -40,6 +41,7 @@ export function Dispatch() {
   const [trackingId, setTrackingId] = useState("");
   const [deliveryPartner, setDeliveryPartner] = useState("DTDC");
   const [isChangingCourier, setIsChangingCourier] = useState(false);
+  const [shippedWeight, setShippedWeight] = useState(1);
 
   const pendingCount = orders.filter(o => o.status === "PACKING" || o.status === "PICKING").length;
   const transitCount = orders.filter(o => o.status === "DISPATCHED").length;
@@ -69,6 +71,8 @@ export function Dispatch() {
     setDeliveryPartner(order.delivery_partner || "DTDC");
     setIsChangingCourier(false);
     setTrackingId("");
+    const defaultBoxes = order.cartonsCount || (order.items ? Math.max(1, Math.ceil(order.items / 50)) : 1);
+    setShippedWeight(order.shipped_weight_kg || defaultBoxes);
     setShowDispatchModal(true);
   };
 
@@ -82,14 +86,15 @@ export function Dispatch() {
     e.preventDefault();
     if (!trackingId) return notify.warning("Tracking ID is required to dispatch");
 
+    const weightNum = Number(shippedWeight) || 1.0;
     setOrders(prev => prev.map(o => 
       o.id === selectedOrder.id 
-      ? { ...o, status: "DISPATCHED", tracking_id: trackingId, delivery_partner: deliveryPartner } 
+      ? { ...o, status: "DISPATCHED", tracking_id: trackingId, delivery_partner: deliveryPartner, shipped_weight_kg: weightNum } 
       : o
     ));
     
     setShowDispatchModal(false);
-    notify.success(`Order ${selectedOrder.id} dispatched via ${deliveryPartner}!`);
+    notify.success(`Order ${selectedOrder.id} dispatched via ${deliveryPartner} (${weightNum} Kg)!`);
   };
 
   const CustomTooltip = ({ active, payload, label }) => {
@@ -113,6 +118,12 @@ export function Dispatch() {
           <p className="text-[13px] text-slate-500 mt-1">Manage packing, tracking IDs, and delivery partners.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
+          <Link
+            to="/courier-reconciliation"
+            className="flex items-center justify-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[13px] border border-indigo-200 rounded-lg h-10 px-4 w-full sm:w-auto"
+          >
+            <FileSpreadsheet size={16} /> Courier Billing Audit
+          </Link>
           <button onClick={() => notify.success("Exporting manifest...")} className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
             <Download size={16} /> Export Manifest
           </button>
@@ -351,6 +362,22 @@ export function Dispatch() {
                     </select>
                   </div>
                 )}
+              </div>
+
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[12px] font-bold text-slate-700">Shipment Weight (Kg)</label>
+                  <span className="text-[11px] text-slate-400">1 standard box = 1.0 Kg</span>
+                </div>
+                <input 
+                  type="number" 
+                  step="0.1"
+                  min="0.1"
+                  value={shippedWeight}
+                  onChange={e => setShippedWeight(e.target.value)}
+                  placeholder="1.0"
+                  className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[14px] font-medium focus:outline-none focus:border-blue-500"
+                />
               </div>
 
               <div className="mb-6">

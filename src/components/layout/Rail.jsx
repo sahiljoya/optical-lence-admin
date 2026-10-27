@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import {
-  Home, Users, ClipboardList, Package, Receipt, Truck, Undo2, BarChart3, KeyRound, Headphones, Search, ListChecks, RefreshCw, X, History, ChevronLeft, ChevronRight
+  Home, Users, ClipboardList, Package, Receipt, Truck, Undo2, BarChart3, KeyRound, Headphones, Search, ListChecks, RefreshCw, X, History, ChevronLeft, ChevronRight, Scale
 } from "lucide-react";
 import { hasPermission } from "@/lib/permissions";
 import { getItem } from "@/services/storage";
@@ -20,6 +20,7 @@ export function Rail({ mobileOpen = false, onMobileClose, collapsed = false, onT
     ["Find My Lens", Search, "/find-my-lens", "VIEW_INVENTORY"],
     ["Billing", Receipt, "/billing", "VIEW_CUSTOMERS"],
     ["Dispatch", Truck, "/dispatch", "MANAGE_DISPATCH"],
+    ["Courier Audit", Scale, "/courier-reconciliation", "MANAGE_DISPATCH"],
     ["Pick List", ListChecks, "/pick-list", "MANAGE_DISPATCH"],
     ["Replenishment", RefreshCw, "/replenishment", "VIEW_INVENTORY"],
     ["Returns", Undo2, "/returns", "VIEW_ORDERS"],

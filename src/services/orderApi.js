@@ -12,6 +12,7 @@ export const orderApi = {
       ...(dispatchMeta.cartage_charge !== undefined ? { cartage_charge: dispatchMeta.cartage_charge } : {}),
       ...(dispatchMeta.is_cartage_free !== undefined ? { is_cartage_free: dispatchMeta.is_cartage_free } : {}),
       ...(dispatchMeta.cartage_rate_per_carton !== undefined ? { cartage_rate_per_carton: dispatchMeta.cartage_rate_per_carton } : {}),
+      ...(dispatchMeta.shipped_weight_kg !== undefined ? { shipped_weight_kg: dispatchMeta.shipped_weight_kg } : {}),
     }),
   confirmOrder: (orderId, allowPartial) => makeRequestAuth("post", "/admin/order/confirm", { orderId, allowPartial }),
   holdOrder: (orderId) => makeRequestAuth("post", "/admin/order/hold", { orderId }),
