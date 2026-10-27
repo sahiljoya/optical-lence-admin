@@ -21,12 +21,13 @@ const inr = (n) => "₹" + Math.round(n || 0).toLocaleString("en-IN");
 const inrLakh = (n) => "₹" + ((n || 0) / 100000).toFixed(1) + " L";
 const pctDelta = (curr, prev) => (prev ? ((curr - prev) / prev) * 100 : null);
 
-function CardHead({ icon, title, right }) {
+function CardHead({ icon, title, note, right }) {
   return (
-    <div className="flex items-center gap-2 mb-3">
-      {icon && <span className="grid place-items-center rounded-lg" style={{ width: 28, height: 28, background: "var(--primary-tint)", color: "var(--primary-pressed)" }}>{icon}</span>}
-      <span style={{ fontSize: 15, fontWeight: 600 }}>{title}</span>
-      <div className="ml-auto">{right}</div>
+    <div className="flex items-center gap-2 mb-2.5 sm:mb-3">
+      {icon && <span className="grid place-items-center rounded-lg shrink-0 w-6 h-6 sm:w-7 sm:h-7" style={{ background: "var(--primary-tint)", color: "var(--primary-pressed)" }}>{icon}</span>}
+      <span className="text-xs sm:text-sm md:text-[15px] font-semibold text-slate-800">{title}</span>
+      {note && <span className="text-[10px] sm:text-xs text-slate-400 font-normal">({note})</span>}
+      <div className="ml-auto flex items-center">{right}</div>
     </div>
   );
 }
@@ -36,7 +37,7 @@ function Spark({ data, color }) {
   const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - 2 - ((v - min) / (max - min || 1)) * (h - 6)]);
   const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
   return (
-    <svg width={w} height={h} className="absolute" style={{ right: 10, bottom: 10 }}>
+    <svg width={w} height={h} className="absolute pointer-events-none opacity-70" style={{ right: 8, bottom: 8 }}>
       <path d={`${line} L${w},${h} L0,${h} Z`} style={{ fill: color, opacity: 0.2 }} />
       <path d={line} fill="none" strokeWidth={2} style={{ stroke: color, opacity: 0.7 }} />
     </svg>
@@ -45,26 +46,43 @@ function Spark({ data, color }) {
 
 function Kpis({ kpis }) {
   return (
-    <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
+    <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
       {kpis.map((k) => {
         const I = ICONS[k.icon];
         const color = `var(--t-${k.theme}-ic)`;
         return (
           <div key={k.label} className="vw-tile" style={{ background: `var(--t-${k.theme}-bg)` }}>
-            <div className="flex gap-3">
-              <span className="grid place-items-center shrink-0" style={{ width: 44, height: 44, borderRadius: 12, background: color, color: "var(--on-primary)" }}><I size={22} /></span>
-              <div className="min-w-0">
-                <div className="truncate" style={{ fontSize: 12, color: "var(--muted)" }}>{k.label}</div>
-                <div className="truncate" style={{ fontSize: k.value.length > 8 ? 18 : 24, fontWeight: 700, lineHeight: 1.25 }}>{k.value}</div>
+            <div className="flex gap-2 sm:gap-3">
+              <span className="grid place-items-center shrink-0 w-8 h-8 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl" style={{ background: color, color: "var(--on-primary)" }}>
+                <I size={16} className="sm:w-[22px] sm:h-[22px]" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] sm:text-[11px] md:text-xs text-slate-500 font-medium truncate" title={k.label}>{k.label}</div>
+                <div
+                  className={`truncate font-bold tracking-tight text-slate-800 leading-tight mt-0.5 ${
+                    k.value.length > 10
+                      ? "text-xs sm:text-sm md:text-base lg:text-lg"
+                      : k.value.length > 6
+                      ? "text-sm sm:text-base md:text-lg lg:text-xl"
+                      : "text-base sm:text-lg md:text-xl lg:text-2xl"
+                  }`}
+                  title={k.value}
+                >
+                  {k.value}
+                </div>
               </div>
             </div>
-            <div className="mt-2" style={{ fontSize: 12 }}>
-              {"sub" in k ? <span style={{ color: "var(--muted)", fontWeight: 600 }}>{k.sub}</span> : (
-                <span className="inline-flex items-center gap-0.5" style={{ fontWeight: 600, color: k.good ? "var(--up)" : "var(--down)" }}>
-                  {k.dir === "up" ? <ArrowUp size={12} /> : <ArrowDown size={12} />}{k.delta}
-                </span>
+            <div className="mt-1.5 sm:mt-2 text-xs relative z-10 flex items-center justify-between gap-1">
+              {"sub" in k ? (
+                <span className="font-semibold text-slate-500 truncate text-[9px] sm:text-[10px] md:text-xs" title={k.sub}>{k.sub}</span>
+              ) : (
+                <div className="flex items-center gap-1 sm:gap-1.5 flex-wrap">
+                  <span className="inline-flex items-center gap-0.5 text-[10px] sm:text-[11px] md:text-xs font-semibold" style={{ color: k.good ? "var(--up)" : "var(--down)" }}>
+                    {k.dir === "up" ? <ArrowUp size={11} className="sm:w-3 sm:h-3" /> : <ArrowDown size={11} className="sm:w-3 sm:h-3" />}{k.delta}
+                  </span>
+                  <span className="text-[8px] sm:text-[9px] md:text-[11px] text-slate-400 font-normal">vs last mo</span>
+                </div>
               )}
-              {!("sub" in k) && <div style={{ fontSize: 11, color: "var(--muted)" }}>vs last month</div>}
             </div>
             <Spark data={k.spark} color={color} />
           </div>
@@ -238,77 +256,89 @@ export function Dashboard() {
 
   return (
     <>
-      <div className="grid gap-4 grid-cols-1 lg:grid-cols-[1fr_340px]">
-        <div className="vw-card flex flex-col md:flex-row items-start md:items-center gap-5" style={{ padding: "20px 24px" }}>
-          <div className="min-w-0">
-            <div style={muted}>Home&nbsp;&nbsp;&gt;&nbsp;&nbsp;Dashboard</div>
-            <div className="flex items-center gap-4 mt-3">
-              <span className="grid place-items-center rounded-full shrink-0" style={{ width: 64, height: 64, background: "var(--primary-gradient)", color: "var(--on-primary)", fontSize: 22, fontWeight: 700, boxShadow: "var(--glow)" }}>{avatarInitials}</span>
-              <div>
-                <div className="flex items-center gap-2"><span style={{ fontSize: 22, fontWeight: 700 }}>{entityName}</span><StatusPill status="active" /></div>
-                <div style={{ fontSize: 13, color: "var(--muted)" }}>{roleLabel} dashboard&nbsp;&nbsp;-&nbsp;&nbsp;Activity from {meta.text} (IST)</div>
+      <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-[1fr_310px] xl:grid-cols-[1fr_340px]">
+        <div className="vw-card flex flex-col md:flex-row items-start md:items-center gap-3.5 sm:gap-5 p-3.5 sm:p-5 lg:p-6">
+          <div className="min-w-0 w-full md:w-auto">
+            <div className="text-[9px] sm:text-[10px] md:text-xs text-slate-400 font-medium">Home&nbsp;&nbsp;&gt;&nbsp;&nbsp;Dashboard</div>
+            <div className="flex items-center gap-2.5 sm:gap-4 mt-1.5 sm:mt-3">
+              <span className="grid place-items-center rounded-full shrink-0 w-10 h-10 text-sm sm:w-13 sm:h-13 sm:text-lg lg:w-16 lg:h-16 lg:text-2xl font-bold" style={{ background: "var(--primary-gradient)", color: "var(--on-primary)", boxShadow: "var(--glow)" }}>{avatarInitials}</span>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                  <span className="text-base sm:text-xl lg:text-2xl font-bold text-slate-900 tracking-tight truncate">{entityName}</span>
+                  <StatusPill status="active" />
+                </div>
+                <div className="text-[10px] sm:text-xs md:text-[13px] text-slate-500 mt-0.5 truncate sm:whitespace-normal">
+                  {roleLabel} dashboard&nbsp;&nbsp;•&nbsp;&nbsp;Activity from {meta.text} (IST)
+                </div>
               </div>
             </div>
           </div>
-          <div className="mt-4 md:mt-0 w-full md:w-auto md:ml-auto md:pl-5 flex flex-col gap-3 md:border-l border-divider">
-            <div className="flex flex-wrap gap-4 md:gap-6">
+          <div className="mt-3 md:mt-0 w-full md:w-auto md:ml-auto md:pl-5 flex flex-col gap-2.5 sm:gap-3 md:border-l border-divider">
+            <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-4 lg:gap-6">
               {[["Period", meta.period], ["Orders today", meta.today], ["Active customers", meta.active], ["Last synced", loading ? "Syncing…" : "Just now"]].map(([l, v]) => (
-                <div key={l} className="whitespace-nowrap"><div style={muted}>{l}</div><div style={{ fontSize: 14, fontWeight: 600 }}>{v}</div></div>
+                <div key={l} className="min-w-0">
+                  <div className="text-[9px] sm:text-[10px] md:text-xs text-slate-400 font-medium">{l}</div>
+                  <div className="text-[11px] sm:text-xs md:text-sm font-semibold text-slate-800 truncate">{v}</div>
+                </div>
               ))}
             </div>
-            <div className="flex gap-2 justify-end">
+            <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center justify-start sm:justify-end">
               <Select value={range} onValueChange={setRange}>
-                <SelectTrigger className="h-10 w-[150px] rounded-[10px]"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-8 sm:h-9 md:h-10 text-[11px] sm:text-xs md:text-[13px] w-full sm:w-[140px] rounded-[10px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="this-month">This month</SelectItem>
-                  <SelectItem value="last-month">Last month</SelectItem>
-                  <SelectItem value="last-3">Last 3 months</SelectItem>
+                  <SelectItem value="this-month" className="text-xs sm:text-[13px]">This month</SelectItem>
+                  <SelectItem value="last-month" className="text-xs sm:text-[13px]">Last month</SelectItem>
+                  <SelectItem value="last-3" className="text-xs sm:text-[13px]">Last 3 months</SelectItem>
                 </SelectContent>
               </Select>
-              <Link to="/orders/new" className="vw-btn-primary h-10 inline-flex items-center" style={{ fontSize: 14 }}>+ New Order</Link>
+              <Link to="/orders/new" className="vw-btn-primary h-8 sm:h-9 md:h-10 px-3 sm:px-4 inline-flex items-center justify-center text-[11px] sm:text-xs md:text-[13px] font-semibold w-full sm:w-auto shrink-0">+ New Order</Link>
             </div>
           </div>
         </div>
 
-        <div className="vw-card" style={{ padding: "16px 20px" }}>
-          <CardHead icon={<CreditCard size={16} />} title="Credit & Receivables" right={<ChevronRight size={18} style={{ color: "var(--muted)" }} />} />
-          {[
-            ["Total outstanding", inr(totalOutstanding)],
-            ["Overdue (60+ days)", inr(overdueAmount), "var(--p-overdue)"],
-            ["Avg payment days", avgPaymentDays !== null ? `${avgPaymentDays} Days` : "—"],
-            ["Credit approvals pending", String(limitQueueCount)],
-          ].map(([l, v, c], i) => (
-            <div key={l} className="flex justify-between py-2" style={{ borderTop: i ? "1px solid var(--divider)" : undefined }}>
-              <span style={{ fontSize: 13, color: "var(--muted)" }}>{l}</span>
-              <span style={{ fontSize: 14, fontWeight: 600, color: c }}>{v}</span>
-            </div>
-          ))}
+        <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
+          <CardHead icon={<CreditCard size={15} className="sm:w-4 sm:h-4" />} title="Credit & Receivables" right={<ChevronRight size={16} className="text-slate-400" />} />
+          <div className="space-y-1 sm:space-y-1.5 flex-1 flex flex-col justify-center">
+            {[
+              ["Total outstanding", inr(totalOutstanding)],
+              ["Overdue (60+ days)", inr(overdueAmount), "var(--p-overdue)"],
+              ["Avg payment days", avgPaymentDays !== null ? `${avgPaymentDays} Days` : "—"],
+              ["Credit approvals pending", String(limitQueueCount)],
+            ].map(([l, v, c], i) => (
+              <div key={l} className="flex justify-between items-center py-1 sm:py-2 border-divider" style={{ borderTop: i ? "1px solid var(--divider)" : undefined }}>
+                <span className="text-[10px] sm:text-xs md:text-[13px] text-slate-500 font-medium">{l}</span>
+                <span className="text-[11px] sm:text-xs md:text-sm font-semibold font-mono" style={{ color: c }}>{v}</span>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       {/* Quick Actions Row */}
-      <div className="flex flex-wrap items-center gap-3 py-2">
-        <h3 className="w-full md:w-auto" style={{ fontSize: 13, fontWeight: 700, color: "var(--muted)", textTransform: "uppercase", letterSpacing: 0.5, marginRight: 8 }}>Quick Actions</h3>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3 py-1">
+        <h3 className="text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-400 tracking-wider uppercase shrink-0">Quick Actions</h3>
 
-        <Link to="/customer-onboard" className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-200 px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-700 transition-all shadow-sm group">
-          <span className="p-1.5 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors"><UserPlus size={16} /></span>
-          Create Customer
-        </Link>
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full">
+          <Link to="/customer-onboard" className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+            <span className="p-1 sm:p-1.5 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0"><UserPlus size={13} className="sm:w-4 sm:h-4" /></span>
+            <span className="truncate">Create Customer</span>
+          </Link>
 
-        <Link to="/billing" search={{ tab: "dues" }} className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-emerald-200 px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-700 transition-all shadow-sm group">
-          <span className="p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors"><Receipt size={16} /></span>
-          Add Payment
-        </Link>
+          <Link to="/billing" search={{ tab: "dues" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-emerald-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+            <span className="p-1 sm:p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0"><Receipt size={13} className="sm:w-4 sm:h-4" /></span>
+            <span className="truncate">Add Payment</span>
+          </Link>
 
-        <Link to="/billing" search={{ tab: "limit_requests" }} className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-amber-200 px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-700 transition-all shadow-sm group">
-          <span className="p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition-colors"><TrendingUp size={16} /></span>
-          Credit Request
-        </Link>
+          <Link to="/billing" search={{ tab: "limit_requests" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-amber-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+            <span className="p-1 sm:p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition-colors shrink-0"><TrendingUp size={13} className="sm:w-4 sm:h-4" /></span>
+            <span className="truncate">Credit Request</span>
+          </Link>
 
-        <Link to="/billing" search={{ tab: "dues" }} className="flex items-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-indigo-200 px-4 py-2 rounded-xl text-[13px] font-semibold text-slate-700 transition-all shadow-sm group">
-          <span className="p-1.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors"><Send size={16} /></span>
-          Send Reminder
-        </Link>
+          <Link to="/billing" search={{ tab: "dues" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-indigo-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+            <span className="p-1 sm:p-1.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0"><Send size={13} className="sm:w-4 sm:h-4" /></span>
+            <span className="truncate">Send Reminder</span>
+          </Link>
+        </div>
       </div>
 
       <Kpis kpis={kpis} />
@@ -326,96 +356,101 @@ export function Dashboard() {
         currentMonthShort={curr?.label}
       />
 
-      <div className="grid gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid gap-3 sm:gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
 
         {/* 1. Pending Orders */}
-        <div className="vw-card" style={{ padding: "16px 18px" }}>
-          <CardHead icon={<Clock size={16} />} title="Recent Pending Orders" note="Needs dispatch" />
-          <div className="space-y-3 mt-4">
-            {!loading && recentPendingOrders.length === 0 && (
-              <div className="text-[12px] text-slate-400 text-center py-4">No pending orders</div>
-            )}
-            {recentPendingOrders.map(ord => (
-              <div key={ord.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/50">
-                <div>
-                  <div className="font-semibold text-[13px] text-blue-600">{ord.id}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">{ord.shop} • {ord.date}</div>
+        <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
+          <div>
+            <CardHead icon={<Clock size={15} className="sm:w-4 sm:h-4" />} title="Recent Pending Orders" note="Needs dispatch" />
+            <div className="space-y-2 sm:space-y-2.5 mt-2 sm:mt-3">
+              {!loading && recentPendingOrders.length === 0 && (
+                <div className="text-[11px] sm:text-xs text-slate-400 text-center py-5 sm:py-6">No pending orders</div>
+              )}
+              {recentPendingOrders.map(ord => (
+                <div key={ord.id} className="flex items-center justify-between p-2 sm:p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                  <div className="min-w-0 pr-2">
+                    <div className="font-semibold text-[11px] sm:text-xs md:text-[13px] text-blue-600 truncate">{ord.id}</div>
+                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mt-0.5 truncate">{ord.shop} • {ord.date}</div>
+                  </div>
+                  <div className="font-bold text-[11px] sm:text-xs md:text-[13px] text-slate-800 shrink-0 font-mono">{ord.amount}</div>
                 </div>
-                <div className="font-bold text-[13px] text-slate-800">{ord.amount}</div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-          <Link to="/dispatch" className="w-full mt-4 text-[12px] font-semibold text-blue-600 hover:bg-blue-50 py-2 rounded-lg transition-colors block text-center">View All Pending Orders</Link>
+          <Link to="/dispatch" className="w-full mt-3 sm:mt-4 text-[10px] sm:text-xs md:text-[13px] font-semibold text-blue-600 hover:bg-blue-50 py-1.5 sm:py-2 rounded-lg transition-colors block text-center border border-blue-100/50">View All Pending Orders</Link>
         </div>
 
         {/* 2. Pending Customers */}
-        <div className="vw-card" style={{ padding: "16px 18px" }}>
-          <CardHead icon={<Users size={16} />} title="Pending Approvals" note="Needs KYC" />
-          <div className="space-y-3 mt-4">
-            {!loading && pendingApprovals.length === 0 && (
-              <div className="text-[12px] text-slate-400 text-center py-4">No pending approvals</div>
-            )}
-            {pendingApprovals.map(cust => (
-              <div key={cust.id} className="flex items-center justify-between p-3 rounded-lg border border-slate-100 bg-slate-50/50">
-                <div>
-                  <div className="font-semibold text-[13px] text-slate-800">{cust.shop}</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">{cust.id} • {cust.city}</div>
+        <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
+          <div>
+            <CardHead icon={<Users size={15} className="sm:w-4 sm:h-4" />} title="Pending Approvals" note="Needs KYC" />
+            <div className="space-y-2 sm:space-y-2.5 mt-2 sm:mt-3">
+              {!loading && pendingApprovals.length === 0 && (
+                <div className="text-[11px] sm:text-xs text-slate-400 text-center py-5 sm:py-6">No pending approvals</div>
+              )}
+              {pendingApprovals.map(cust => (
+                <div key={cust.id} className="flex items-center justify-between p-2 sm:p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                  <div className="min-w-0 pr-2">
+                    <div className="font-semibold text-[11px] sm:text-xs md:text-[13px] text-slate-800 truncate">{cust.shop}</div>
+                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mt-0.5 truncate">{cust.id} • {cust.city}</div>
+                  </div>
+                  <div className="text-[8px] sm:text-[9px] md:text-[10px] font-bold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 bg-amber-100 text-amber-700 rounded border border-amber-200 shrink-0">Pending</div>
                 </div>
-                <div className="text-[10px] font-bold uppercase tracking-wide px-2 py-1 bg-amber-100 text-amber-700 rounded border border-amber-200">Pending</div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-          <Link to="/pending-accounts" className="w-full mt-4 text-[12px] font-semibold text-blue-600 hover:bg-blue-50 py-2 rounded-lg transition-colors block text-center">Review Pending Accounts</Link>
+          <Link to="/pending-accounts" className="w-full mt-3 sm:mt-4 text-[10px] sm:text-xs md:text-[13px] font-semibold text-blue-600 hover:bg-blue-50 py-1.5 sm:py-2 rounded-lg transition-colors block text-center border border-blue-100/50">Review Pending Accounts</Link>
         </div>
 
         {/* 3. Pending & Overdue (Monthly Data) */}
-        <div className="vw-card" style={{ padding: "16px 18px" }}>
-          <CardHead icon={<AlertCircle size={16} />} title="Pending & Overdue" note="Monthly Snapshot" />
+        <div className="vw-card p-3.5 sm:p-5 md:col-span-2 xl:col-span-1 flex flex-col justify-between">
+          <div>
+            <CardHead icon={<AlertCircle size={15} className="sm:w-4 sm:h-4" />} title="Pending & Overdue" note="Monthly Snapshot" />
 
-          <div className="mt-4 space-y-4">
-            {/* This Month */}
-            <div className="p-3 rounded-xl border border-blue-100 bg-blue-50/30">
-              <div className="flex items-center gap-2 mb-2 text-[12px] font-bold text-slate-600 uppercase tracking-wider">
-                <Calendar size={14} className="text-blue-500" /> This Month ({curr?.label ?? ""})
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-[11px] text-slate-500 mb-0.5">Total Ordered</div>
-                  <div className="text-[14px] font-bold text-slate-800">{inr(financials?.thisMonth?.ordered)}</div>
+            <div className="mt-2.5 sm:mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2.5 sm:gap-3">
+              {/* This Month */}
+              <div className="p-2.5 sm:p-3.5 rounded-xl border border-blue-100 bg-blue-50/30">
+                <div className="flex items-center gap-1.5 mb-2 text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-600 uppercase tracking-wider">
+                  <Calendar size={12} className="text-blue-500 shrink-0 sm:w-3.5 sm:h-3.5" /> This Month ({curr?.label ?? ""})
                 </div>
-                <div>
-                  <div className="text-[11px] text-slate-500 mb-0.5">Payment Received</div>
-                  <div className="text-[14px] font-bold text-emerald-600">{inr(financials?.thisMonth?.received)}</div>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  <div>
+                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Total Ordered</div>
+                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-800 truncate font-mono">{inr(financials?.thisMonth?.ordered)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Payment Received</div>
+                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-emerald-600 truncate font-mono">{inr(financials?.thisMonth?.received)}</div>
+                  </div>
+                </div>
+                <div className="mt-2 pt-1.5 sm:pt-2 border-t border-blue-100/50 flex justify-between items-center">
+                  <span className="text-[9px] sm:text-[10px] md:text-[11px] font-medium text-slate-500">Unpaid / Pending</span>
+                  <span className="text-[11px] sm:text-xs md:text-sm font-bold text-rose-600 font-mono">{inr(financials?.thisMonth?.pending)}</span>
                 </div>
               </div>
-              <div className="mt-3 pt-3 border-t border-blue-100/50 flex justify-between items-center">
-                <span className="text-[11px] font-semibold text-slate-500">Unpaid / Pending</span>
-                <span className="text-[13px] font-bold text-rose-600">{inr(financials?.thisMonth?.pending)}</span>
-              </div>
-            </div>
 
-            {/* Last Month */}
-            <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50">
-              <div className="flex items-center gap-2 mb-2 text-[12px] font-bold text-slate-600 uppercase tracking-wider">
-                <Calendar size={14} className="text-slate-400" /> Last Month ({prev?.label ?? ""})
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <div className="text-[11px] text-slate-500 mb-0.5">Total Ordered</div>
-                  <div className="text-[14px] font-bold text-slate-800">{inr(financials?.lastMonth?.ordered)}</div>
+              {/* Last Month */}
+              <div className="p-2.5 sm:p-3.5 rounded-xl border border-slate-200 bg-slate-50/50">
+                <div className="flex items-center gap-1.5 mb-2 text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-600 uppercase tracking-wider">
+                  <Calendar size={12} className="text-slate-400 shrink-0 sm:w-3.5 sm:h-3.5" /> Last Month ({prev?.label ?? ""})
                 </div>
-                <div>
-                  <div className="text-[11px] text-slate-500 mb-0.5">Payment Received</div>
-                  <div className="text-[14px] font-bold text-emerald-600">{inr(financials?.lastMonth?.received)}</div>
+                <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                  <div>
+                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Total Ordered</div>
+                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-800 truncate font-mono">{inr(financials?.lastMonth?.ordered)}</div>
+                  </div>
+                  <div>
+                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Payment Received</div>
+                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-emerald-600 truncate font-mono">{inr(financials?.lastMonth?.received)}</div>
+                  </div>
                 </div>
-              </div>
-              <div className="mt-3 pt-3 border-t border-slate-200 flex justify-between items-center">
-                <span className="text-[11px] font-semibold text-slate-500">Overdue (Unpaid)</span>
-                <span className="text-[13px] font-bold text-rose-600">{inr(financials?.lastMonth?.overdue)}</span>
+                <div className="mt-2 pt-1.5 sm:pt-2 border-t border-slate-200 flex justify-between items-center">
+                  <span className="text-[9px] sm:text-[10px] md:text-[11px] font-medium text-slate-500">Overdue (Unpaid)</span>
+                  <span className="text-[11px] sm:text-xs md:text-sm font-bold text-rose-600 font-mono">{inr(financials?.lastMonth?.overdue)}</span>
+                </div>
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </>

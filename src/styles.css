@@ -27,6 +27,7 @@
   --color-slate-c: #3b3f4a;
   --color-grey-c: #a7aab3;
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
 
 @theme inline {
@@ -141,6 +142,20 @@
 @layer base {
   * {
     border-color: var(--color-border);
+  }
+
+  html,
+  body,
+  button,
+  input,
+  select,
+  textarea,
+  .font-mono,
+  code,
+  kbd,
+  samp,
+  pre {
+    font-family: var(--font-sans) !important;
   }
 
   body {

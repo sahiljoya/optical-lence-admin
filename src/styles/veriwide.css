@@ -112,12 +112,24 @@
 .vw-nav.active { background: var(--primary-tint); color: var(--primary-pressed); font-weight: 600; }
 .vw-btn-primary { background: var(--primary-gradient); color: var(--on-primary); font-weight: 600; border-radius: 10px; padding: 0 16px; }
 .vw-btn-primary:hover { background: var(--primary-pressed); }
-.vw-tile { position: relative; height: 112px; border-radius: 14px; padding: 14px; border: 1px solid var(--card-border); box-shadow: var(--shadow); transition: transform .15s, box-shadow .15s; overflow: hidden; }
+.vw-btn-secondary { background: #ffffff; color: var(--ink); border: 1px solid var(--card-border); font-weight: 600; border-radius: 10px; padding: 0 14px; transition: all 0.15s ease; }
+.vw-btn-secondary:hover { background: var(--soft-bg); }
+.vw-tile { position: relative; min-height: 100px; height: 100%; border-radius: 12px; padding: 10px 12px; border: 1px solid var(--card-border); box-shadow: var(--shadow); transition: transform .15s, box-shadow .15s; overflow: hidden; display: flex; flex-direction: column; justify-content: space-between; }
+@media (min-width: 640px) {
+  .vw-tile { min-height: 114px; border-radius: 14px; padding: 14px; }
+}
 .vw-tile:hover { transform: translateY(-1px); box-shadow: var(--shadow-hover); }
-.vw-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 10px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+.vw-pill { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 7px; font-size: 10px; font-weight: 600; white-space: nowrap; line-height: 1.2; }
+@media (min-width: 640px) {
+  .vw-pill { padding: 2px 10px; font-size: 11px; }
+}
 .vw-qa { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border-radius: 10px; font-size: 13px; font-weight: 600; width: 100%; }
 .vw-qa-green { background: var(--qa-green-bg); color: var(--qa-green); } .vw-qa-green:hover { background: var(--qa-green-h); }
 .vw-qa-blue { background: var(--qa-blue-bg); color: var(--qa-blue); } .vw-qa-blue:hover { background: var(--qa-blue-h); }
 .vw-qa-purple { background: var(--qa-purple-bg); color: var(--qa-purple); } .vw-qa-purple:hover { background: var(--qa-purple-h); }
 .vw-qa-orange { background: var(--qa-orange-bg); color: var(--qa-orange); } .vw-qa-orange:hover { background: var(--qa-orange-h); }
-.vw-tip { background: var(--card); border-radius: 10px; box-shadow: var(--shadow-hover); padding: 8px 10px; font-size: 12px; border: 1px solid var(--card-border); }
+.vw-tip { background: var(--card); border-radius: 10px; box-shadow: var(--shadow-hover); padding: 8px 10px; font-size: 11px; border: 1px solid var(--card-border); }
+@media (min-width: 640px) {
+  .vw-tip { font-size: 12px; }
+}
+

@@ -124,12 +124,12 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
   };
 
   const btnClass = size === "md"
-    ? "vw-btn-primary h-10 px-4 text-[13px] rounded-lg flex items-center gap-2 shadow-sm shrink-0 whitespace-nowrap"
-    : "vw-btn-primary px-3 py-1.5 h-auto text-[11px] rounded flex items-center gap-1 shrink-0 whitespace-nowrap";
+    ? "vw-btn-primary h-9 sm:h-10 px-3.5 sm:px-4 text-xs sm:text-[13px] rounded-xl flex items-center justify-center gap-1.5 sm:gap-2 shadow-xs shrink-0 whitespace-nowrap cursor-pointer"
+    : "vw-btn-primary h-7 sm:h-8 px-2 sm:px-2.5 text-[10px] sm:text-[11px] rounded-lg flex items-center justify-center gap-1 shrink-0 whitespace-nowrap cursor-pointer shadow-xs font-semibold";
 
-  const iconBtnClass = "p-1.5 shrink-0 rounded-md transition-colors disabled:opacity-60";
+  const iconBtnClass = "p-1.5 sm:p-2 shrink-0 rounded-lg transition-colors disabled:opacity-60 cursor-pointer";
 
-  const iconSize = size === "md" ? 16 : 12;
+  const iconSize = size === "md" ? 15 : 12;
 
   return (
     <div className="flex items-center justify-end gap-1 flex-nowrap">
@@ -139,7 +139,7 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
           className={`${iconBtnClass} text-slate-400 hover:text-blue-600 hover:bg-blue-50`}
           title="View Order"
         >
-          <Eye size={16} />
+          <Eye size={15} />
         </Link>
       )}
 
@@ -183,7 +183,7 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
           title="We can't expedite this — remove urgent status and refund its surcharge"
           className={`${iconBtnClass} text-rose-400 hover:text-rose-600 hover:bg-rose-50`}
         >
-          <ZapOff size={16} />
+          <ZapOff size={15} />
         </button>
       )}
 
@@ -194,42 +194,42 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
           title="Cancel order"
           className={`${iconBtnClass} text-slate-400 hover:text-rose-600 hover:bg-rose-50`}
         >
-          <XCircle size={16} />
+          <XCircle size={15} />
         </button>
       )}
 
       {/* Dispatch Tracking Modal */}
       {modalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden border border-slate-200">
-            <div className="flex items-center justify-between p-4 border-b border-slate-100 bg-slate-50/50">
-              <h3 className="font-bold text-slate-800 text-[15px]">Dispatch Order</h3>
-              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-700">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-100 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 bg-slate-50/60">
+              <h3 className="font-bold text-slate-800 text-sm sm:text-[15px]">Dispatch Order</h3>
+              <button onClick={() => setModalOpen(false)} className="text-slate-400 hover:text-slate-700 p-1 rounded-lg cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-5 flex flex-col gap-4">
+            <div className="p-3.5 sm:p-5 flex flex-col gap-3 sm:gap-4 max-h-[80vh] overflow-y-auto">
               <div>
-                <label className="block text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Order ID</label>
-                <div className="text-slate-800 font-medium">{order.id}</div>
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Order ID</label>
+                <div className="text-slate-800 font-mono font-bold text-xs sm:text-sm">{order.id}</div>
               </div>
 
               <div>
-                <label className="block text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Courier Company</label>
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Courier Company</label>
                 {!isChangingCourier ? (
-                  <div className="flex items-center justify-between p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                  <div className="flex items-center justify-between p-2.5 sm:p-3 bg-slate-50 border border-slate-200 rounded-xl">
                     <div className="flex items-center gap-2 min-w-0">
-                      <Truck size={16} className="text-slate-500 shrink-0" />
-                      <span className="font-semibold text-slate-800 text-[13px] truncate">{courier}</span>
-                      <span className="text-[10px] bg-blue-50 text-blue-700 font-medium px-2 py-0.5 rounded-full border border-blue-200 shrink-0">
+                      <Truck size={15} className="text-slate-500 shrink-0" />
+                      <span className="font-semibold text-slate-800 text-xs sm:text-[13px] truncate">{courier}</span>
+                      <span className="text-[9px] sm:text-[10px] bg-blue-50 text-blue-700 font-semibold px-2 py-0.5 rounded-full border border-blue-200 shrink-0">
                         Customer Selected
                       </span>
                     </div>
                     <button
                       type="button"
                       onClick={() => setIsChangingCourier(true)}
-                      className="text-[12px] font-semibold text-blue-600 hover:text-blue-700 hover:underline shrink-0 ml-2"
+                      className="text-[11px] sm:text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline shrink-0 ml-2 cursor-pointer"
                     >
                       Change Company
                     </button>
@@ -237,14 +237,14 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
                 ) : (
                   <div className="flex flex-col gap-1.5">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-medium text-slate-500">Select alternative courier:</span>
+                      <span className="text-[10px] sm:text-[11px] font-medium text-slate-500">Select alternative courier:</span>
                       <button
                         type="button"
                         onClick={() => {
                           setCourier(order.deliveryPartner && order.deliveryPartner !== "—" ? order.deliveryPartner : "DTDC");
                           setIsChangingCourier(false);
                         }}
-                        className="text-[11px] font-semibold text-slate-500 hover:text-rose-600 hover:underline"
+                        className="text-[10px] sm:text-[11px] font-semibold text-slate-500 hover:text-rose-600 hover:underline cursor-pointer"
                       >
                         Cancel
                       </button>
@@ -252,7 +252,7 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
                     <select
                       value={courier}
                       onChange={(e) => setCourier(e.target.value)}
-                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[13px] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      className="w-full h-9 sm:h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15"
                       autoFocus
                     >
                       {!couriers.some(c => c.name === courier) && courier && (
@@ -264,7 +264,7 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
                     </select>
                   </div>
                 )}
-                <p className="text-[11px] text-slate-500 mt-1">
+                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1">
                   {!isChangingCourier
                     ? "Customer ne checkout ke waqt ye courier company choose ki thi."
                     : "Dusra courier chunne par dispatch usi company ke naam se save hoga."}
@@ -272,28 +272,28 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
               </div>
 
               <div className="animate-in fade-in slide-in-from-top-2 duration-200">
-                <label className="block text-[12px] font-bold text-slate-500 uppercase tracking-wide mb-1.5">Tracking ID (Courier)</label>
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-1">Tracking ID (Courier)</label>
                 <div className="relative">
-                  <Truck size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                  <Truck size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
                   <input
                     type="text"
                     value={trackingId}
                     onChange={(e) => setTrackingId(e.target.value)}
                     placeholder="e.g. BLUEDART12345"
                     autoFocus
-                    className="w-full h-10 pl-9 pr-3 bg-white border border-slate-200 rounded-lg text-[13px] outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full h-9 sm:h-10 pl-9 pr-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] font-mono outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs"
                   />
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1">Scan or type the courier tracking number.</p>
+                <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1">Scan or type the courier tracking number.</p>
               </div>
 
               {/* Packaging / Cartez Section */}
               <div className="pt-3 border-t border-slate-100 flex flex-col gap-2.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-[12px] font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
+                  <label className="text-[11px] sm:text-xs font-bold text-slate-700 uppercase tracking-wide flex items-center gap-1.5">
                     <Package size={14} className="text-purple-600" /> Packaging (Cartez)
                   </label>
-                  <label className="flex items-center gap-1.5 cursor-pointer text-[12px] font-bold text-slate-600 hover:text-emerald-700 select-none">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[11px] sm:text-xs font-bold text-slate-600 hover:text-emerald-700 select-none">
                     <input
                       type="checkbox"
                       checked={isCartageFree}
@@ -304,30 +304,30 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
                   </label>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 items-center">
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 items-center">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">Total Cartons</label>
+                    <label className="block text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-1">Total Cartons</label>
                     <input
                       type="number"
                       min="1"
                       value={cartonsCount}
                       onChange={(e) => setCartonsCount(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="w-full h-9 px-3 bg-white border border-slate-200 rounded-lg text-[13px] font-bold text-slate-800 outline-none focus:border-purple-500"
+                      className="w-full h-9 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] font-bold text-slate-800 outline-none focus:border-purple-500"
                       placeholder="1"
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-500 mb-1">Rate / Carton</label>
-                    <div className="w-full h-9 px-3 bg-slate-100 border border-slate-200 rounded-lg text-[13px] font-semibold text-slate-700 flex items-center justify-between select-none">
+                    <label className="block text-[10px] sm:text-[11px] font-semibold text-slate-500 mb-1">Rate / Carton</label>
+                    <div className="w-full h-9 px-3 bg-slate-100 border border-slate-200 rounded-xl text-xs sm:text-[13px] font-semibold text-slate-700 flex items-center justify-between select-none">
                       <span>{isCartageFree ? "₹0 (Waived)" : `₹${ratePerCarton}`}</span>
-                      <span className="text-[10px] text-slate-400 font-normal">Fixed Rate</span>
+                      <span className="text-[9px] sm:text-[10px] text-slate-400 font-normal">Fixed Rate</span>
                     </div>
                   </div>
                 </div>
 
-                <div className={`p-2.5 rounded-lg border text-[12px] flex items-center justify-between transition-colors ${isCartageFree ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
+                <div className={`p-2.5 rounded-xl border text-[11px] sm:text-xs flex items-center justify-between transition-colors ${isCartageFree ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-slate-50 border-slate-200 text-slate-700'}`}>
                   <span>{isCartageFree ? "Cartage waived:" : `Total Packaging (${cartonsCount} × ₹${ratePerCarton}):`}</span>
-                  <span className="font-bold text-[13px]">{isCartageFree ? "FREE (₹0)" : `+ ₹${calculatedCartage.toLocaleString()}`}</span>
+                  <span className="font-bold text-xs sm:text-[13px] font-mono">{isCartageFree ? "FREE (₹0)" : `+ ₹${calculatedCartage.toLocaleString()}`}</span>
                 </div>
                 {!isCartageFree && calculatedCartage > 0 && (
                   <p className="text-[10px] text-slate-400">Added to customer invoice & deducted from balance.</p>
@@ -335,16 +335,16 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50">
+            <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-2.5 bg-slate-50/60">
               <button
                 onClick={() => setModalOpen(false)}
-                className="px-4 py-2 text-[13px] font-medium text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                className="w-full sm:w-auto px-4 py-2 text-xs sm:text-[13px] font-semibold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors text-center cursor-pointer"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSaveDispatch}
-                className="vw-btn-primary px-5 py-2 text-[13px] bg-purple-600 hover:bg-purple-700 border-purple-700"
+                className="w-full sm:w-auto vw-btn-primary h-9 sm:h-10 px-5 text-xs sm:text-[13px] font-semibold bg-purple-600 hover:bg-purple-700 border-purple-700 rounded-xl flex items-center justify-center cursor-pointer shadow-xs"
               >
                 Confirm Dispatch
               </button>
@@ -355,22 +355,22 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
 
       {/* Stock Shortage Modal — partial fulfillment needs the customer's explicit approval */}
       {shortage && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md overflow-hidden border border-slate-200">
-            <div className="flex items-center justify-between p-4 border-b border-amber-100 bg-amber-50">
-              <h3 className="font-bold text-amber-900 text-[15px] flex items-center gap-2">
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3 sm:py-3.5 border-b border-amber-100 bg-amber-50">
+              <h3 className="font-bold text-amber-900 text-sm sm:text-[15px] flex items-center gap-2">
                 <PackageX size={18} className="text-amber-600" /> Stock Shortage
               </h3>
-              <button onClick={() => setShortage(null)} className="text-amber-500 hover:text-amber-700">
+              <button onClick={() => setShortage(null)} className="text-amber-500 hover:text-amber-700 p-1 rounded-lg cursor-pointer">
                 <X size={18} />
               </button>
             </div>
 
-            <div className="p-5 flex flex-col gap-3">
-              <p className="text-[13px] text-slate-700">
-                Only <strong>{shortage.confirmedCount} of {shortage.totalCount}</strong> item line(s) are currently in stock for order <strong>{order.id}</strong>.
+            <div className="p-3.5 sm:p-5 flex flex-col gap-2.5 sm:gap-3">
+              <p className="text-xs sm:text-[13px] text-slate-700">
+                Only <strong>{shortage.confirmedCount} of {shortage.totalCount}</strong> item line(s) are currently in stock for order <strong className="font-mono">{order.id}</strong>.
               </p>
-              <p className="text-[12px] text-slate-500">
+              <p className="text-[11px] sm:text-xs text-slate-500">
                 Partial fulfillment can only proceed once the customer has been informed and has approved receiving the available quantity now. Confirm that approval, or hold the full order until restock arrives.
               </p>
 
@@ -378,14 +378,14 @@ export function OrderActions({ order, onUpdate, hideView = false, size = "sm" })
                 <button
                   onClick={handlePartialFulfill}
                   disabled={busy}
-                  className="vw-btn-primary h-10 text-[13px] disabled:opacity-60"
+                  className="w-full vw-btn-primary h-9 sm:h-10 text-xs sm:text-[13px] font-semibold rounded-xl flex items-center justify-center cursor-pointer shadow-xs disabled:opacity-60"
                 >
                   Customer Approved — Dispatch Available Stock
                 </button>
                 <button
                   onClick={handleHold}
                   disabled={busy}
-                  className="vw-btn-secondary h-10 text-[13px] disabled:opacity-60"
+                  className="w-full vw-btn-secondary h-9 sm:h-10 text-xs sm:text-[13px] font-semibold rounded-xl flex items-center justify-center cursor-pointer disabled:opacity-60"
                 >
                   Hold Order (Wait for Full Restock)
                 </button>

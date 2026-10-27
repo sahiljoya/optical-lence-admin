@@ -102,30 +102,34 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
   }, [floor, rack, startShelf, endShelf]);
 
   const selectClass =
-    "w-full h-10 px-2 bg-white border border-slate-200 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 disabled:bg-slate-100 disabled:text-slate-400";
+    "w-full h-9 sm:h-10 px-2.5 sm:px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all disabled:bg-slate-100 disabled:text-slate-400";
 
   return (
     <div
-      className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 animate-in fade-in duration-200"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-xl shadow-xl w-full max-w-sm overflow-hidden"
+        className="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden border border-slate-100 animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-5 py-3 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
-          <h3 className="font-bold text-slate-800 text-[14px] flex items-center gap-1.5">
-            <MapPin size={14} className="text-emerald-600" /> Set Shelf Range for Cell
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
+          <h3 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
+            <MapPin size={15} className="text-emerald-600" /> Set Shelf Range for Cell
           </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600">
+          <button 
+            type="button"
+            onClick={onClose} 
+            className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer"
+          >
             <X size={16} />
           </button>
         </div>
 
-        <div className="p-5 flex flex-col gap-3">
-          <div className="grid grid-cols-2 gap-3">
+        <div className="p-3.5 sm:p-5 flex flex-col gap-3">
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">Floor</label>
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Floor</label>
               <select
                 value={floor}
                 onChange={(e) => handleFloorChange(e.target.value)}
@@ -141,7 +145,7 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">Rack</label>
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Rack</label>
               <select
                 value={rack}
                 onChange={(e) => handleRackChange(e.target.value)}
@@ -158,7 +162,7 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
                 Start Shelf
               </label>
               <select
@@ -177,7 +181,7 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
             </div>
 
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
                 End Shelf
               </label>
               <select
@@ -199,25 +203,25 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
           </div>
 
           {resolvedLocation && (
-            <div className="flex items-center gap-1.5 text-[12px] font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 mt-1">
-              <MapPin size={13} /> {resolvedLocation.label}
+            <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-xl px-3 py-2 mt-0.5">
+              <MapPin size={13} className="shrink-0" /> {resolvedLocation.label}
             </div>
           )}
         </div>
 
-        <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col gap-2">
+        <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50/80 flex flex-col gap-2">
           <button
             type="button"
             onClick={() => resolvedLocation && onConfirm(resolvedLocation.id || resolvedLocation.label, resolvedLocation)}
             disabled={!floor || !rack || !startShelf || isResolving}
-            className="vw-btn-primary h-9 text-[13px] disabled:opacity-50"
+            className="vw-btn-primary h-9 sm:h-10 text-xs sm:text-[13px] font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
           >
             {isResolving ? "Resolving..." : "Apply Shelf Range"}
           </button>
           <button
             type="button"
             onClick={onClear}
-            className="h-9 text-[12px] font-bold text-slate-500 hover:text-rose-600"
+            className="h-8 sm:h-9 text-[11px] sm:text-xs font-bold text-slate-500 hover:text-rose-600 rounded-xl transition-colors cursor-pointer"
           >
             Clear Location
           </button>
@@ -244,15 +248,15 @@ export const MatrixCell = memo(function MatrixCell({
 
   if (isNA) {
     return (
-      <td className="p-1 border-b border-r border-slate-200 bg-slate-100 text-center align-middle select-none">
+      <td className="p-1 border-b border-r border-slate-200 bg-slate-100/80 text-center align-middle select-none">
         <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
-          <span className="text-[10px] font-bold text-slate-400 bg-slate-200 px-1.5 py-0.5 rounded tracking-wide">
+          <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 bg-slate-200/80 px-1.5 py-0.5 rounded tracking-wide font-mono">
             N/A
           </span>
           <button
             type="button"
             onClick={() => onToggleNA(key)}
-            className="text-[9px] text-blue-600 hover:text-blue-800 underline font-medium"
+            className="text-[9px] text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
             title="Enable this power cell"
           >
             Enable
@@ -274,12 +278,12 @@ export const MatrixCell = memo(function MatrixCell({
           value={qty}
           onChange={(e) => onQtyChange(key, e.target.value)}
           placeholder="Qty"
-          className="w-full text-center h-7 text-[12px] focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 rounded bg-transparent font-medium"
+          className="w-full text-center h-6 sm:h-7 text-[11px] sm:text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 rounded bg-transparent font-medium font-mono"
         />
         <button
           type="button"
           onClick={() => onToggleNA(key)}
-          className="text-[9px] font-bold px-1 py-0.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 transition-colors shrink-0"
+          className="text-[9px] font-bold px-1 py-0.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 transition-colors shrink-0 cursor-pointer"
           title="Mark cell as N/A (No stock / location)"
         >
           N/A
@@ -290,7 +294,7 @@ export const MatrixCell = memo(function MatrixCell({
         <button
           type="button"
           onClick={() => setShowModal(true)}
-          className={`w-full text-[9px] mt-0.5 rounded px-1 py-0.5 truncate border transition-colors ${
+          className={`w-full text-[9px] sm:text-[10px] mt-0.5 rounded px-1 py-0.5 truncate border transition-colors cursor-pointer ${
             hasOverride || effectiveLoc
               ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 font-medium"
               : "bg-white border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-600"
@@ -319,6 +323,7 @@ export const MatrixCell = memo(function MatrixCell({
     </td>
   );
 });
+
 
 // Generates the power-matrix STRUCTURE for a product via the backend's real spec-compliant
 // generator (Power_Matrix_Reference_Guide Section 2: SPH/CYL/AXIS/ADD ranges, Progressive-family
@@ -553,23 +558,23 @@ export function MatrixEditor({
   }, [lensType, rangeConfig, hasCyl]);
 
   return (
-    <div className="vw-card p-5">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 border-b border-slate-100 pb-3">
-        <h3 className="font-bold text-slate-800 flex items-center gap-2">
+    <div className="vw-card p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 sm:mb-4 border-b border-slate-100 pb-2.5 sm:pb-3">
+        <h3 className="font-bold text-xs sm:text-sm text-slate-800 flex items-center gap-2">
           <Grid size={16} className="text-purple-600" /> POWER MATRIX
         </h3>
       </div>
 
-      <p className="text-[12px] text-slate-500 mb-3 leading-relaxed">
+      <p className="text-[11px] sm:text-xs text-slate-500 mb-3 sm:mb-4 leading-relaxed">
         {isProgressiveFamily
           ? "Progressive/KT family: ADD runs across the columns (+1.00 to +3.00). SPH/CYL compound power runs down the rows. Axis (1–180°) is required when CYL is added."
           : "Single Vision: SPH runs down the rows, CYL runs across the columns. Axis does not apply."}
       </p>
 
-      <div className="bg-slate-50/50 border border-slate-200 rounded-lg p-4 mb-5">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+      <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-5 shadow-xs">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 mb-3 sm:mb-4">
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">
+            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
               SPH Min
             </label>
             <PowerInput
@@ -579,7 +584,7 @@ export function MatrixEditor({
             />
           </div>
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">
+            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
               SPH Max
             </label>
             <PowerInput
@@ -589,42 +594,44 @@ export function MatrixEditor({
             />
           </div>
           <div>
-            <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">
+            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
               SPH Step
             </label>
             <input
               type="text"
               value={rangeConfig.sph.step}
               onChange={(e) => updateSph("step", e.target.value)}
-              className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] font-mono focus:outline-none focus:border-blue-500"
+              className="w-full h-8 sm:h-9 px-2.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
             />
           </div>
         </div>
 
-        <label className="flex items-center gap-2 text-[12px] font-bold text-slate-700 mb-3">
+        <label className="flex items-center gap-2 text-xs sm:text-[13px] font-bold text-slate-700 mb-2.5 sm:mb-3 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={hasCyl}
             onChange={(e) => toggleHasCyl(e.target.checked)}
+            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
           />
           This range also has a CYL dimension
         </label>
 
         {hasCyl && (
-          <div className="flex flex-col gap-3 mb-2">
+          <div className="flex flex-col gap-2.5 sm:gap-3 mb-2">
             {rangeConfig.cylBlocks.map((b, idx) => (
-              <div key={idx} className="relative bg-white border border-slate-100 rounded p-3">
+              <div key={idx} className="relative bg-white border border-slate-200/80 rounded-xl p-2.5 sm:p-3 shadow-xs">
                 {rangeConfig.cylBlocks.length > 1 && (
                   <button
+                    type="button"
                     onClick={() => removeCylBlock(idx)}
-                    className="absolute top-2 right-2 text-slate-400 hover:text-rose-500"
+                    className="absolute top-2 right-2 text-slate-400 hover:text-rose-500 p-1 cursor-pointer transition-colors"
                   >
                     <Trash2 size={14} />
                   </button>
                 )}
-                <div className="grid grid-cols-2 gap-3 mb-3 pr-6">
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-2.5 pr-6">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">
+                    <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
                       CYL Min
                     </label>
                     <PowerInput
@@ -634,7 +641,7 @@ export function MatrixEditor({
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">
+                    <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
                       CYL Max
                     </label>
                     <PowerInput
@@ -644,23 +651,23 @@ export function MatrixEditor({
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                   <div>
-                    <label className="block text-[10px] font-bold text-slate-500 mb-1 uppercase">
+                    <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
                       Step
                     </label>
                     <input
                       type="text"
                       value={b.step}
                       onChange={(e) => updateCylBlock(idx, "step", e.target.value)}
-                      className="w-full h-9 px-2 bg-slate-50 border border-slate-200 rounded text-[13px] font-mono focus:outline-none focus:border-blue-500"
+                      className="w-full h-8 sm:h-9 px-2.5 bg-slate-50/70 border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
                     />
                   </div>
                   {isProgressiveFamily ? (
                     <div>
-                      <label className="block text-[10px] font-bold text-slate-700 mb-1 uppercase flex items-center justify-between">
+                      <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wider flex items-center justify-between">
                         <span>Axis (1–180°)</span>
-                        <span className="text-[9px] text-rose-500 font-bold">*Required</span>
+                        <span className="text-[9px] text-rose-500 font-bold">*Req</span>
                       </label>
                       <PowerInput
                         value={b.axis}
@@ -670,7 +677,7 @@ export function MatrixEditor({
                         decimals={0}
                         signed={false}
                       />
-                      <p className="text-[9px] text-slate-400 mt-0.5">Convention: ~90° for -CYL, ~180° for +CYL</p>
+                      <p className="text-[9px] text-slate-400 mt-0.5">~90° for -CYL, ~180° for +CYL</p>
                     </div>
                   ) : (
                     <div className="flex flex-col justify-end pb-1">
@@ -683,18 +690,19 @@ export function MatrixEditor({
               </div>
             ))}
             <button
+              type="button"
               onClick={addCylBlock}
-              className="self-start text-purple-600 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded text-[11px] font-bold inline-flex items-center gap-1 transition-colors"
+              className="self-start text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
             >
-              <Plus size={12} /> Add CYL/Axis Block
+              <Plus size={13} /> Add CYL/Axis Block
             </button>
           </div>
         )}
 
         {isProgressiveFamily && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4 pt-4 border-t border-slate-200">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200">
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
                 ADD Min
               </label>
               <PowerInput
@@ -704,7 +712,7 @@ export function MatrixEditor({
               />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
                 ADD Max
               </label>
               <PowerInput
@@ -714,25 +722,26 @@ export function MatrixEditor({
               />
             </div>
             <div>
-              <label className="block text-[11px] font-bold text-slate-600 mb-1 uppercase">
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
                 ADD Step
               </label>
               <input
                 type="text"
                 value={rangeConfig.add.step}
                 onChange={(e) => updateAdd("step", e.target.value)}
-                className="w-full h-9 px-2 bg-white border border-slate-200 rounded text-[13px] font-mono focus:outline-none focus:border-blue-500"
+                className="w-full h-8 sm:h-9 px-2.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
               />
             </div>
           </div>
         )}
 
         <button
+          type="button"
           onClick={handleGenerate}
           disabled={!productId || isGenerating}
-          className="mt-4 vw-btn-secondary h-10 w-full font-bold bg-purple-600 text-white hover:bg-purple-700 disabled:opacity-50 flex items-center justify-center gap-2"
+          className="mt-3 sm:mt-4 vw-btn-secondary h-9 sm:h-10 w-full font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 flex items-center justify-center gap-2 rounded-xl text-xs sm:text-[13px] cursor-pointer shadow-xs transition-all"
         >
-          <RefreshCw size={14} />{" "}
+          <RefreshCw size={14} className={isGenerating ? "animate-spin" : ""} />{" "}
           {isGenerating
             ? "Generating..."
             : cells.length > 0
@@ -746,22 +755,24 @@ export function MatrixEditor({
         )}
       </div>
 
-      {isLoading && <p className="text-[12px] text-slate-500">Loading matrix...</p>}
+      {isLoading && <p className="text-xs sm:text-[13px] text-slate-500 font-medium">Loading matrix...</p>}
 
       {!isLoading && cells.length > 0 && (
         <div className="mt-2">
-          <div className="flex items-center justify-between mb-3">
-            <h4 className="font-bold text-slate-800 flex items-center gap-2 text-[13px]">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
+            <h4 className="font-bold text-slate-800 flex items-center gap-2 text-xs sm:text-sm">
               <Package size={15} className="text-emerald-600" /> STOCK ENTRY ({cells.length} cells)
             </h4>
             <button
+              type="button"
               onClick={handleSaveStock}
               disabled={isSavingStock}
-              className="vw-btn-primary h-9 px-3 gap-2 flex items-center justify-center disabled:opacity-50 text-[12px]"
+              className="w-full sm:w-auto vw-btn-primary h-8 sm:h-9 px-3.5 sm:px-4 gap-1.5 flex items-center justify-center disabled:opacity-50 text-xs sm:text-[13px] font-semibold rounded-xl cursor-pointer shadow-xs"
             >
               <Save size={14} /> {isSavingStock ? "Saving..." : "Save Stock"}
             </button>
           </div>
+
 
           <MatrixGridView
             cells={cells}
@@ -824,11 +835,11 @@ export function MatrixGridView({
 
   return (
     <div>
-      <div className={`overflow-x-auto border border-slate-200 rounded-lg ${maxHeight} overflow-y-auto`}>
-        <table className="w-full text-center border-collapse text-[12px]">
-          <thead className="bg-slate-100 sticky top-0 z-10">
+      <div className={`overflow-x-auto border border-slate-200 rounded-xl ${maxHeight} overflow-y-auto shadow-xs`}>
+        <table className="w-full text-center border-collapse text-[11px] sm:text-xs">
+          <thead className="bg-slate-100 sticky top-0 z-10 shadow-xs">
             <tr>
-              <th className="p-2 border-b border-r border-slate-200 min-w-[90px] font-bold text-slate-700 bg-slate-200">
+              <th className="p-1.5 sm:p-2 border-b border-r border-slate-200 min-w-[76px] sm:min-w-[90px] font-bold text-slate-700 bg-slate-200 text-[10px] sm:text-xs">
                 {grid.flags.hasAdd
                   ? "SPH/CYL/AX \\ ADD"
                   : grid.flags.hasCyl
@@ -838,12 +849,12 @@ export function MatrixGridView({
               {grid.colKeys.map((ck) => (
                 <th
                   key={ck}
-                  className="p-2 border-b border-r border-slate-200 min-w-[64px] font-bold text-slate-700"
+                  className="p-1.5 sm:p-2 border-b border-r border-slate-200 min-w-[56px] sm:min-w-[64px] font-bold text-slate-700 text-[10px] sm:text-xs font-mono"
                 >
                   {grid.cols.get(ck).label}
                 </th>
               ))}
-              <th className="p-2 border-b border-slate-200 min-w-[64px] font-bold text-slate-700 bg-slate-200">
+              <th className="p-1.5 sm:p-2 border-b border-slate-200 min-w-[56px] sm:min-w-[64px] font-bold text-slate-700 bg-slate-200 text-[10px] sm:text-xs">
                 TOTAL
               </th>
             </tr>
@@ -851,7 +862,7 @@ export function MatrixGridView({
           <tbody>
             {grid.rowKeys.map((rk) => (
               <tr key={rk}>
-                <th className="p-2 border-b border-r border-slate-200 bg-slate-50 font-bold text-slate-700 sticky left-0 z-10">
+                <th className="p-1.5 sm:p-2 border-b border-r border-slate-200 bg-slate-50 font-bold text-slate-700 sticky left-0 z-10 text-[10px] sm:text-xs font-mono">
                   {grid.rows.get(rk).label}
                 </th>
                 {grid.colKeys.map((ck) => {
@@ -860,7 +871,7 @@ export function MatrixGridView({
                     return (
                       <td
                         key={ck}
-                        className="p-1 border-b border-r border-slate-200 bg-amber-50/70 text-center text-amber-500/70 text-[10px] select-none font-mono"
+                        className="p-1 border-b border-r border-slate-200 bg-amber-50/70 text-center text-amber-500/70 text-[9px] sm:text-[10px] select-none font-mono"
                         title="Excluded by Cross rule (|SPH| ≥ |CYL|)"
                       >
                         ×
@@ -885,44 +896,44 @@ export function MatrixGridView({
                     />
                   );
                 })}
-                <td className="p-1 border-b border-slate-100 bg-slate-50 font-bold text-slate-700">
+                <td className="p-1 border-b border-slate-100 bg-slate-50 font-bold text-slate-700 text-[11px] sm:text-xs font-mono">
                   {rowTotals[rk] || 0}
                 </td>
               </tr>
             ))}
             <tr>
-              <th className="p-2 border-r border-slate-200 bg-slate-200 font-bold text-slate-700 sticky left-0">
+              <th className="p-1.5 sm:p-2 border-r border-slate-200 bg-slate-200 font-bold text-slate-700 sticky left-0 text-[10px] sm:text-xs">
                 TOTAL
               </th>
               {grid.colKeys.map((ck) => (
                 <td
                   key={ck}
-                  className="p-1 border-r border-slate-200 bg-slate-200 font-bold text-slate-700"
+                  className="p-1 border-r border-slate-200 bg-slate-200 font-bold text-slate-700 text-[11px] sm:text-xs font-mono"
                 >
                   {colTotals[ck] || 0}
                 </td>
               ))}
-              <td className="p-1 bg-slate-300 font-bold text-slate-900">{grandTotal}</td>
+              <td className="p-1 bg-slate-300 font-bold text-slate-900 text-[11px] sm:text-xs font-mono">{grandTotal}</td>
             </tr>
           </tbody>
         </table>
       </div>
 
       {/* Visual Legend */}
-      <div className="flex flex-wrap items-center gap-4 mt-3 text-[11px] text-slate-500 px-1">
+      <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-2.5 sm:mt-3 text-[10px] sm:text-[11px] text-slate-500 px-1">
         <span className="flex items-center gap-1.5">
-          <span className="w-3.5 h-3.5 bg-white border border-slate-300 rounded-sm inline-block" />
+          <span className="w-3 sm:w-3.5 h-3 sm:h-3.5 bg-white border border-slate-300 rounded-sm inline-block shadow-2xs" />
           Valid Stock Cell
         </span>
         <span className="flex items-center gap-1.5">
-          <span className="w-4 h-3.5 bg-slate-100 border border-slate-300 rounded-sm inline-flex items-center justify-center text-[8px] font-bold text-slate-400">
+          <span className="w-4 h-3 sm:h-3.5 bg-slate-100 border border-slate-300 rounded-sm inline-flex items-center justify-center text-[8px] font-bold text-slate-400 font-mono">
             N/A
           </span>
           Not Available (No Stock / Location)
         </span>
         {matrixTypeInfo?.isCross && (
           <span className="flex items-center gap-1.5">
-            <span className="w-3.5 h-3.5 bg-amber-100 border border-amber-300 rounded-sm inline-block" />
+            <span className="w-3 sm:w-3.5 h-3 sm:h-3.5 bg-amber-100 border border-amber-300 rounded-sm inline-block shadow-2xs" />
             Excluded (Cross rule: |SPH| ≥ |CYL|)
           </span>
         )}

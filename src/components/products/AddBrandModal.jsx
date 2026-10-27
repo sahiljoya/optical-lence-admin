@@ -95,30 +95,30 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto animate-in fade-in duration-200">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-6 overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95 duration-200">
+    <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-4 sm:my-6 overflow-hidden flex flex-col border border-slate-100 animate-in zoom-in-95 duration-200">
         
         {/* Header */}
-        <div className="px-5 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
+        <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
           <div>
-            <h3 className="font-bold text-slate-900 text-[16px]">Add New Brand</h3>
-            <p className="text-[12px] text-slate-500 mt-0.5">Define brand name and optional logo.</p>
+            <h3 className="font-bold text-slate-900 text-sm sm:text-base">Add New Brand</h3>
+            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5">Define brand name and optional logo.</p>
           </div>
           <button 
             type="button"
             onClick={onClose} 
-            className="text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 p-1.5 rounded-xl transition-colors"
+            className="text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 p-1.5 rounded-xl transition-colors cursor-pointer"
           >
             <X size={18} />
           </button>
         </div>
 
         {/* Form Body */}
-        <form onSubmit={handleSave} className="p-5 space-y-4">
+        <form onSubmit={handleSave} className="p-3.5 sm:p-5 space-y-3 sm:space-y-4">
           
           {/* Brand Name */}
           <div>
-            <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
+            <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5">
               Brand Name <span className="text-rose-500">*</span>
             </label>
             <input
@@ -126,24 +126,24 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
               required
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full h-10 px-3.5 bg-slate-50/50 border border-slate-200 rounded-xl text-[13px] text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+              className="w-full h-9 sm:h-10 px-3 sm:px-3.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
               placeholder="e.g. Vishal HC, Crizal, Essilor"
             />
           </div>
 
           {/* Image Selection (Upload vs URL) */}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-[12px] font-bold text-slate-700">Brand Logo / Image</label>
+            <div className="flex items-center justify-between mb-1 sm:mb-1.5">
+              <label className="text-[11px] sm:text-xs font-bold text-slate-700">Brand Logo / Image</label>
               
               {/* Mode Switcher Tabs */}
-              <div className="flex bg-slate-100 p-0.5 rounded-lg text-[11px] font-semibold">
+              <div className="flex bg-slate-100 p-0.5 rounded-lg text-[10px] sm:text-[11px] font-semibold">
                 <button
                   type="button"
                   onClick={() => setImageMode("upload")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
                     imageMode === "upload"
-                      ? "bg-white text-blue-600 shadow-sm"
+                      ? "bg-white text-blue-600 shadow-xs"
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
@@ -152,9 +152,9 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
                 <button
                   type="button"
                   onClick={() => setImageMode("url")}
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded-md transition-all cursor-pointer ${
                     imageMode === "url"
-                      ? "bg-white text-blue-600 shadow-sm"
+                      ? "bg-white text-blue-600 shadow-xs"
                       : "text-slate-500 hover:text-slate-800"
                   }`}
                 >
@@ -167,7 +167,7 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
             {imageMode === "upload" ? (
               imageUrl ? (
                 /* Prominent clean image preview for uploaded file */
-                <div className="relative w-full h-36 bg-slate-50/70 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center p-3 group">
+                <div className="relative w-full h-32 sm:h-36 bg-slate-50/70 border border-slate-200 rounded-xl overflow-hidden flex items-center justify-center p-3 group">
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -191,7 +191,7 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
                   <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
                     <label
                       htmlFor="brand-image-upload-change"
-                      className="px-2.5 py-1 text-[11px] font-semibold bg-white/95 hover:bg-white text-slate-700 hover:text-blue-600 rounded-lg shadow-sm border border-slate-200 cursor-pointer transition-colors flex items-center gap-1"
+                      className="px-2.5 py-1 text-[10px] sm:text-[11px] font-semibold bg-white/95 hover:bg-white text-slate-700 hover:text-blue-600 rounded-lg shadow-xs border border-slate-200 cursor-pointer transition-colors flex items-center gap-1"
                       title="Upload different image"
                     >
                       <Upload size={12} /> Change
@@ -199,10 +199,10 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
                     <button
                       type="button"
                       onClick={handleClearImage}
-                      className="p-1.5 bg-white/95 hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg shadow-sm border border-slate-200 transition-colors"
+                      className="p-1.5 bg-white/95 hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg shadow-xs border border-slate-200 transition-colors cursor-pointer"
                       title="Remove image"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 </div>
@@ -220,23 +220,23 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
                   />
                   <label
                     htmlFor="brand-image-upload"
-                    className={`w-full border-2 border-dashed rounded-xl p-5 flex flex-col items-center justify-center cursor-pointer transition-all ${
+                    className={`w-full border-2 border-dashed rounded-xl p-4 sm:p-5 flex flex-col items-center justify-center cursor-pointer transition-all ${
                       isUploading 
                         ? "border-blue-300 bg-blue-50/40 cursor-wait" 
                         : "border-slate-200 hover:border-blue-400 hover:bg-slate-50/50 bg-slate-50/30"
                     }`}
                   >
                     {isUploading ? (
-                      <div className="flex items-center gap-2 text-[12px] text-blue-600 font-semibold py-3">
-                        <Loader2 size={18} className="animate-spin" /> Uploading image to Cloudinary...
+                      <div className="flex items-center gap-2 text-[11px] sm:text-xs text-blue-600 font-semibold py-3">
+                        <Loader2 size={16} className="animate-spin" /> Uploading image to Cloudinary...
                       </div>
                     ) : (
                       <div className="flex flex-col items-center gap-1.5 text-center py-1">
-                        <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-1 shadow-sm">
-                          <Upload size={18} />
+                        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center mb-0.5 sm:mb-1 shadow-xs">
+                          <Upload size={16} className="sm:w-[18px] sm:h-[18px]" />
                         </div>
-                        <span className="text-[13px] font-semibold text-slate-700">Click to choose brand logo</span>
-                        <span className="text-[11px] text-slate-400">PNG, JPG, WEBP up to 5MB</span>
+                        <span className="text-xs sm:text-[13px] font-semibold text-slate-700">Click to choose brand logo</span>
+                        <span className="text-[10px] sm:text-[11px] text-slate-400">PNG, JPG, WEBP up to 5MB</span>
                       </div>
                     )}
                   </label>
@@ -249,7 +249,7 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
                   type="url"
                   value={imageUrl}
                   onChange={e => setImageUrl(e.target.value)}
-                  className="w-full h-10 px-3.5 bg-slate-50/50 border border-slate-200 rounded-xl text-[13px] text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all"
+                  className="w-full h-9 sm:h-10 px-3 sm:px-3.5 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
                   placeholder="Paste image link e.g. https://example.com/logo.png"
                 />
 
@@ -267,10 +267,10 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
                     <button
                       type="button"
                       onClick={handleClearImage}
-                      className="absolute top-2 right-2 p-1.5 bg-white/95 hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg shadow-sm border border-slate-200 transition-colors"
+                      className="absolute top-2 right-2 p-1.5 bg-white/95 hover:bg-rose-50 text-slate-500 hover:text-rose-600 rounded-lg shadow-xs border border-slate-200 transition-colors cursor-pointer"
                       title="Remove image"
                     >
-                      <Trash2 size={14} />
+                      <Trash2 size={13} />
                     </button>
                   </div>
                 )}
@@ -280,30 +280,30 @@ export function AddBrandModal({ isOpen, onClose, onBrandCreated }) {
 
           {/* Description */}
           <div>
-            <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Description (Optional)</label>
+            <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5">Description (Optional)</label>
             <textarea
               value={description}
               onChange={e => setDescription(e.target.value)}
-              className="w-full p-3 bg-slate-50/50 border border-slate-200 rounded-xl text-[13px] text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all resize-none h-20"
+              className="w-full p-2.5 sm:p-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 placeholder-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all resize-none h-18 sm:h-20"
               placeholder="Brief details about this lens brand..."
             />
           </div>
 
           {/* Footer Actions */}
-          <div className="pt-3 border-t border-slate-100 flex justify-end gap-2.5">
+          <div className="pt-3 border-t border-slate-100 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-2.5">
             <button 
               type="button"
               onClick={onClose} 
-              className="px-4 py-2 text-[13px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors"
+              className="w-full sm:w-auto px-4 py-2 text-xs sm:text-[13px] font-semibold text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition-colors text-center cursor-pointer shadow-xs"
             >
               Cancel
             </button>
             <button 
               type="submit" 
               disabled={!name.trim() || isUploading || isSaving} 
-              className="px-5 py-2 text-[13px] font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-sm transition-all flex items-center gap-1.5"
+              className="w-full sm:w-auto px-5 py-2 text-xs sm:text-[13px] font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-xl shadow-xs transition-all flex items-center justify-center gap-1.5 cursor-pointer"
             >
-              {isSaving ? <Loader2 size={15} className="animate-spin" /> : null}
+              {isSaving ? <Loader2 size={14} className="animate-spin" /> : null}
               {isSaving ? "Saving..." : "Save Brand"}
             </button>
           </div>
