@@ -104,27 +104,15 @@ export function CourierReconciliation() {
   const fetchCouriers = async () => {
     try {
       const res = await courierService.getCouriers();
-      if (res && Array.isArray(res) && res.length > 0) {
-        setCouriers(res);
+      const list = Array.isArray(res) ? res : res?.data;
+      if (list && Array.isArray(list) && list.length > 0) {
+        setCouriers(list);
         if (!selectedCourier) {
-          setSelectedCourier(res[0].name);
+          setSelectedCourier(list[0].name);
         }
-      } else {
-        // Fallback default couriers from Section 11
-        setCouriers([
-          { _id: "c1", name: "DTDC", rate_per_kg: 60, rate_half_kg: 35 },
-          { _id: "c2", name: "Blue Dart", rate_per_kg: 90, rate_half_kg: 50 },
-          { _id: "c3", name: "S R Courier", rate_per_kg: 50, rate_half_kg: 30 },
-          { _id: "c4", name: "Delhivery", rate_per_kg: 70, rate_half_kg: 40 },
-        ]);
       }
     } catch (err) {
       console.error("Error fetching couriers:", err);
-      setCouriers([
-        { _id: "c1", name: "DTDC", rate_per_kg: 60, rate_half_kg: 35 },
-        { _id: "c2", name: "Blue Dart", rate_per_kg: 90, rate_half_kg: 50 },
-        { _id: "c3", name: "S R Courier", rate_per_kg: 50, rate_half_kg: 30 },
-      ]);
     }
   };
 
@@ -923,7 +911,18 @@ export function CourierReconciliation() {
                       {historyList.map((h) => {
                         const monthName = MONTHS.find((m) => m.value === h.month)?.label || h.month;
                         return (
-                          <tr key={h._id} className="hover:bg-slate-50/70 transition-colors">
+                          <tr
+                            key={h._id}
+                            onClick={() => {
+                              setSelectedCourier(h.courier_name);
+                              setSelectedMonth(h.month);
+                              setSelectedYear(h.year);
+                              setActiveTab("breakdown");
+                              notify.info(`Loaded ${h.courier_name} (${monthName} ${h.year}) audit record.`);
+                            }}
+                            className="hover:bg-blue-50/60 cursor-pointer transition-colors"
+                            title="Click to view and edit this audit"
+                          >
                             <td className="p-3 pl-4 font-bold text-slate-900">{h.courier_name}</td>
                             <td className="p-3 font-semibold text-slate-700">
                               {monthName} {h.year}

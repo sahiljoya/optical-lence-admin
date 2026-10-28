@@ -42,7 +42,7 @@ export function Settings() {
   const [roleForm, setRoleForm] = useState({ role: "", desc: "", permissions: [] });
 
   // Platform Settings (Charges) State
-  const [platformForm, setPlatformForm] = useState({ bulk_cartage_charge: 0, urgent_delivery_charge: 0 });
+  const [platformForm, setPlatformForm] = useState({ bulk_cartage_charge: 0, customer_rate_per_kg: 40, urgent_delivery_charge: 0 });
   const [loadingPlatformSettings, setLoadingPlatformSettings] = useState(true);
   const [savingPlatformSettings, setSavingPlatformSettings] = useState(false);
 
@@ -94,6 +94,7 @@ export function Settings() {
       if (res.error === false) {
         setPlatformForm({
           bulk_cartage_charge: res.data?.bulk_cartage_charge ?? 0,
+          customer_rate_per_kg: res.data?.customer_rate_per_kg ?? 40,
           urgent_delivery_charge: res.data?.urgent_delivery_charge ?? 0
         });
       }
@@ -133,6 +134,7 @@ export function Settings() {
     try {
       const res = await settingsService.updatePlatformSettings({
         bulk_cartage_charge: Number(platformForm.bulk_cartage_charge) || 0,
+        customer_rate_per_kg: Number(platformForm.customer_rate_per_kg) || 0,
         urgent_delivery_charge: Number(platformForm.urgent_delivery_charge) || 0
       });
       if (res.error === false) {
@@ -737,11 +739,21 @@ export function Settings() {
                   </div>
                   <div>
                     <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Default Cartage Rate per Carton (₹)</label>
-                    <p className="text-[11px] text-slate-500 mb-2">Default packaging charge per carton applied during order dispatch.</p>
+                    <p className="text-[11px] text-slate-500 mb-2">Default packaging charge per carton when charging customer by Cartaz.</p>
                     <input
                       type="number" min="0"
                       value={platformForm.bulk_cartage_charge}
                       onChange={e => setPlatformForm({ ...platformForm, bulk_cartage_charge: e.target.value })}
+                      className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[14px] font-semibold focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Default Customer Rate per Kg (₹)</label>
+                    <p className="text-[11px] text-slate-500 mb-2">Default shipping charge per Kg when charging customer by Weight.</p>
+                    <input
+                      type="number" min="0"
+                      value={platformForm.customer_rate_per_kg}
+                      onChange={e => setPlatformForm({ ...platformForm, customer_rate_per_kg: e.target.value })}
                       className="w-full h-10 px-3 bg-white border border-slate-200 rounded-lg text-[14px] font-semibold focus:outline-none focus:border-blue-500"
                     />
                   </div>

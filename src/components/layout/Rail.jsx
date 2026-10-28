@@ -20,9 +20,9 @@ export function Rail({ mobileOpen = false, onMobileClose, collapsed = false, onT
     ["Find My Lens", Search, "/find-my-lens", "VIEW_INVENTORY"],
     ["Billing", Receipt, "/billing", "VIEW_CUSTOMERS"],
     ["Dispatch", Truck, "/dispatch", "MANAGE_DISPATCH"],
-    ["Courier Audit", Scale, "/courier-reconciliation", "MANAGE_DISPATCH"],
+    ["Logistics & Courier Billing", Scale, "/courier-reconciliation", "MANAGE_DISPATCH"],
     ["Pick List", ListChecks, "/pick-list", "MANAGE_DISPATCH"],
-    ["Replenishment", RefreshCw, "/replenishment", "VIEW_INVENTORY"],
+    ["Reserve Stock", RefreshCw, "/replenishment", "VIEW_INVENTORY"],
     ["Returns", Undo2, "/returns", "VIEW_ORDERS"],
     ["Reports", BarChart3, "/reports", null],
     ["Access", KeyRound, "/settings", "MANAGE_USERS"],
@@ -54,14 +54,14 @@ export function Rail({ mobileOpen = false, onMobileClose, collapsed = false, onT
               onClick={(e) => e.preventDefault()}
             >
               <I size={20} className="shrink-0" />
-              {!isCollapsed && <span>{l}</span>}
+              {!isCollapsed && <span className="truncate">{l}</span>}
             </button>
           ) : (
             <Link 
               key={l} 
               to={href} 
               className={`vw-nav ${isCollapsed ? "vw-nav-collapsed" : "w-full"}`} 
-              title={isCollapsed ? l : undefined}
+              title={l}
               activeProps={{ className: "active" }} 
               activeOptions={{ exact: href === "/" }}
               onClick={() => {
@@ -69,7 +69,7 @@ export function Rail({ mobileOpen = false, onMobileClose, collapsed = false, onT
               }}
             >
               <I size={20} className="shrink-0" />
-              {!isCollapsed && <span>{l}</span>}
+              {!isCollapsed && <span className="truncate">{l}</span>}
             </Link>
           )
         ))}

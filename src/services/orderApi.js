@@ -2,6 +2,7 @@ import { makeRequestAuth } from "@/config/apiClient";
 
 export const orderApi = {
   getPickQueue: () => makeRequestAuth("get", "/admin/order/pick-queue"),
+  getDispatchQueue: () => makeRequestAuth("get", "/admin/order/dispatch-queue"),
   getPickList: (id) => makeRequestAuth("get", `/admin/order/${id}/pick-list`),
   advanceStatus: (id, status, trackingNumber, deliveryPartner, dispatchMeta = {}) =>
     makeRequestAuth("post", `/admin/order/${id}/advance-status`, {
@@ -13,6 +14,7 @@ export const orderApi = {
       ...(dispatchMeta.is_cartage_free !== undefined ? { is_cartage_free: dispatchMeta.is_cartage_free } : {}),
       ...(dispatchMeta.cartage_rate_per_carton !== undefined ? { cartage_rate_per_carton: dispatchMeta.cartage_rate_per_carton } : {}),
       ...(dispatchMeta.shipped_weight_kg !== undefined ? { shipped_weight_kg: dispatchMeta.shipped_weight_kg } : {}),
+      ...(dispatchMeta.receipt_image_url !== undefined ? { receipt_image_url: dispatchMeta.receipt_image_url } : {}),
     }),
   confirmOrder: (orderId, allowPartial) => makeRequestAuth("post", "/admin/order/confirm", { orderId, allowPartial }),
   holdOrder: (orderId) => makeRequestAuth("post", "/admin/order/hold", { orderId }),

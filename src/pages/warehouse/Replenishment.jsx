@@ -1262,7 +1262,7 @@ export function Replenishment() {
   return (
     <>
       <div className="mb-6 mt-2">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><RefreshCw className="text-blue-600" size={22} /> Replenishment</h1>
+        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2"><RefreshCw className="text-blue-600" size={22} /> Reserve Stock (Replenishment)</h1>
         <p className="text-[13px] text-slate-500 mt-1">Low stock alerts, receiving into Reserve, refilling Running stock, and physical stock counts.</p>
       </div>
 
