@@ -6,6 +6,7 @@ import { getItem } from "@/services/storage";
 export function hasPermission(permission) {
   try {
     const user = getItem("admin_user");
+    if (user?.role?.name === "admin" || user?.role === "admin") return true;
     const permissions = user?.role?.permissions || [];
     return permissions.includes(permission);
   } catch {

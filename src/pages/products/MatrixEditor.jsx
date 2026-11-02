@@ -243,6 +243,7 @@ export const MatrixCell = memo(function MatrixCell({
   onQtyChange,
   onToggleNA,
   onLocChange,
+  readOnly = false,
 }) {
   const [showModal, setShowModal] = useState(false);
 
@@ -253,14 +254,16 @@ export const MatrixCell = memo(function MatrixCell({
           <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 bg-slate-200/80 px-1.5 py-0.5 rounded tracking-wide font-mono">
             N/A
           </span>
-          <button
-            type="button"
-            onClick={() => onToggleNA(key)}
-            className="text-[9px] text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
-            title="Enable this power cell"
-          >
-            Enable
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={() => onToggleNA(key)}
+              className="text-[9px] text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
+              title="Enable this power cell"
+            >
+              Enable
+            </button>
+          )}
         </div>
       </td>
     );
@@ -268,6 +271,35 @@ export const MatrixCell = memo(function MatrixCell({
 
   const effectiveLoc = locEntry || (typeof hasOverride === "object" ? hasOverride : null);
   const displayLocText = locLabel || effectiveLoc?.label || (hasOverride ? "✓ shelf set" : "+ shelf");
+  const quantity = parseInt(qty) || 0;
+
+  if (readOnly) {
+    return (
+      <td
+        className={`p-1 border-b border-r border-slate-100 text-center align-middle transition-colors ${
+          quantity > 0 ? "bg-emerald-50/40" : "bg-white"
+        }`}
+      >
+        <div className="flex flex-col items-center justify-center py-0.5">
+          <span
+            className={`font-mono text-[11px] sm:text-xs ${
+              quantity > 0 ? "text-emerald-700 font-bold" : "text-slate-300"
+            }`}
+          >
+            {quantity > 0 ? quantity : "—"}
+          </span>
+          {quantity > 0 && displayLocText && displayLocText !== "+ shelf" && displayLocText !== "✓ shelf set" && (
+            <span
+              className="text-[8px] sm:text-[9px] text-slate-500 font-mono mt-0.5 px-1 py-0.2 bg-slate-100 rounded border border-slate-200 truncate max-w-[70px]"
+              title={displayLocText}
+            >
+              {displayLocText}
+            </span>
+          )}
+        </div>
+      </td>
+    );
+  }
 
   return (
     <td className="p-1 border-b border-r border-slate-100 hover:bg-emerald-50/50 transition-colors align-top group">
@@ -336,6 +368,7 @@ export function MatrixEditor({
   rangeConfig,
   onRangeConfigChange,
   autoGenerateIfEmpty = false,
+  readOnly = false,
 }) {
   // RX is always structurally a Progressive lens (same SPH/CYL/AXIS/ADD fields) per the
   // client's spec, even though it's shown as its own distinct lens-type card to staff.
@@ -561,199 +594,244 @@ export function MatrixEditor({
     <div className="vw-card p-3.5 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3 sm:mb-4 border-b border-slate-100 pb-2.5 sm:pb-3">
         <h3 className="font-bold text-xs sm:text-sm text-slate-800 flex items-center gap-2">
-          <Grid size={16} className="text-purple-600" /> POWER MATRIX
+          <Grid size={16} className="text-purple-600" /> POWER MATRIX {readOnly ? "(VIEW ONLY)" : ""}
         </h3>
+        {readOnly && (
+          <span className="text-[10px] sm:text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+            Read-Only Matrix
+          </span>
+        )}
       </div>
 
-      <p className="text-[11px] sm:text-xs text-slate-500 mb-3 sm:mb-4 leading-relaxed">
-        {isProgressiveFamily
-          ? "Progressive/KT family: ADD runs across the columns (+1.00 to +3.00). SPH/CYL compound power runs down the rows. Axis (1–180°) is required when CYL is added."
-          : "Single Vision: SPH runs down the rows, CYL runs across the columns. Axis does not apply."}
-      </p>
-
-      <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-5 shadow-xs">
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 mb-3 sm:mb-4">
-          <div>
-            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
-              SPH Min
-            </label>
-            <PowerInput
-              value={rangeConfig.sph.min}
-              onChange={(v) => updateSph("min", v)}
-              step={parseFloat(rangeConfig.sph.step) || 0.25}
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
-              SPH Max
-            </label>
-            <PowerInput
-              value={rangeConfig.sph.max}
-              onChange={(v) => updateSph("max", v)}
-              step={parseFloat(rangeConfig.sph.step) || 0.25}
-            />
-          </div>
-          <div>
-            <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
-              SPH Step
-            </label>
-            <input
-              type="text"
-              value={rangeConfig.sph.step}
-              onChange={(e) => updateSph("step", e.target.value)}
-              className="w-full h-8 sm:h-9 px-2.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
-            />
-          </div>
-        </div>
-
-        <label className="flex items-center gap-2 text-xs sm:text-[13px] font-bold text-slate-700 mb-2.5 sm:mb-3 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={hasCyl}
-            onChange={(e) => toggleHasCyl(e.target.checked)}
-            className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
-          />
-          This range also has a CYL dimension
-        </label>
-
-        {hasCyl && (
-          <div className="flex flex-col gap-2.5 sm:gap-3 mb-2">
-            {rangeConfig.cylBlocks.map((b, idx) => (
-              <div key={idx} className="relative bg-white border border-slate-200/80 rounded-xl p-2.5 sm:p-3 shadow-xs">
-                {rangeConfig.cylBlocks.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeCylBlock(idx)}
-                    className="absolute top-2 right-2 text-slate-400 hover:text-rose-500 p-1 cursor-pointer transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                )}
-                <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-2.5 pr-6">
-                  <div>
-                    <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                      CYL Min
-                    </label>
-                    <PowerInput
-                      value={b.min}
-                      onChange={(v) => updateCylBlock(idx, "min", v)}
-                      step={parseFloat(b.step) || 0.25}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                      CYL Max
-                    </label>
-                    <PowerInput
-                      value={b.max}
-                      onChange={(v) => updateCylBlock(idx, "max", v)}
-                      step={parseFloat(b.step) || 0.25}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-                  <div>
-                    <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                      Step
-                    </label>
-                    <input
-                      type="text"
-                      value={b.step}
-                      onChange={(e) => updateCylBlock(idx, "step", e.target.value)}
-                      className="w-full h-8 sm:h-9 px-2.5 bg-slate-50/70 border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
-                    />
-                  </div>
-                  {isProgressiveFamily ? (
-                    <div>
-                      <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wider flex items-center justify-between">
-                        <span>Axis (1–180°)</span>
-                        <span className="text-[9px] text-rose-500 font-bold">*Req</span>
-                      </label>
-                      <PowerInput
-                        value={b.axis}
-                        onChange={(v) => updateCylBlock(idx, "axis", v)}
-                        placeholder="e.g. 90"
-                        step={1}
-                        decimals={0}
-                        signed={false}
-                      />
-                      <p className="text-[9px] text-slate-400 mt-0.5">~90° for -CYL, ~180° for +CYL</p>
-                    </div>
-                  ) : (
-                    <div className="flex flex-col justify-end pb-1">
-                      <span className="text-[11px] text-slate-400 italic">
-                        Single Vision has no Axis (CYL only).
-                      </span>
-                    </div>
+      {readOnly ? (
+        <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-5 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <span className="text-[10px] sm:text-[11px] font-bold px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 font-mono">
+                {matrixTypeInfo?.code || "Type B"}
+              </span>
+              <div>
+                <h4 className="font-bold text-slate-800 text-xs sm:text-[13px]">
+                  {matrixTypeInfo?.name || "Power Matrix"}
+                </h4>
+                <div className="flex flex-wrap items-center gap-2 mt-0.5 text-[11px] text-slate-500 font-mono">
+                  <span>SPH: {rangeConfig?.sph?.min} ~ {rangeConfig?.sph?.max}</span>
+                  {hasCyl && rangeConfig?.cylBlocks?.length > 0 && (
+                    <>
+                      <span>•</span>
+                      <span>CYL: {rangeConfig.cylBlocks[0]?.min} ~ {rangeConfig.cylBlocks[0]?.max}</span>
+                    </>
+                  )}
+                  {isProgressiveFamily && rangeConfig?.add && (
+                    <>
+                      <span>•</span>
+                      <span>ADD: {rangeConfig.add?.min} ~ {rangeConfig.add?.max}</span>
+                    </>
                   )}
                 </div>
               </div>
-            ))}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded-lg">
+                Total Cells: <b className="font-mono text-slate-900">{cells.length}</b>
+              </span>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="text-[11px] sm:text-xs text-slate-500 mb-3 sm:mb-4 leading-relaxed">
+            {isProgressiveFamily
+              ? "Progressive/KT family: ADD runs across the columns (+1.00 to +3.00). SPH/CYL compound power runs down the rows. Axis (1–180°) is required when CYL is added."
+              : "Single Vision: SPH runs down the rows, CYL runs across the columns. Axis does not apply."}
+          </p>
+
+          <div className="bg-slate-50/80 border border-slate-200 rounded-xl p-3 sm:p-4 mb-4 sm:mb-5 shadow-xs">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 mb-3 sm:mb-4">
+              <div>
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                  SPH Min
+                </label>
+                <PowerInput
+                  value={rangeConfig.sph.min}
+                  onChange={(v) => updateSph("min", v)}
+                  step={parseFloat(rangeConfig.sph.step) || 0.25}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                  SPH Max
+                </label>
+                <PowerInput
+                  value={rangeConfig.sph.max}
+                  onChange={(v) => updateSph("max", v)}
+                  step={parseFloat(rangeConfig.sph.step) || 0.25}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                  SPH Step
+                </label>
+                <input
+                  type="text"
+                  value={rangeConfig.sph.step}
+                  onChange={(e) => updateSph("step", e.target.value)}
+                  className="w-full h-8 sm:h-9 px-2.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
+                />
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-xs sm:text-[13px] font-bold text-slate-700 mb-2.5 sm:mb-3 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={hasCyl}
+                onChange={(e) => toggleHasCyl(e.target.checked)}
+                className="rounded border-slate-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+              />
+              This range also has a CYL dimension
+            </label>
+
+            {hasCyl && (
+              <div className="flex flex-col gap-2.5 sm:gap-3 mb-2">
+                {rangeConfig.cylBlocks.map((b, idx) => (
+                  <div key={idx} className="relative bg-white border border-slate-200/80 rounded-xl p-2.5 sm:p-3 shadow-xs">
+                    {rangeConfig.cylBlocks.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => removeCylBlock(idx)}
+                        className="absolute top-2 right-2 text-slate-400 hover:text-rose-500 p-1 cursor-pointer transition-colors"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    )}
+                    <div className="grid grid-cols-2 gap-2.5 sm:gap-3 mb-2.5 pr-6">
+                      <div>
+                        <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                          CYL Min
+                        </label>
+                        <PowerInput
+                          value={b.min}
+                          onChange={(v) => updateCylBlock(idx, "min", v)}
+                          step={parseFloat(b.step) || 0.25}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                          CYL Max
+                        </label>
+                        <PowerInput
+                          value={b.max}
+                          onChange={(v) => updateCylBlock(idx, "max", v)}
+                          step={parseFloat(b.step) || 0.25}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                      <div>
+                        <label className="block text-[10px] sm:text-[11px] font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                          Step
+                        </label>
+                        <input
+                          type="text"
+                          value={b.step}
+                          onChange={(e) => updateCylBlock(idx, "step", e.target.value)}
+                          className="w-full h-8 sm:h-9 px-2.5 bg-slate-50/70 border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
+                        />
+                      </div>
+                      {isProgressiveFamily ? (
+                        <div>
+                          <label className="block text-[10px] sm:text-[11px] font-bold text-slate-700 mb-1 uppercase tracking-wider flex items-center justify-between">
+                            <span>Axis (1–180°)</span>
+                            <span className="text-[9px] text-rose-500 font-bold">*Req</span>
+                          </label>
+                          <PowerInput
+                            value={b.axis}
+                            onChange={(v) => updateCylBlock(idx, "axis", v)}
+                            placeholder="e.g. 90"
+                            step={1}
+                            decimals={0}
+                            signed={false}
+                          />
+                          <p className="text-[9px] text-slate-400 mt-0.5">~90° for -CYL, ~180° for +CYL</p>
+                        </div>
+                      ) : (
+                        <div className="flex flex-col justify-end pb-1">
+                          <span className="text-[11px] text-slate-400 italic">
+                            Single Vision has no Axis (CYL only).
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={addCylBlock}
+                  className="self-start text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                >
+                  <Plus size={13} /> Add CYL/Axis Block
+                </button>
+              </div>
+            )}
+
+            {isProgressiveFamily && (
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200">
+                <div>
+                  <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                    ADD Min
+                  </label>
+                  <PowerInput
+                    value={rangeConfig.add.min}
+                    onChange={(v) => updateAdd("min", v)}
+                    step={parseFloat(rangeConfig.add.step) || 0.25}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                    ADD Max
+                  </label>
+                  <PowerInput
+                    value={rangeConfig.add.max}
+                    onChange={(v) => updateAdd("max", v)}
+                    step={parseFloat(rangeConfig.add.step) || 0.25}
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                    ADD Step
+                  </label>
+                  <input
+                    type="text"
+                    value={rangeConfig.add.step}
+                    onChange={(e) => updateAdd("step", e.target.value)}
+                    className="w-full h-8 sm:h-9 px-2.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
+                  />
+                </div>
+              </div>
+            )}
+
             <button
               type="button"
-              onClick={addCylBlock}
-              className="self-start text-purple-700 bg-purple-50 hover:bg-purple-100 px-3 py-1.5 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-bold inline-flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              onClick={handleGenerate}
+              disabled={!productId || isGenerating}
+              className="mt-3 sm:mt-4 vw-btn-secondary h-9 sm:h-10 w-full font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 flex items-center justify-center gap-2 rounded-xl text-xs sm:text-[13px] cursor-pointer shadow-xs transition-all"
             >
-              <Plus size={13} /> Add CYL/Axis Block
+              <RefreshCw size={14} className={isGenerating ? "animate-spin" : ""} />{" "}
+              {isGenerating
+                ? "Generating..."
+                : cells.length > 0
+                  ? "Regenerate Matrix Structure"
+                  : "Generate Matrix Structure"}
             </button>
+            {!productId && (
+              <p className="text-[11px] text-amber-600 mt-2">
+                Save the product first to generate its matrix.
+              </p>
+            )}
           </div>
-        )}
-
-        {isProgressiveFamily && (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3 mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-slate-200">
-            <div>
-              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
-                ADD Min
-              </label>
-              <PowerInput
-                value={rangeConfig.add.min}
-                onChange={(v) => updateAdd("min", v)}
-                step={parseFloat(rangeConfig.add.step) || 0.25}
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
-                ADD Max
-              </label>
-              <PowerInput
-                value={rangeConfig.add.max}
-                onChange={(v) => updateAdd("max", v)}
-                step={parseFloat(rangeConfig.add.step) || 0.25}
-              />
-            </div>
-            <div>
-              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
-                ADD Step
-              </label>
-              <input
-                type="text"
-                value={rangeConfig.add.step}
-                onChange={(e) => updateAdd("step", e.target.value)}
-                className="w-full h-8 sm:h-9 px-2.5 bg-white border border-slate-200 rounded-lg sm:rounded-xl text-xs sm:text-[13px] font-mono focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
-              />
-            </div>
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleGenerate}
-          disabled={!productId || isGenerating}
-          className="mt-3 sm:mt-4 vw-btn-secondary h-9 sm:h-10 w-full font-bold bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 flex items-center justify-center gap-2 rounded-xl text-xs sm:text-[13px] cursor-pointer shadow-xs transition-all"
-        >
-          <RefreshCw size={14} className={isGenerating ? "animate-spin" : ""} />{" "}
-          {isGenerating
-            ? "Generating..."
-            : cells.length > 0
-              ? "Regenerate Matrix Structure"
-              : "Generate Matrix Structure"}
-        </button>
-        {!productId && (
-          <p className="text-[11px] text-amber-600 mt-2">
-            Save the product first to generate its matrix.
-          </p>
-        )}
-      </div>
+        </>
+      )}
 
       {isLoading && <p className="text-xs sm:text-[13px] text-slate-500 font-medium">Loading matrix...</p>}
 
@@ -761,18 +839,20 @@ export function MatrixEditor({
         <div className="mt-2">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3">
             <h4 className="font-bold text-slate-800 flex items-center gap-2 text-xs sm:text-sm">
-              <Package size={15} className="text-emerald-600" /> STOCK ENTRY ({cells.length} cells)
+              <Package size={15} className="text-emerald-600" />
+              {readOnly ? `CURRENT STOCK MATRIX (${cells.length} cells)` : `STOCK ENTRY (${cells.length} cells)`}
             </h4>
-            <button
-              type="button"
-              onClick={handleSaveStock}
-              disabled={isSavingStock}
-              className="w-full sm:w-auto vw-btn-primary h-8 sm:h-9 px-3.5 sm:px-4 gap-1.5 flex items-center justify-center disabled:opacity-50 text-xs sm:text-[13px] font-semibold rounded-xl cursor-pointer shadow-xs"
-            >
-              <Save size={14} /> {isSavingStock ? "Saving..." : "Save Stock"}
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleSaveStock}
+                disabled={isSavingStock}
+                className="w-full sm:w-auto vw-btn-primary h-8 sm:h-9 px-3.5 sm:px-4 gap-1.5 flex items-center justify-center disabled:opacity-50 text-xs sm:text-[13px] font-semibold rounded-xl cursor-pointer shadow-xs"
+              >
+                <Save size={14} /> {isSavingStock ? "Saving..." : "Save Stock"}
+              </button>
+            )}
           </div>
-
 
           <MatrixGridView
             cells={cells}
@@ -784,6 +864,7 @@ export function MatrixEditor({
             onLocChange={handleLocChange}
             racks={racks}
             matrixTypeInfo={matrixTypeInfo}
+            readOnly={readOnly}
           />
         </div>
       )}
@@ -802,6 +883,7 @@ export function MatrixGridView({
   racks = [],
   matrixTypeInfo,
   maxHeight = "max-h-[560px]",
+  readOnly = false,
 }) {
   const grid = useMemo(() => buildGridFromCells(cells), [cells]);
 
@@ -893,6 +975,7 @@ export function MatrixGridView({
                       onQtyChange={onQtyChange}
                       onToggleNA={onToggleNA}
                       onLocChange={onLocChange}
+                      readOnly={readOnly}
                     />
                   );
                 })}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Link, useParams } from "@tanstack/react-router";
+import { Link, useParams, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Edit } from "lucide-react";
 import { productApi, warehouseApi } from "../../services/productApi";
 import { MatrixEditor, defaultRangeConfigFromProduct } from "./MatrixEditor";
@@ -8,10 +8,13 @@ import "@/styles/veriwide.css";
 
 export function ProductMatrix() {
   const { id } = useParams({ strict: false });
+  const routeSearch = useSearch({ strict: false });
   const [product, setProduct] = useState(null);
   const [racks, setRacks] = useState([]);
   const [rangeConfig, setRangeConfig] = useState(defaultRangeConfigFromProduct(null));
   const [loading, setLoading] = useState(true);
+
+  const brandParam = routeSearch?.brand || product?.brand;
 
   useEffect(() => {
     if (!id) return;
@@ -56,9 +59,10 @@ export function ProductMatrix() {
         <p className="text-xs sm:text-[13px] font-bold text-rose-600">Product not found or failed to load.</p>
         <Link
           to="/products"
+          search={brandParam ? { brand: brandParam } : {}}
           className="inline-flex items-center gap-1.5 mt-3 px-3.5 py-1.5 bg-white border border-rose-200 text-rose-700 text-xs font-semibold rounded-xl hover:bg-rose-50 shadow-xs"
         >
-          <ArrowLeft size={14} /> Back to Products
+          <ArrowLeft size={14} /> Back to {brandParam || "Products"}
         </Link>
       </div>
     );
@@ -69,9 +73,10 @@ export function ProductMatrix() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 sm:mb-6 gap-3 sm:gap-4 mt-1 sm:mt-2">
         <div className="flex items-center gap-2.5 sm:gap-3">
           <Link 
-            to="/products" 
+            to="/products"
+            search={brandParam ? { brand: brandParam } : {}}
             className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition-colors shadow-xs cursor-pointer shrink-0"
-            title="Back to Products"
+            title={brandParam ? `Back to ${brandParam}` : "Back to Products"}
           >
             <ArrowLeft size={16} />
           </Link>
@@ -85,7 +90,8 @@ export function ProductMatrix() {
           </div>
         </div>
         <Link 
-          to={`/products/${id}/edit`} 
+          to={`/products/${id}/edit`}
+          search={brandParam ? { brand: brandParam } : {}}
           className="w-full sm:w-auto vw-btn-secondary h-9 sm:h-10 px-3.5 sm:px-4 gap-1.5 sm:gap-2 flex items-center justify-center text-xs sm:text-[13px] font-semibold rounded-xl shadow-xs cursor-pointer shrink-0"
         >
           <Edit size={15} /> Edit Product Details
@@ -99,6 +105,7 @@ export function ProductMatrix() {
         rangeConfig={rangeConfig}
         onRangeConfigChange={setRangeConfig}
         autoGenerateIfEmpty={false}
+        readOnly={true}
       />
     </>
   );

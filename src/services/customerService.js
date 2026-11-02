@@ -33,7 +33,9 @@ export const customerService = {
   updateAccountStatus: (customerId, account_status) =>
     makeRequestAuth("post", "/admin/customer/update-account-status", { customerId, account_status }),
 
-  resetDevice: (customerId, platform) => makeRequestAuth("post", "/admin/customer/reset-device", { customerId, platform }),
+  resetDevice: (customerId, platform, deviceId) => makeRequestAuth("post", "/admin/customer/reset-device", { customerId, platform, deviceId }),
+
+  toggleMultiDevice: (customerId, allow_multi_device) => makeRequestAuth("post", "/admin/customer/toggle-multi-device", { customerId, allow_multi_device }),
 
   requestLimitIncrease: (customerId, requestedAmount, reason) =>
     makeRequestAuth("post", "/admin/customer/limit/request", { customerId, requestedAmount, reason }),

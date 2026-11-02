@@ -14,6 +14,8 @@ export const productApi = {
   findMyLens: (data) => makeRequestAuth("post", "/admin/product/find-my-lens", data),
   getProducts: (data) => makeRequestAuth("post", "/admin/product/list", data || {}),
   getProductDetail: (id) => makeRequestAuth("get", `/admin/product/detail/${id}`),
+  getAgingStock: (params) => makeRequestAuth("get", "/admin/product/aging-stock", null, { params }),
+  setClearanceAction: (id, data) => makeRequestAuth("post", `/admin/product/${id}/clearance-action`, data),
 };
 
 export const warehouseApi = {

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AdminRouteImport } from './routes/_admin'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AdminIndexRouteImport } from './routes/_admin.index'
+import { Route as AdminAgingStockRouteImport } from './routes/_admin.aging-stock'
 import { Route as AdminBillingRouteImport } from './routes/_admin.billing'
 import { Route as AdminCourierReconciliationRouteImport } from './routes/_admin.courier-reconciliation'
 import { Route as AdminCustomerOnboardRouteImport } from './routes/_admin.customer-onboard'
@@ -49,6 +50,11 @@ const LoginRoute = LoginRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminAgingStockRoute = AdminAgingStockRouteImport.update({
+  id: '/aging-stock',
+  path: '/aging-stock',
   getParentRoute: () => AdminRoute,
 } as any)
 const AdminBillingRoute = AdminBillingRouteImport.update({
@@ -176,6 +182,7 @@ const AdminProductsIdEditRoute = AdminProductsIdEditRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof AdminIndexRoute
   '/login': typeof LoginRoute
+  '/aging-stock': typeof AdminAgingStockRoute
   '/billing': typeof AdminBillingRoute
   '/courier-reconciliation': typeof AdminCourierReconciliationRoute
   '/customer-onboard': typeof AdminCustomerOnboardRoute
@@ -203,6 +210,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
+  '/aging-stock': typeof AdminAgingStockRoute
   '/billing': typeof AdminBillingRoute
   '/courier-reconciliation': typeof AdminCourierReconciliationRoute
   '/customer-onboard': typeof AdminCustomerOnboardRoute
@@ -233,6 +241,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_admin': typeof AdminRouteWithChildren
   '/login': typeof LoginRoute
+  '/_admin/aging-stock': typeof AdminAgingStockRoute
   '/_admin/billing': typeof AdminBillingRoute
   '/_admin/courier-reconciliation': typeof AdminCourierReconciliationRoute
   '/_admin/customer-onboard': typeof AdminCustomerOnboardRoute
@@ -264,6 +273,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/login'
+    | '/aging-stock'
     | '/billing'
     | '/courier-reconciliation'
     | '/customer-onboard'
@@ -291,6 +301,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
+    | '/aging-stock'
     | '/billing'
     | '/courier-reconciliation'
     | '/customer-onboard'
@@ -320,6 +331,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/_admin'
     | '/login'
+    | '/_admin/aging-stock'
     | '/_admin/billing'
     | '/_admin/courier-reconciliation'
     | '/_admin/customer-onboard'
@@ -373,6 +385,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/_admin/aging-stock': {
+      id: '/_admin/aging-stock'
+      path: '/aging-stock'
+      fullPath: '/aging-stock'
+      preLoaderRoute: typeof AdminAgingStockRouteImport
       parentRoute: typeof AdminRoute
     }
     '/_admin/billing': {
@@ -547,6 +566,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteChildren {
+  AdminAgingStockRoute: typeof AdminAgingStockRoute
   AdminBillingRoute: typeof AdminBillingRoute
   AdminCourierReconciliationRoute: typeof AdminCourierReconciliationRoute
   AdminCustomerOnboardRoute: typeof AdminCustomerOnboardRoute
@@ -575,6 +595,7 @@ interface AdminRouteChildren {
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
+  AdminAgingStockRoute: AdminAgingStockRoute,
   AdminBillingRoute: AdminBillingRoute,
   AdminCourierReconciliationRoute: AdminCourierReconciliationRoute,
   AdminCustomerOnboardRoute: AdminCustomerOnboardRoute,

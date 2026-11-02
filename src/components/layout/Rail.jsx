@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import {
-  Home, Users, ClipboardList, Package, Receipt, Truck, Undo2, BarChart3, KeyRound, Headphones, Search, ListChecks, RefreshCw, X, History, ChevronLeft, ChevronRight, Scale
+  Home, Users, ClipboardList, Package, Receipt, Truck, Undo2, BarChart3, KeyRound, Headphones, Search, ListChecks, RefreshCw, X, History, ChevronLeft, ChevronRight, Scale, AlertTriangle
 } from "lucide-react";
 import { hasPermission } from "@/lib/permissions";
 import { getItem } from "@/services/storage";
@@ -23,7 +23,7 @@ export function Rail({ mobileOpen = false, onMobileClose, collapsed = false, onT
     ["Logistics & Courier Billing", Scale, "/courier-reconciliation", "MANAGE_DISPATCH"],
     ["Pick List", ListChecks, "/pick-list", "MANAGE_DISPATCH"],
     ["Reserve Stock", RefreshCw, "/replenishment", "VIEW_INVENTORY"],
-    ["Returns", Undo2, "/returns", "VIEW_ORDERS"],
+    ["Returns", Undo2, "/returns", hasPermission("VIEW_RETURNS") ? "VIEW_RETURNS" : "VIEW_ORDERS"],
     ["Reports", BarChart3, "/reports", null],
     ["Access", KeyRound, "/settings", "MANAGE_USERS"],
     ...(isOwnerAdmin ? [["Activity Logs", History, "/logs", null]] : [])

@@ -51,6 +51,7 @@ export function CustomerDetails() {
     allow_cart: true, 
     allow_order: false, 
     show_quantity: true, 
+    allow_multi_device: false,
     parent_customer_id: "" 
   });
   const [showTransferModal, setShowTransferModal] = useState(false);
@@ -209,13 +210,13 @@ export function CustomerDetails() {
 
   // Reset App / Web Device Lock
   const handleResetDevice = async (platform) => {
-    const label = platform === "web" ? "Web" : "App";
+    const label = platform === "web" ? "Web Browser" : platform === "app" ? "Mobile App" : "All Devices";
     const ok = await confirm(`Are you sure you want to reset the ${label} login device lock for this account?`, {
       title: "Reset Device Lock",
       acceptLabel: "Reset Device",
     });
     if (!ok) return;
-    setActionLoading(`device-${platform}`);
+    setActionLoading(`device-${platform || "all"}`);
     try {
       await customerService.resetDevice(id, platform);
       notify.success(`${label} device lock reset successfully. Customer can now log in from a new device.`);
@@ -227,31 +228,155 @@ export function CustomerDetails() {
     }
   };
 
-  // Reset Sub-Customer App / Web Device Lock
-  const handleResetSubDevice = async (subId, platform) => {
-    const label = platform === "web" ? "Web" : platform === "app" ? "Mobile App" : "All";
-    const ok = await confirm(`Are you sure you want to reset the ${label} login device lock for this staff account?`, {
-      title: "Reset Staff Device Lock",
-      acceptLabel: "Reset Device",
+  // Toggle Multi-Device Permission
+  const handleToggleMultiDevice = async (enable) => {
+    const ok = await confirm(
+      enable
+        ? "Enable Multi-Device login for this customer? Retailer will be permitted to log in from multiple smartphones and web browsers simultaneously."
+        : "Disable Multi-Device login? The customer account will revert to strict 1-mobile and 1-web lock.",
+      {
+        title: `${enable ? "Enable" : "Disable"} Multi-Device Login`,
+        acceptLabel: enable ? "Enable Multi-Device" : "Disable Multi-Device",
+      }
+    );
+    if (!ok) return;
+
+    setActionLoading("toggle-multi-device");
+    try {
+      await customerService.toggleMultiDevice(id, enable);
+      notify.success(`Multi-device login ${enable ? "enabled" : "disabled"} successfully.`);
+      await fetchData();
+    } catch (err) {
+      notify.error(err.message || "Failed to update multi-device setting.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Revoke / Remove a specific device from active devices
+  const handleRemoveDevice = async (deviceId, deviceName) => {
+    const ok = await confirm(`Revoke access and log out device "${deviceName || deviceId}"?`, {
+      title: "Revoke Device Access",
+      acceptLabel: "Revoke Device",
     });
     if (!ok) return;
 
-    setActionLoading(`sub-device-${platform || "all"}`);
+    setActionLoading(`device-remove-${deviceId}`);
     try {
-      await customerService.resetDevice(subId, platform);
-      notify.success(`${label} device lock reset successfully! Staff can now log in from a new device.`);
+      await customerService.resetDevice(id, null, deviceId);
+      notify.success("Device revoked successfully.");
+      await fetchData();
+    } catch (err) {
+      notify.error(err.message || "Failed to revoke device.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Reset Sub-Customer App / Web Device Lock or Revoke Specific Device
+  const handleResetSubDevice = async (subId, platform, deviceId = null) => {
+    const label = deviceId
+      ? `Device (${deviceId})`
+      : platform === "web"
+      ? "Web Browser"
+      : platform === "app"
+      ? "Mobile App"
+      : "All Devices";
+    const ok = await confirm(
+      `Are you sure you want to reset/revoke access for this staff member's ${label}?`,
+      {
+        title: "Reset Staff Device",
+        acceptLabel: "Confirm Reset",
+      }
+    );
+    if (!ok) return;
+
+    setActionLoading(`sub-device-${deviceId || platform || "all"}`);
+    try {
+      await customerService.resetDevice(subId, platform, deviceId);
+      notify.success(`${label} reset successfully! Staff can now log in on a new device.`);
 
       // Update local modal state immediately
-      setSubDeviceModalSub(prev => {
+      setSubDeviceModalSub((prev) => {
         if (!prev) return null;
-        if (platform === "web") return { ...prev, web_device_id: "", web_device_name: "" };
-        if (platform === "app") return { ...prev, device_id: "", device_name: "" };
-        return { ...prev, device_id: "", device_name: "", web_device_id: "", web_device_name: "" };
+        if (deviceId) {
+          return {
+            ...prev,
+            logged_in_devices: (prev.logged_in_devices || []).filter((d) => d.device_id !== deviceId),
+            device_id: prev.device_id === deviceId ? "" : prev.device_id,
+            device_name: prev.device_id === deviceId ? "" : prev.device_name,
+            web_device_id: prev.web_device_id === deviceId ? "" : prev.web_device_id,
+            web_device_name: prev.web_device_id === deviceId ? "" : prev.web_device_name,
+          };
+        }
+        if (platform === "web") {
+          return {
+            ...prev,
+            web_device_id: "",
+            web_device_name: "",
+            logged_in_devices: (prev.logged_in_devices || []).filter((d) => d.platform !== "web"),
+          };
+        }
+        if (platform === "app") {
+          return {
+            ...prev,
+            device_id: "",
+            device_name: "",
+            logged_in_devices: (prev.logged_in_devices || []).filter((d) => d.platform !== "app"),
+          };
+        }
+        return {
+          ...prev,
+          device_id: "",
+          device_name: "",
+          web_device_id: "",
+          web_device_name: "",
+          logged_in_devices: [],
+        };
       });
 
       await fetchData();
     } catch (err) {
       notify.error(err.message || "Failed to reset device lock.");
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // Toggle Multi-Device Permission for Sub-Customer / Staff
+  const handleToggleSubMultiDevice = async (subId, enable) => {
+    const ok = await confirm(
+      enable
+        ? "Enable Multi-Device login for this staff account? Staff member will be permitted to log in from multiple smartphones and web browsers simultaneously."
+        : "Disable Multi-Device login? The staff account will revert to strict 1-device lock and all active sessions will be logged out immediately.",
+      {
+        title: `${enable ? "Enable" : "Disable"} Multi-Device Login`,
+        acceptLabel: enable ? "Enable Multi-Device" : "Disable Multi-Device",
+      }
+    );
+    if (!ok) return;
+
+    setActionLoading("sub-toggle-multi-device");
+    try {
+      await customerService.toggleMultiDevice(subId, enable);
+      notify.success(`Multi-device login ${enable ? "enabled" : "disabled"} successfully.`);
+
+      setSubDeviceModalSub((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          allow_multi_device: enable,
+          subcustomer_permissions: {
+            ...(prev.subcustomer_permissions || {}),
+            allow_multi_device: enable,
+          },
+          ...(enable ? {} : { logged_in_devices: [], device_id: "", device_name: "", web_device_id: "", web_device_name: "" }),
+        };
+      });
+
+      await fetchData();
+    } catch (err) {
+      notify.error(err.message || "Failed to update multi-device setting.");
     } finally {
       setActionLoading(null);
     }
@@ -319,6 +444,7 @@ export function CustomerDetails() {
         allow_cart: subForm.allow_cart,
         allow_order: subForm.allow_order,
         show_quantity: subForm.show_quantity,
+        allow_multi_device: subForm.allow_multi_device || false,
       };
       if (subForm.id) {
         // Edit mode
@@ -338,7 +464,7 @@ export function CustomerDetails() {
         notify.success("Staff member added successfully!");
       }
       setShowSubModal(false);
-      setSubForm({ id: null, name: "", phone: "", email: "", allow_cart: true, allow_order: false, show_quantity: true, parent_customer_id: "" });
+      setSubForm({ id: null, name: "", phone: "", email: "", allow_cart: true, allow_order: false, show_quantity: true, allow_multi_device: false, parent_customer_id: "" });
       await fetchData();
     } catch (err) {
       console.error(err);
@@ -357,6 +483,7 @@ export function CustomerDetails() {
       allow_cart: sub.subcustomer_permissions?.allow_cart ?? true,
       allow_order: sub.subcustomer_permissions?.allow_order ?? false,
       show_quantity: sub.subcustomer_permissions?.show_quantity ?? true,
+      allow_multi_device: sub.subcustomer_permissions?.allow_multi_device ?? false,
       parent_customer_id: id
     });
     setShowSubModal(true);
@@ -924,50 +1051,229 @@ export function CustomerDetails() {
           </div>
 
           {/* Device Security Card */}
-          <div className="bg-white rounded-xl border border-amber-200 shadow-sm overflow-hidden">
-            <div className="p-5 border-b border-amber-100 bg-amber-50/30">
-              <h3 className="text-[12px] font-bold text-amber-600 uppercase tracking-wider flex items-center gap-2">
-                <MonitorSmartphone size={14}/> Bound Devices (Security Lock)
-              </h3>
-            </div>
-            <div className="p-5 space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3">
               <div>
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  <Smartphone size={14} className="text-slate-400" /> App Device Lock
-                </div>
-                <p className="text-[13px] font-medium text-slate-800 mb-1">
-                  {data.device_name || data.device_id || <span className="text-slate-400 font-normal italic">No mobile app bound</span>}
+                <h3 className="text-[13px] font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+                  <MonitorSmartphone size={16} className="text-blue-600"/> Device Security & Locks
+                </h3>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  {data.allow_multi_device
+                    ? "Multi-device login allowed across smartphones and browsers."
+                    : "Strict 1-device lock active per platform (Mobile App & Web)."}
                 </p>
-                {data.device_id && (
-                  <p className="text-[11px] text-slate-400 font-mono truncate mb-2">{data.device_id}</p>
-                )}
-                <button 
-                  onClick={() => handleResetDevice("app")} 
-                  disabled={!data.device_id || actionLoading === "device-app"} 
-                  className="w-full h-8 flex items-center justify-center gap-2 text-[12px] font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
-                >
-                  {actionLoading === "device-app" ? <Loader2 size={14} className="animate-spin" /> : "Reset Mobile Device Lock"}
-                </button>
               </div>
 
-              <div className="pt-4 border-t border-slate-100">
-                <div className="flex items-center gap-1.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  <Globe size={14} className="text-slate-400" /> Web Browser Lock
+              {/* Multi-Device Permission Toggle */}
+              {hasPermission("EDIT_CUSTOMER") && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full border ${
+                    data.allow_multi_device
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : "bg-slate-100 text-slate-600 border-slate-200"
+                  }`}>
+                    {data.allow_multi_device ? "Multi-Device ON" : "1-Device Lock"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleMultiDevice(!data.allow_multi_device)}
+                    disabled={actionLoading === "toggle-multi-device"}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                      data.allow_multi_device ? "bg-emerald-600" : "bg-slate-300"
+                    }`}
+                    title={data.allow_multi_device ? "Disable Multi-Device" : "Enable Multi-Device"}
+                  >
+                    {actionLoading === "toggle-multi-device" ? (
+                      <Loader2 size={12} className="animate-spin text-white mx-auto" />
+                    ) : (
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          data.allow_multi_device ? "translate-x-6" : "translate-x-1"
+                        }`}
+                      />
+                    )}
+                  </button>
                 </div>
-                <p className="text-[13px] font-medium text-slate-800 mb-1">
-                  {data.web_device_name || data.web_device_id || <span className="text-slate-400 font-normal italic">No web browser bound</span>}
-                </p>
-                {data.web_device_id && (
-                  <p className="text-[11px] text-slate-400 font-mono truncate mb-2">{data.web_device_id}</p>
-                )}
-                <button 
-                  onClick={() => handleResetDevice("web")} 
-                  disabled={!data.web_device_id || actionLoading === "device-web"} 
-                  className="w-full h-8 flex items-center justify-center gap-2 text-[12px] font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-50 disabled:cursor-not-allowed rounded-md transition-colors"
-                >
-                  {actionLoading === "device-web" ? <Loader2 size={14} className="animate-spin" /> : "Reset Web Device Lock"}
-                </button>
-              </div>
+              )}
+            </div>
+
+            <div className="p-5 space-y-4">
+              {/* If Multi-Device is ON and there are logged_in_devices, list them! */}
+              {data.allow_multi_device ? (
+                <div>
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                      Active Logged-In Devices ({data.logged_in_devices?.length || (data.device_id || data.web_device_id ? 1 : 0)})
+                    </span>
+                    {(data.logged_in_devices?.length > 0 || data.device_id || data.web_device_id) && (
+                      <button
+                        onClick={() => handleResetDevice(null)}
+                        disabled={actionLoading === "device-all"}
+                        className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 cursor-pointer"
+                      >
+                        Reset All Devices
+                      </button>
+                    )}
+                  </div>
+
+                  {data.logged_in_devices && data.logged_in_devices.length > 0 ? (
+                    <div className="space-y-2">
+                      {data.logged_in_devices.map((dev, idx) => (
+                        <div
+                          key={dev.device_id || idx}
+                          className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 flex items-start justify-between gap-3"
+                        >
+                          <div className="flex items-start gap-2.5 min-w-0">
+                            <div className="mt-0.5 p-1.5 rounded-md bg-white border border-slate-200 text-slate-600 shrink-0">
+                              {dev.platform === "web" ? <Globe size={15} className="text-blue-600" /> : <Smartphone size={15} className="text-amber-600" />}
+                            </div>
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-semibold text-slate-800 text-[13px] truncate">
+                                  {dev.device_name || (dev.platform === "web" ? "Web Browser" : "Mobile App")}
+                                </span>
+                                <span className="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase bg-slate-200/70 text-slate-700">
+                                  {dev.platform || "app"}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-400 font-mono truncate select-all mt-0.5" title={dev.device_id}>
+                                ID: {dev.device_id}
+                              </p>
+                              {dev.logged_in_at && (
+                                <p className="text-[10px] text-slate-400 mt-0.5">
+                                  Logged in: {new Date(dev.logged_in_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleRemoveDevice(dev.device_id, dev.device_name)}
+                            disabled={actionLoading === `device-remove-${dev.device_id}`}
+                            className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer shrink-0"
+                            title="Revoke / Logout this device"
+                          >
+                            {actionLoading === `device-remove-${dev.device_id}` ? (
+                              <Loader2 size={14} className="animate-spin" />
+                            ) : (
+                              <Trash2 size={14} />
+                            )}
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (data.device_id || data.web_device_id) ? (
+                    <div className="space-y-2">
+                      {data.device_id && (
+                        <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Smartphone size={15} className="text-amber-600 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="font-semibold text-slate-800 text-[13px]">{data.device_name || "Mobile App"}</div>
+                              <p className="text-[11px] text-slate-400 font-mono truncate">{data.device_id}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleResetDevice("app")}
+                            disabled={actionLoading === "device-app"}
+                            className="text-xs font-semibold text-amber-700 hover:underline"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      )}
+                      {data.web_device_id && (
+                        <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <Globe size={15} className="text-blue-600 shrink-0" />
+                            <div className="min-w-0">
+                              <div className="font-semibold text-slate-800 text-[13px]">{data.web_device_name || "Web Browser"}</div>
+                              <p className="text-[11px] text-slate-400 font-mono truncate">{data.web_device_id}</p>
+                            </div>
+                          </div>
+                          <button
+                            onClick={() => handleResetDevice("web")}
+                            disabled={actionLoading === "device-web"}
+                            className="text-xs font-semibold text-amber-700 hover:underline"
+                          >
+                            Reset
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center text-slate-400 text-xs italic bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                      No devices logged in yet. Customer can log in from any phone or browser.
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* Single Device Mode (Standard) */
+                <div className="space-y-4">
+                  <div>
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      <span className="flex items-center gap-1.5">
+                        <Smartphone size={14} className="text-amber-600" /> App Device Lock
+                      </span>
+                      {data.device_id ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Locked
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500">
+                          Not Bound
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[13px] font-medium text-slate-800 mb-1">
+                      {data.device_name || data.device_id || <span className="text-slate-400 font-normal italic">No mobile app bound</span>}
+                    </p>
+                    {data.device_id && (
+                      <p className="text-[11px] text-slate-500 font-mono truncate mb-2 bg-slate-50 px-2 py-1 rounded border border-slate-200 select-all" title={data.device_id}>
+                        {data.device_id}
+                      </p>
+                    )}
+                    <button 
+                      onClick={() => handleResetDevice("app")} 
+                      disabled={!data.device_id || actionLoading === "device-app"} 
+                      className="w-full h-8 flex items-center justify-center gap-2 text-[12px] font-semibold text-amber-800 bg-amber-50 hover:bg-amber-100 border border-amber-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                    >
+                      {actionLoading === "device-app" ? <Loader2 size={14} className="animate-spin" /> : "Reset Mobile Device Lock"}
+                    </button>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                      <span className="flex items-center gap-1.5">
+                        <Globe size={14} className="text-blue-600" /> Web Browser Lock
+                      </span>
+                      {data.web_device_id ? (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          Locked
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-slate-500">
+                          Not Bound
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[13px] font-medium text-slate-800 mb-1">
+                      {data.web_device_name || data.web_device_id || <span className="text-slate-400 font-normal italic">No web browser bound</span>}
+                    </p>
+                    {data.web_device_id && (
+                      <p className="text-[11px] text-slate-500 font-mono truncate mb-2 bg-slate-50 px-2 py-1 rounded border border-slate-200 select-all" title={data.web_device_id}>
+                        {data.web_device_id}
+                      </p>
+                    )}
+                    <button 
+                      onClick={() => handleResetDevice("web")} 
+                      disabled={!data.web_device_id || actionLoading === "device-web"} 
+                      className="w-full h-8 flex items-center justify-center gap-2 text-[12px] font-semibold text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors cursor-pointer"
+                    >
+                      {actionLoading === "device-web" ? <Loader2 size={14} className="animate-spin" /> : "Reset Web Browser Lock"}
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -1341,6 +1647,7 @@ export function CustomerDetails() {
                           {sub.subcustomer_permissions?.allow_cart ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Cart: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Cart: No</span>}
                           {sub.subcustomer_permissions?.allow_order ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Order: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Order: No</span>}
                           {sub.subcustomer_permissions?.show_quantity ? <span className="px-2 py-1 bg-emerald-50 text-emerald-700 rounded-md text-[10px] font-semibold border border-emerald-100">Stock: Yes</span> : <span className="px-2 py-1 bg-rose-50 text-rose-700 rounded-md text-[10px] font-semibold border border-rose-100">Stock: No</span>}
+                          {sub.subcustomer_permissions?.allow_multi_device ? <span className="px-2 py-1 bg-purple-50 text-purple-700 rounded-md text-[10px] font-semibold border border-purple-100">Multi-Device: Yes</span> : null}
                         </div>
                       </td>
                       <td className="py-3 px-5 text-center"><StatusPill status={sub.is_active ? "active" : "frozen"} /></td>
@@ -1348,7 +1655,7 @@ export function CustomerDetails() {
                         <div className="flex items-center justify-end gap-2">
                           <button onClick={() => setSubDeviceModalSub(sub)} className="p-1.5 text-amber-600 hover:bg-amber-50 rounded transition-colors relative" title="Staff Device Lock & Security">
                             <MonitorSmartphone size={16} />
-                            {(sub.device_id || sub.web_device_id) && (
+                            {(sub.device_id || sub.web_device_id || (sub.logged_in_devices && sub.logged_in_devices.length > 0)) && (
                               <span className="absolute top-1 right-1 w-1.5 h-1.5 bg-amber-500 rounded-full" />
                             )}
                           </button>
@@ -1684,6 +1991,13 @@ export function CustomerDetails() {
                       <div className="text-[11px] text-slate-500 font-medium">Can view the live available stock quantities for products.</div>
                     </div>
                   </label>
+                  <label className="flex items-start gap-3 cursor-pointer p-3 border border-slate-100 rounded-lg hover:bg-slate-50 transition-colors">
+                    <input type="checkbox" checked={subForm.allow_multi_device || false} onChange={e=>setSubForm({...subForm, allow_multi_device: e.target.checked})} className="mt-0.5 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4" />
+                    <div>
+                      <div className="text-[13px] font-bold text-slate-800">Allow Multi-Device Login</div>
+                      <div className="text-[11px] text-slate-500 font-medium">Permit this staff member to log in from multiple smartphones simultaneously.</div>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -1890,128 +2204,279 @@ export function CustomerDetails() {
       )}
 
       {/* Sub-Customer Bound Devices & Reset Modal */}
-      {subDeviceModalSub && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md my-4 sm:my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
-            {/* Modal Header */}
-            <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-amber-50/70 via-slate-50 to-white flex justify-between items-center">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shadow-sm">
-                  <MonitorSmartphone size={18} />
-                </div>
-                <div>
-                  <h2 className="text-[15px] font-bold text-slate-900 leading-tight">Staff Device Security</h2>
-                  <p className="text-[12px] text-slate-500 font-medium">{subDeviceModalSub.name} ({subDeviceModalSub.phone})</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setSubDeviceModalSub(null)} 
-                className="text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 p-1.5 rounded-xl transition-colors"
-              >
-                <X size={16}/>
-              </button>
-            </div>
+      {subDeviceModalSub && (() => {
+        const isMulti = !!(subDeviceModalSub.allow_multi_device || subDeviceModalSub.subcustomer_permissions?.allow_multi_device);
+        const subId = subDeviceModalSub.id || subDeviceModalSub._id;
+        const loggedDevices = subDeviceModalSub.logged_in_devices || [];
 
-            {/* Modal Body */}
-            <div className="p-5 space-y-4">
-              {/* Mobile App Device Card */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-[12px] font-bold text-slate-700 uppercase tracking-wider">
-                    <Smartphone size={15} className="text-amber-600" /> Mobile App Device
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg my-4 sm:my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200 border border-slate-100">
+              {/* Modal Header */}
+              <div className="px-5 py-4 border-b border-slate-100 bg-gradient-to-r from-amber-50/70 via-slate-50 to-white flex justify-between items-center">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shadow-sm">
+                    <MonitorSmartphone size={18} />
                   </div>
-                  {subDeviceModalSub.device_id ? (
-                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-semibold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Bound
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full text-[10px] font-medium">
-                      Not Bound
-                    </span>
-                  )}
-                </div>
-                <div className="mb-3">
-                  <p className="text-[13px] font-semibold text-slate-800">
-                    {subDeviceModalSub.device_name || (subDeviceModalSub.device_id ? "Active Mobile App" : <span className="text-slate-400 font-normal italic">No mobile app bound</span>)}
-                  </p>
-                  {subDeviceModalSub.device_id && (
-                    <p className="text-[11px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200 mt-1 truncate select-all">
-                      {subDeviceModalSub.device_id}
-                    </p>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handleResetSubDevice(subDeviceModalSub.id, "app")}
-                  disabled={!subDeviceModalSub.device_id || actionLoading === "sub-device-app"}
-                  className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
-                >
-                  {actionLoading === "sub-device-app" ? <Loader2 size={13} className="animate-spin" /> : "Reset Mobile Device Lock"}
-                </button>
-              </div>
-
-              {/* Web Browser Device Card */}
-              <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition-colors">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2 text-[12px] font-bold text-slate-700 uppercase tracking-wider">
-                    <Globe size={15} className="text-blue-600" /> Web Browser Device
+                  <div>
+                    <h2 className="text-[15px] font-bold text-slate-900 leading-tight">Staff Device Security</h2>
+                    <p className="text-[12px] text-slate-500 font-medium">{subDeviceModalSub.name} ({subDeviceModalSub.phone})</p>
                   </div>
-                  {subDeviceModalSub.web_device_id ? (
-                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-semibold flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Bound
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full text-[10px] font-medium">
-                      Not Bound
-                    </span>
-                  )}
                 </div>
-                <div className="mb-3">
-                  <p className="text-[13px] font-semibold text-slate-800">
-                    {subDeviceModalSub.web_device_name || (subDeviceModalSub.web_device_id ? "Active Web Browser" : <span className="text-slate-400 font-normal italic">No web browser bound</span>)}
-                  </p>
-                  {subDeviceModalSub.web_device_id && (
-                    <p className="text-[11px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200 mt-1 truncate select-all">
-                      {subDeviceModalSub.web_device_id}
-                    </p>
+                <div className="flex items-center gap-2">
+                  {hasPermission("EDIT_CUSTOMER") && (
+                    <div className="flex items-center gap-2 mr-2">
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                        isMulti
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : "bg-slate-100 text-slate-600 border-slate-200"
+                      }`}>
+                        {isMulti ? "Multi-Device ON" : "1-Device Lock"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSubMultiDevice(subId, !isMulti)}
+                        disabled={actionLoading === "sub-toggle-multi-device"}
+                        className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer ${
+                          isMulti ? "bg-emerald-600" : "bg-slate-300"
+                        }`}
+                        title={isMulti ? "Disable Multi-Device" : "Enable Multi-Device"}
+                      >
+                        {actionLoading === "sub-toggle-multi-device" ? (
+                          <Loader2 size={10} className="animate-spin text-white mx-auto" />
+                        ) : (
+                          <span
+                            className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                              isMulti ? "translate-x-4" : "translate-x-1"
+                            }`}
+                          />
+                        )}
+                      </button>
+                    </div>
                   )}
+                  <button 
+                    onClick={() => setSubDeviceModalSub(null)} 
+                    className="text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 p-1.5 rounded-xl transition-colors"
+                  >
+                    <X size={16}/>
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleResetSubDevice(subDeviceModalSub.id, "web")}
-                  disabled={!subDeviceModalSub.web_device_id || actionLoading === "sub-device-web"}
-                  className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
-                >
-                  {actionLoading === "sub-device-web" ? <Loader2 size={13} className="animate-spin" /> : "Reset Web Browser Lock"}
-                </button>
               </div>
 
-              {/* Reset Both Shortcut */}
-              {(subDeviceModalSub.device_id || subDeviceModalSub.web_device_id) && (
+              {/* Modal Body */}
+              <div className="p-5 space-y-4">
+                {isMulti ? (
+                  <div>
+                    <div className="flex items-center justify-between mb-2.5">
+                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        Active Logged-In Devices ({loggedDevices.length || (subDeviceModalSub.device_id || subDeviceModalSub.web_device_id ? 1 : 0)})
+                      </span>
+                      {(loggedDevices.length > 0 || subDeviceModalSub.device_id || subDeviceModalSub.web_device_id) && (
+                        <button
+                          onClick={() => handleResetSubDevice(subId, null)}
+                          disabled={actionLoading === "sub-device-all"}
+                          className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 cursor-pointer"
+                        >
+                          Reset All Devices
+                        </button>
+                      )}
+                    </div>
+
+                    {loggedDevices.length > 0 ? (
+                      <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                        {loggedDevices.map((dev, idx) => (
+                          <div
+                            key={dev.device_id || idx}
+                            className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 flex items-start justify-between gap-3"
+                          >
+                            <div className="flex items-start gap-2.5 min-w-0">
+                              <div className="mt-0.5 p-1.5 rounded-md bg-white border border-slate-200 text-slate-600 shrink-0">
+                                {dev.platform === "web" ? <Globe size={15} className="text-blue-600" /> : <Smartphone size={15} className="text-amber-600" />}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-semibold text-slate-800 text-[13px] truncate">
+                                    {dev.device_name || (dev.platform === "web" ? "Web Browser" : "Mobile App")}
+                                  </span>
+                                  <span className="px-1.5 py-0.2 rounded text-[10px] font-bold uppercase bg-slate-200/70 text-slate-700">
+                                    {dev.platform || "app"}
+                                  </span>
+                                </div>
+                                <p className="text-[11px] text-slate-400 font-mono truncate select-all mt-0.5" title={dev.device_id}>
+                                  ID: {dev.device_id}
+                                </p>
+                                {dev.logged_in_at && (
+                                  <p className="text-[10px] text-slate-400 mt-0.5">
+                                    Logged in: {new Date(dev.logged_in_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleResetSubDevice(subId, null, dev.device_id)}
+                              disabled={actionLoading === `sub-device-${dev.device_id}`}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer shrink-0"
+                              title="Revoke / Logout this device"
+                            >
+                              {actionLoading === `sub-device-${dev.device_id}` ? (
+                                <Loader2 size={14} className="animate-spin" />
+                              ) : (
+                                <Trash2 size={14} />
+                              )}
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (subDeviceModalSub.device_id || subDeviceModalSub.web_device_id) ? (
+                      <div className="space-y-2">
+                        {subDeviceModalSub.device_id && (
+                          <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Smartphone size={15} className="text-amber-600 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-[12px] font-semibold text-slate-800 truncate">{subDeviceModalSub.device_name || "Mobile App"}</p>
+                                <p className="text-[11px] text-slate-400 font-mono truncate select-all">ID: {subDeviceModalSub.device_id}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleResetSubDevice(subId, "app")}
+                              disabled={actionLoading === "sub-device-app"}
+                              className="text-[11px] font-semibold text-amber-700 hover:text-amber-900 cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        )}
+                        {subDeviceModalSub.web_device_id && (
+                          <div className="p-3 rounded-lg border border-slate-200 bg-slate-50/50 flex items-center justify-between">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <Globe size={15} className="text-blue-600 shrink-0" />
+                              <div className="min-w-0">
+                                <p className="text-[12px] font-semibold text-slate-800 truncate">{subDeviceModalSub.web_device_name || "Web Browser"}</p>
+                                <p className="text-[11px] text-slate-400 font-mono truncate select-all">ID: {subDeviceModalSub.web_device_id}</p>
+                              </div>
+                            </div>
+                            <button
+                              onClick={() => handleResetSubDevice(subId, "web")}
+                              disabled={actionLoading === "sub-device-web"}
+                              className="text-[11px] font-semibold text-blue-700 hover:text-blue-900 cursor-pointer"
+                            >
+                              Reset
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-4 rounded-xl border border-dashed border-slate-200 bg-slate-50 text-center">
+                        <Smartphone size={22} className="mx-auto text-slate-400 mb-1" />
+                        <p className="text-[12px] text-slate-600 font-medium">No active devices currently logged in under this staff account.</p>
+                        <p className="text-[11px] text-slate-400 mt-0.5">Multi-device login is enabled. Any phone or browser logging in will be listed here.</p>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <>
+                    {/* Mobile App Device Card */}
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition-colors">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+                          <Smartphone size={15} className="text-amber-600" /> Mobile App Device
+                        </div>
+                        {subDeviceModalSub.device_id ? (
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-semibold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Bound
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full text-[10px] font-medium">
+                            Not Bound
+                          </span>
+                        )}
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-[13px] font-semibold text-slate-800">
+                          {subDeviceModalSub.device_name || (subDeviceModalSub.device_id ? "Active Mobile App" : <span className="text-slate-400 font-normal italic">No mobile app bound</span>)}
+                        </p>
+                        {subDeviceModalSub.device_id && (
+                          <p className="text-[11px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200 mt-1 truncate select-all">
+                            {subDeviceModalSub.device_id}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleResetSubDevice(subId, "app")}
+                        disabled={!subDeviceModalSub.device_id || actionLoading === "sub-device-app"}
+                        className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-amber-700 bg-amber-100 hover:bg-amber-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+                      >
+                        {actionLoading === "sub-device-app" ? <Loader2 size={13} className="animate-spin" /> : "Reset Mobile Device Lock"}
+                      </button>
+                    </div>
+
+                    {/* Web Browser Device Card */}
+                    <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/50 hover:bg-white transition-colors">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-[12px] font-bold text-slate-700 uppercase tracking-wider">
+                          <Globe size={15} className="text-blue-600" /> Web Browser Device
+                        </div>
+                        {subDeviceModalSub.web_device_id ? (
+                          <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded-full text-[10px] font-semibold flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> Bound
+                          </span>
+                        ) : (
+                          <span className="px-2 py-0.5 bg-slate-100 text-slate-500 border border-slate-200 rounded-full text-[10px] font-medium">
+                            Not Bound
+                          </span>
+                        )}
+                      </div>
+                      <div className="mb-3">
+                        <p className="text-[13px] font-semibold text-slate-800">
+                          {subDeviceModalSub.web_device_name || (subDeviceModalSub.web_device_id ? "Active Web Browser" : <span className="text-slate-400 font-normal italic">No web browser bound</span>)}
+                        </p>
+                        {subDeviceModalSub.web_device_id && (
+                          <p className="text-[11px] text-slate-500 font-mono bg-white px-2 py-1 rounded border border-slate-200 mt-1 truncate select-all">
+                            {subDeviceModalSub.web_device_id}
+                          </p>
+                        )}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleResetSubDevice(subId, "web")}
+                        disabled={!subDeviceModalSub.web_device_id || actionLoading === "sub-device-web"}
+                        className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg transition-colors"
+                      >
+                        {actionLoading === "sub-device-web" ? <Loader2 size={13} className="animate-spin" /> : "Reset Web Browser Lock"}
+                      </button>
+                    </div>
+
+                    {/* Reset Both Shortcut */}
+                    {(subDeviceModalSub.device_id || subDeviceModalSub.web_device_id) && (
+                      <button
+                        type="button"
+                        onClick={() => handleResetSubDevice(subId, null)}
+                        disabled={actionLoading === "sub-device-all"}
+                        className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-medium text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors"
+                      >
+                        {actionLoading === "sub-device-all" ? <Loader2 size={13} className="animate-spin" /> : "Reset All Devices (Both App & Web)"}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Modal Footer */}
+              <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
                 <button
                   type="button"
-                  onClick={() => handleResetSubDevice(subDeviceModalSub.id, null)}
-                  disabled={actionLoading === "sub-device-all"}
-                  className="w-full h-8 flex items-center justify-center gap-1.5 text-[12px] font-medium text-rose-700 hover:bg-rose-50 border border-rose-200 rounded-lg transition-colors"
+                  onClick={() => setSubDeviceModalSub(null)}
+                  className="h-8 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors"
                 >
-                  {actionLoading === "sub-device-all" ? <Loader2 size={13} className="animate-spin" /> : "Reset All Devices (Both App & Web)"}
+                  Close
                 </button>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-5 py-3 border-t border-slate-100 bg-slate-50 flex justify-end">
-              <button
-                type="button"
-                onClick={() => setSubDeviceModalSub(null)}
-                className="h-8 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Close
-              </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {confirmDialog}
     </div>

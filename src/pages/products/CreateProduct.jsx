@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import {
   ArrowLeft,
   ArrowRight,
@@ -34,6 +34,7 @@ import "@/styles/veriwide.css";
 
 export function CreateProduct() {
   const navigate = useNavigate();
+  const routeSearch = useSearch({ strict: false });
   const [currentStep, setCurrentStep] = useState(1); // 1 = Details & Range, 2 = Full-Page Matrix Chart
   const [brands, setBrands] = useState([]);
   const [racks, setRacks] = useState([]);
@@ -41,7 +42,7 @@ export function CreateProduct() {
   const [isSaving, setIsSaving] = useState(false);
 
   const [productData, setProductData] = useState({
-    brand: "",
+    brand: routeSearch?.brand || "",
     index: 1.56,
     base: "Hard Coat (HC)",
     coating: "Standard",
@@ -123,7 +124,9 @@ export function CreateProduct() {
       const res = await brandApi.getBrands();
       if (res.error === false) {
         setBrands(res.data);
-        if (res.data.length > 0 && !productData.brand) {
+        if (routeSearch?.brand) {
+          setProductData((prev) => ({ ...prev, brand: routeSearch.brand }));
+        } else if (res.data.length > 0 && !productData.brand) {
           setProductData((prev) => ({ ...prev, brand: res.data[0].name }));
         }
       }
@@ -415,7 +418,8 @@ export function CreateProduct() {
         notify.success(`Product (${prodRes.data?.product_code || sku}) and Power Matrix saved successfully!`);
       }
 
-      navigate({ to: "/products" });
+      const targetBrand = productData.brand || routeSearch?.brand;
+      navigate({ to: "/products", search: targetBrand ? { brand: targetBrand } : {} });
     } catch (error) {
       console.error(error);
       notify.error(error.message || "An error occurred while saving product and matrix.");
@@ -430,8 +434,9 @@ export function CreateProduct() {
         <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
           <Link
             to="/products"
+            search={routeSearch?.brand ? { brand: routeSearch.brand } : {}}
             className="p-2 sm:p-2.5 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors text-slate-600 shrink-0 cursor-pointer shadow-xs flex items-center justify-center"
-            title="Back to Catalog"
+            title={routeSearch?.brand ? `Back to ${routeSearch.brand}` : "Back to Catalog"}
           >
             <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
           </Link>

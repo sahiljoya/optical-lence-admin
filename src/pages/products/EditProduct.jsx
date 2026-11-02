@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { Link, useParams, useNavigate } from "@tanstack/react-router";
+import { Link, useParams, useNavigate, useSearch } from "@tanstack/react-router";
 import { ArrowLeft, Save, Settings2, Plus, Tag } from "lucide-react";
 import { brandApi, productApi, warehouseApi } from "../../services/productApi";
 import { notify } from "@/lib/notify";
@@ -12,6 +12,7 @@ import "@/styles/veriwide.css";
 export function EditProduct() {
   const { id } = useParams({ strict: false });
   const navigate = useNavigate();
+  const routeSearch = useSearch({ strict: false });
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -163,6 +164,8 @@ export function EditProduct() {
         notify.error(pRes.message || "Failed to update product");
       } else {
         notify.success("Product details updated.");
+        const targetBrand = productData.brand || routeSearch?.brand;
+        navigate({ to: "/products", search: targetBrand ? { brand: targetBrand } : {} });
       }
     } catch (error) {
       notify.error("An error occurred while saving.");
@@ -170,6 +173,8 @@ export function EditProduct() {
     }
     setIsSaving(false);
   };
+
+  const brandParam = routeSearch?.brand || productData?.brand;
 
   if (isLoading) {
     return (
@@ -186,8 +191,9 @@ export function EditProduct() {
         <div className="flex items-center gap-2.5 sm:gap-3">
           <Link
             to="/products"
+            search={brandParam ? { brand: brandParam } : {}}
             className="w-8 h-8 sm:w-9 sm:h-9 rounded-xl flex items-center justify-center border border-slate-200 bg-white hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition-colors shadow-xs cursor-pointer shrink-0"
-            title="Back to Products"
+            title={brandParam ? `Back to ${brandParam}` : "Back to Products"}
           >
             <ArrowLeft size={16} />
           </Link>
@@ -490,21 +496,18 @@ export function EditProduct() {
               </div>
               <div>
                 <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5 flex items-center justify-between">
-                  Grade — Quantity/Volume <DeptBadge dept="sales" />
+                  Grade — Velocity / Volume <DeptBadge dept="sales" />
                 </label>
-                <select
-                  value={productData.grade_quantity}
-                  onChange={(e) =>
-                    setProductData({ ...productData, grade_quantity: e.target.value })
-                  }
-                  className="w-full h-9 sm:h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
-                >
-                  <option value="">-- Not graded --</option>
-                  <option value="A">A — Super Fast</option>
-                  <option value="B">B</option>
-                  <option value="C">C</option>
-                  <option value="D">D — Dead Stock</option>
-                </select>
+                <div className="w-full h-9 sm:h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-700 flex items-center justify-between shadow-xs" title="Auto-computed based on 70/90 days order activity">
+                  <span className="font-semibold text-slate-800">
+                    {productData.grade_quantity === "A" ? "A — Super Fast" :
+                     productData.grade_quantity === "B" ? "B — Normal" :
+                     productData.grade_quantity === "C" ? "C — Slow Moving (70-90d)" :
+                     productData.grade_quantity === "D" ? "D — Dead Stock (>90d)" :
+                     "Auto (Sales Activity)"}
+                  </span>
+                  <span className="text-[10px] bg-blue-100 text-blue-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Auto-Computed</span>
+                </div>
               </div>
               <div>
                 <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5 flex items-center justify-between">
