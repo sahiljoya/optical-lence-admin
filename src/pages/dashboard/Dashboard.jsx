@@ -11,6 +11,7 @@ import { dashboardService } from "@/services/dashboardService";
 import { orderApi } from "@/services/orderApi";
 import { customerService } from "@/services/customerService";
 import { billingService } from "@/services/billingService";
+import { hasPermission } from "@/lib/permissions";
 
 const ICONS = { BarChart3, Package, Tag, Truck, Trophy, Wallet, CheckCircle2 };
 
@@ -380,27 +381,29 @@ export function Dashboard() {
           <Link to="/dispatch" className="w-full mt-3 sm:mt-4 text-[10px] sm:text-xs md:text-[13px] font-semibold text-blue-600 hover:bg-blue-50 py-1.5 sm:py-2 rounded-lg transition-colors block text-center border border-blue-100/50">View All Pending Orders</Link>
         </div>
 
-        {/* 2. Pending Customers */}
-        <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
-          <div>
-            <CardHead icon={<Users size={15} className="sm:w-4 sm:h-4" />} title="Pending Approvals" note="Needs KYC" />
-            <div className="space-y-2 sm:space-y-2.5 mt-2 sm:mt-3">
-              {!loading && pendingApprovals.length === 0 && (
-                <div className="text-[11px] sm:text-xs text-slate-400 text-center py-5 sm:py-6">No pending approvals</div>
-              )}
-              {pendingApprovals.map(cust => (
-                <div key={cust.id} className="flex items-center justify-between p-2 sm:p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
-                  <div className="min-w-0 pr-2">
-                    <div className="font-semibold text-[11px] sm:text-xs md:text-[13px] text-slate-800 truncate">{cust.shop}</div>
-                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mt-0.5 truncate">{cust.id} • {cust.city}</div>
+        {/* 2. Pending Customers (Only for Owner & Accounts with APPROVE_CUSTOMER) */}
+        {hasPermission("APPROVE_CUSTOMER") && (
+          <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
+            <div>
+              <CardHead icon={<Users size={15} className="sm:w-4 sm:h-4" />} title="Pending Approvals" note="Needs KYC" />
+              <div className="space-y-2 sm:space-y-2.5 mt-2 sm:mt-3">
+                {!loading && pendingApprovals.length === 0 && (
+                  <div className="text-[11px] sm:text-xs text-slate-400 text-center py-5 sm:py-6">No pending approvals</div>
+                )}
+                {pendingApprovals.map(cust => (
+                  <div key={cust.id} className="flex items-center justify-between p-2 sm:p-3 rounded-lg border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors">
+                    <div className="min-w-0 pr-2">
+                      <div className="font-semibold text-[11px] sm:text-xs md:text-[13px] text-slate-800 truncate">{cust.shop}</div>
+                      <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mt-0.5 truncate">{cust.id} • {cust.city}</div>
+                    </div>
+                    <div className="text-[8px] sm:text-[9px] md:text-[10px] font-bold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 bg-amber-100 text-amber-700 rounded border border-amber-200 shrink-0">Pending</div>
                   </div>
-                  <div className="text-[8px] sm:text-[9px] md:text-[10px] font-bold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 bg-amber-100 text-amber-700 rounded border border-amber-200 shrink-0">Pending</div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
+            <Link to="/pending-accounts" className="w-full mt-3 sm:mt-4 text-[10px] sm:text-xs md:text-[13px] font-semibold text-blue-600 hover:bg-blue-50 py-1.5 sm:py-2 rounded-lg transition-colors block text-center border border-blue-100/50">Review Pending Accounts</Link>
           </div>
-          <Link to="/pending-accounts" className="w-full mt-3 sm:mt-4 text-[10px] sm:text-xs md:text-[13px] font-semibold text-blue-600 hover:bg-blue-50 py-1.5 sm:py-2 rounded-lg transition-colors block text-center border border-blue-100/50">Review Pending Accounts</Link>
-        </div>
+        )}
 
         {/* 3. Pending & Overdue (Monthly Data) */}
         <div className="vw-card p-3.5 sm:p-5 md:col-span-2 xl:col-span-1 flex flex-col justify-between">

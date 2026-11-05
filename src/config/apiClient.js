@@ -171,3 +171,48 @@ export const uploadImageApi = async (file) => {
     throw new Error(message);
   }
 };
+
+export const downloadFileAuth = async (url, defaultFilename = "download.xlsx") => {
+  try {
+    const token = getItem("admin_token");
+    if (!token) throw new Error("Token not found. Please login again.");
+
+    const response = await axios({
+      method: "get",
+      url: `${BACKEND_URL}${url}`,
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      responseType: "blob",
+    });
+
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const downloadUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = downloadUrl;
+
+    let filename = defaultFilename;
+    const disposition = response.headers["content-disposition"];
+    if (disposition && disposition.indexOf("filename=") !== -1) {
+      const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+      const matches = filenameRegex.exec(disposition);
+      if (matches != null && matches[1]) {
+        filename = matches[1].replace(/['"]/g, "");
+      }
+    }
+    link.setAttribute("download", filename);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(downloadUrl);
+  } catch (error) {
+    const message =
+      error.response?.data?.message ||
+      error.response?.data?.error ||
+      error.message ||
+      "File download failed";
+    throw new Error(message);
+  }
+};

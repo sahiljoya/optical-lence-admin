@@ -13,6 +13,7 @@ import { userService } from "@/services/userService";
 import { StatusPill } from "@/components/common/StatusPill";
 import { notify } from "@/lib/notify";
 import { hasPermission } from "@/lib/permissions";
+import { getItem } from "@/services/storage";
 import { useConfirm } from "@/hooks/useConfirm";
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -30,12 +31,19 @@ const ACCOUNT_STATUS_STYLES = {
 
 const REQUEST_STATUS_STYLES = {
   PENDING: "bg-amber-50 text-amber-700 border-amber-200",
+  PENDING_OWNER: "bg-blue-50 text-blue-700 border-blue-200",
   APPROVED: "bg-emerald-50 text-emerald-700 border-emerald-200",
   REJECTED: "bg-rose-50 text-rose-700 border-rose-200",
 };
 
 export function CustomerDetails() {
   const { id } = useParams({ strict: false });
+  const adminUser = getItem("admin_user");
+  const userRole = adminUser?.role?.name?.toLowerCase() || "";
+  const isOwner = userRole === "admin";
+  const isAccounts = userRole === "accounts";
+  const isSales = userRole === "sales";
+
   const [data, setData] = useState(null);
   const [allCustomers, setAllCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -101,8 +109,10 @@ export function CustomerDetails() {
   // Negotiated Pricing Section state (Floor-protected)
   const [negotiatedPrices, setNegotiatedPrices] = useState([]);
   const [productsList, setProductsList] = useState([]);
+  const [selectedBrand, setSelectedBrand] = useState("all");
   const [selectedProductId, setSelectedProductId] = useState("");
   const [customPriceInput, setCustomPriceInput] = useState("");
+  const [customPriceNote, setCustomPriceNote] = useState("");
   const [priceSaving, setPriceSaving] = useState(false);
 
   // Credit Limit Request History state
@@ -621,6 +631,11 @@ export function CustomerDetails() {
   };
 
   // Negotiated Price Handlers (Floor Protected)
+  const availableBrands = Array.from(new Set(productsList.map(p => p.brand).filter(Boolean))).sort();
+  const filteredProducts = selectedBrand === "all" 
+    ? productsList 
+    : productsList.filter(p => p.brand === selectedBrand);
+
   const selectedProduct = productsList.find(p => p._id === selectedProductId);
   const selectedProdTierPrice = selectedProduct?.tier_prices?.[data?.pricing_tier || "stock_a"] ?? "-";
   const selectedFloorPrice = selectedProduct?.min_selling_price ?? null;
@@ -637,18 +652,42 @@ export function CustomerDetails() {
 
     setPriceSaving(true);
     try {
-      const res = await customerService.setNegotiatedPrice(id, selectedProductId, Number(customPriceInput));
-      if (res.error === false) {
-        notify.success("Special negotiated price set successfully!");
-        setSelectedProductId("");
-        setCustomPriceInput("");
-        const negRes = await customerService.getCustomerNegotiatedPrices(id);
-        setNegotiatedPrices(negRes.data || []);
+      if (isSales || isAccounts) {
+        const res = await customerService.createDiscountRequest({
+          customerId: id,
+          productId: selectedProductId,
+          requestedPrice: Number(customPriceInput),
+          reason: customPriceNote || (isAccounts ? "Initiated by Accounts team for Owner approval" : "")
+        });
+        if (res.error === false) {
+          notify.success(
+            isAccounts
+              ? "Special price submitted for Owner approval (Awaiting Owner Sign-Off)!"
+              : "Discount approval request submitted successfully to Accounts Team & Owner!"
+          );
+          setSelectedProductId("");
+          setCustomPriceInput("");
+          setCustomPriceNote("");
+          await fetchData();
+        } else {
+          notify.error(res.message || "Failed to submit discount request.");
+        }
       } else {
-        notify.error(res.message || "Failed to set negotiated price.");
+        const res = await customerService.setNegotiatedPrice(id, selectedProductId, Number(customPriceInput));
+        if (res.error === false) {
+          notify.success("Special negotiated price set successfully!");
+          setSelectedProductId("");
+          setCustomPriceInput("");
+          setCustomPriceNote("");
+          const negRes = await customerService.getCustomerNegotiatedPrices(id);
+          setNegotiatedPrices(negRes.data || []);
+          await fetchData();
+        } else {
+          notify.error(res.message || "Failed to set negotiated price.");
+        }
       }
     } catch (err) {
-      notify.error(err.message || "Error saving negotiated price.");
+      notify.error(err.message || "Error saving special price.");
     } finally {
       setPriceSaving(false);
     }
@@ -1354,7 +1393,11 @@ export function CustomerDetails() {
                     <Tag size={16} className="text-blue-600"/> Special Negotiated Pricing (Sub-List)
                   </h3>
                   <p className="text-[12px] text-slate-500 mt-0.5">
-                    Pinned custom lens rates for this retailer. Rates cannot be lower than the product floor price.
+                    {isOwner 
+                      ? "Directly set custom lens rates for this retailer. Rates cannot be lower than the product floor price."
+                      : isAccounts 
+                      ? "Submit custom lens rates for Owner approval. Rates cannot be lower than the product floor price."
+                      : "Request custom lens rates with commitment note for Accounts/Owner approval."}
                   </p>
                 </div>
               </div>
@@ -1363,15 +1406,34 @@ export function CustomerDetails() {
             {/* Set New Negotiated Price Form */}
             <form onSubmit={handleSaveNegotiatedPrice} className="p-5 border-b border-slate-100 bg-blue-50/20">
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                <div className="sm:col-span-6">
-                  <label className="block text-[12px] font-semibold text-slate-700 mb-1">Select Product</label>
+                <div className="sm:col-span-3">
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-1">Filter Brand</label>
+                  <select 
+                    value={selectedBrand} 
+                    onChange={e => {
+                      setSelectedBrand(e.target.value);
+                      setSelectedProductId("");
+                    }}
+                    className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="all">All Brands ({productsList.length})</option>
+                    {availableBrands.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="sm:col-span-4">
+                  <label className="block text-[12px] font-semibold text-slate-700 mb-1">
+                    Select Product Variant <span className="text-slate-400 font-normal">({filteredProducts.length})</span>
+                  </label>
                   <select 
                     value={selectedProductId} 
                     onChange={e => setSelectedProductId(e.target.value)}
                     className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none focus:border-blue-500"
                   >
-                    <option value="">-- Choose a Lens Product --</option>
-                    {productsList.map(p => (
+                    <option value="">-- Choose Lens Variant --</option>
+                    {filteredProducts.map(p => (
                       <option key={p._id} value={p._id}>
                         {[p.brand, p.index, p.base, p.coating].filter(Boolean).join(" ")} ({p.product_code || "SKU"})
                       </option>
@@ -1379,7 +1441,7 @@ export function CustomerDetails() {
                   </select>
                 </div>
 
-                <div className="sm:col-span-3">
+                <div className="sm:col-span-2">
                   <label className="block text-[12px] font-semibold text-slate-700 mb-1">Special Rate (₹)</label>
                   <input 
                     type="number" 
@@ -1395,11 +1457,38 @@ export function CustomerDetails() {
                   <button 
                     type="submit" 
                     disabled={priceSaving || !selectedProductId || !customPriceInput || isBelowFloor}
-                    className="w-full h-[38px] flex items-center justify-center gap-1.5 text-[12px] font-semibold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg shadow-sm transition-colors"
+                    className={`w-full h-[38px] flex items-center justify-center gap-1.5 text-[12px] font-semibold text-white rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                      isOwner 
+                        ? 'bg-emerald-600 hover:bg-emerald-700' 
+                        : isAccounts 
+                        ? 'bg-blue-600 hover:bg-blue-700' 
+                        : 'bg-indigo-600 hover:bg-indigo-700'
+                    }`}
                   >
-                    {priceSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Set Special Rate
+                    {priceSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
+                    {isOwner ? "Set Special Rate (Direct)" : isAccounts ? "Submit for Owner Approval" : "Request Special Discount"}
                   </button>
                 </div>
+              </div>
+
+              {/* Note / Commitment Reason */}
+              <div className="mt-3">
+                <label className="block text-[12px] font-semibold text-slate-700 mb-1">
+                  Reason / Commitment Note {isOwner ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-amber-600 font-medium">(Required for approval review)</span>}
+                </label>
+                <input 
+                  type="text" 
+                  placeholder={
+                    isOwner
+                      ? "Optional internal note for this negotiated rate"
+                      : isAccounts
+                      ? "Reason for special rate (e.g., Accounts review agreement, awaiting Owner approval)"
+                      : "Reason / volume commitment (e.g., Client committed to 100 pairs/month, competitor price match)"
+                  }
+                  value={customPriceNote} 
+                  onChange={e => setCustomPriceNote(e.target.value)}
+                  className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none focus:border-blue-500"
+                />
               </div>
 
               {/* Selected Product Floor Price & Tier Price Info Box */}
@@ -1543,22 +1632,34 @@ export function CustomerDetails() {
               <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2">
                 <History size={16} className="text-indigo-600"/> Special Discount Request History
               </h3>
-              <p className="text-[12px] text-slate-500 mt-0.5">Discount requests raised by sales staff for specific products (floor-price protected).</p>
+              <p className="text-[12px] text-slate-500 mt-0.5">
+                Special product rate requests submitted by Sales & Accounts teams (Floor-price protected).
+              </p>
             </div>
             <div className="overflow-x-auto w-full">
-              <table className="w-full text-left text-[13px] min-w-[640px]">
+              <table className="w-full text-left text-[13px] min-w-[720px]">
                 <thead className="bg-slate-50 border-b border-border text-[11px] uppercase tracking-wider text-slate-500">
                   <tr>
                     <th className="py-2.5 px-4 sm:px-5 font-semibold">Product</th>
-                    <th className="py-2.5 px-3 sm:px-4 font-semibold">Salesperson</th>
+                    <th className="py-2.5 px-3 sm:px-4 font-semibold">Requested By</th>
+                    <th className="py-2.5 px-3 sm:px-4 font-semibold">Reason / Note</th>
                     <th className="py-2.5 px-3 sm:px-4 font-semibold text-right">Standard → Requested</th>
                     <th className="py-2.5 px-3 sm:px-4 font-semibold text-center">Status</th>
-                    <th className="py-2.5 px-3 sm:px-4 font-semibold text-right w-36">Action</th>
+                    <th className="py-2.5 px-3 sm:px-4 font-semibold text-right w-40">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {discountRequests.length > 0 ? discountRequests.map(req => {
                     const prod = req.product_id || {};
+                    const requesterName = req.requested_by?.name || req.salesperson_id?.name || "Staff";
+                    const isAccountsReq = req.requested_by_role === "accounts";
+                    
+                    // Approval authorization:
+                    // - PENDING (sales initiated): Both Accounts & Owner can approve
+                    // - PENDING_OWNER (accounts initiated): ONLY Owner can approve
+                    const canApprove = (req.status === "PENDING" && hasPermission("APPROVE_DISCOUNT")) ||
+                                       (req.status === "PENDING_OWNER" && isOwner);
+
                     return (
                       <tr key={req._id} className="hover:bg-slate-50/50 transition-colors">
                         <td className="py-3 px-4 sm:px-5">
@@ -1566,8 +1667,22 @@ export function CustomerDetails() {
                           <div className="text-[11px] text-slate-400 font-mono">{prod.product_code || "-"}</div>
                         </td>
                         <td className="py-3 px-3 sm:px-4">
-                          <div className="text-slate-700">{req.salesperson_id?.name || "—"}</div>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-slate-800">{requesterName}</span>
+                            <span className={`text-[10px] font-semibold px-1.5 py-0.2 rounded border ${
+                              isAccountsReq 
+                                ? 'bg-purple-50 text-purple-700 border-purple-200' 
+                                : 'bg-sky-50 text-sky-700 border-sky-200'
+                            }`}>
+                              {isAccountsReq ? "Accounts" : "Sales"}
+                            </span>
+                          </div>
                           <div className="text-[11px] text-slate-400">{new Date(req.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })}</div>
+                        </td>
+                        <td className="py-3 px-3 sm:px-4 max-w-[200px]">
+                          <p className="text-[12px] text-slate-600 truncate" title={req.reason || ""}>
+                            {req.reason || <span className="text-slate-400 italic">No note</span>}
+                          </p>
                         </td>
                         <td className="py-3 px-3 sm:px-4 text-right">
                           <span className="text-slate-500">₹{req.standard_tier_price}</span>
@@ -1575,12 +1690,12 @@ export function CustomerDetails() {
                           <span className="font-bold text-indigo-600">₹{req.requested_price}</span>
                         </td>
                         <td className="py-3 px-3 sm:px-4 text-center">
-                          <span className={`inline-block px-2 py-1 rounded text-[10px] font-bold uppercase border ${REQUEST_STATUS_STYLES[req.status] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
-                            {req.status}
+                          <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase border ${REQUEST_STATUS_STYLES[req.status] || "bg-slate-50 text-slate-600 border-slate-200"}`}>
+                            {req.status === "PENDING_OWNER" ? "Awaiting Owner" : req.status}
                           </span>
                         </td>
                         <td className="py-3 px-3 sm:px-4 text-right">
-                          {req.status === "PENDING" && hasPermission("APPROVE_DISCOUNT") ? (
+                          {canApprove ? (
                             <div className="flex items-center justify-end gap-1.5">
                               <button onClick={() => handleApproveDiscountRequest(req)} className="px-2.5 py-1 text-[11px] font-semibold rounded bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100 transition-colors flex items-center gap-1">
                                 <CheckCircle2 size={12}/> Approve
@@ -1589,15 +1704,21 @@ export function CustomerDetails() {
                                 <XCircle size={12}/> Reject
                               </button>
                             </div>
+                          ) : req.status === "PENDING_OWNER" && isAccounts ? (
+                            <span className="text-[11px] font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              Awaiting Owner Sign-Off
+                            </span>
                           ) : req.status === "APPROVED" ? (
                             <span className="text-[11px] text-slate-400">by {req.action_by?.name || "—"}</span>
+                          ) : req.status === "REJECTED" ? (
+                            <span className="text-[11px] text-rose-500">Rejected by {req.action_by?.name || "—"}</span>
                           ) : null}
                         </td>
                       </tr>
                     );
                   }) : (
                     <tr>
-                      <td colSpan={5} className="py-8 text-center text-slate-500 text-[13px]">No discount requests raised for this customer yet.</td>
+                      <td colSpan={6} className="py-8 text-center text-slate-500 text-[13px]">No discount requests raised for this customer yet.</td>
                     </tr>
                   )}
                 </tbody>

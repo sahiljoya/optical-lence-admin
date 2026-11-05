@@ -1,12 +1,20 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, Link as LinkIcon, UserPlus, FileText, Loader2 } from "lucide-react";
 import { customerService } from "@/services/customerService";
 import { notify } from "@/lib/notify";
+import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
 export function CustomerOnboard() {
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!hasPermission("CREATE_CUSTOMER")) {
+      notify.error("Access denied. Only Owner, Accounts, and Sales team can onboard customers.");
+      navigate({ to: "/customers" });
+    }
+  }, []);
   const [activeTab, setActiveTab] = useState("direct"); // "direct" | "invite"
   const [inviteLink, setInviteLink] = useState("");
   const [isPending, setIsPending] = useState(false);

@@ -1,4 +1,4 @@
-import { makeRequestAuth, uploadImageApi } from "@/config/apiClient";
+import { makeRequestAuth, uploadImageApi, downloadFileAuth } from "@/config/apiClient";
 
 export const brandApi = {
   getBrands: () => makeRequestAuth("get", "/admin/brand/list"),
@@ -16,6 +16,10 @@ export const productApi = {
   getProductDetail: (id) => makeRequestAuth("get", `/admin/product/detail/${id}`),
   getAgingStock: (params) => makeRequestAuth("get", "/admin/product/aging-stock", null, { params }),
   setClearanceAction: (id, data) => makeRequestAuth("post", `/admin/product/${id}/clearance-action`, data),
+  bulkExcelUpload: (formData) => makeRequestAuth("post", "/admin/product/bulk-excel-upload", formData, true),
+  downloadMasterExcelTemplate: () => downloadFileAuth("/admin/product/bulk-excel-template", "product_master_template.xlsx"),
+  downloadMatrixExcelTemplate: (productId, filename) => downloadFileAuth(`/admin/product/${productId}/matrix-excel-template`, filename || "stock_template.xlsx"),
+  uploadMatrixExcel: (productId, formData) => makeRequestAuth("post", `/admin/product/${productId}/matrix-excel-upload`, formData, true),
 };
 
 export const warehouseApi = {

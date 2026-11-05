@@ -6,6 +6,7 @@ import { StatusPill } from "@/components/common/StatusPill";
 import { CustomerActions } from "./components/CustomerActions";
 import { customerService } from "@/services/customerService";
 import { notify } from "@/lib/notify";
+import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
 export function Customers() {
@@ -228,17 +229,21 @@ export function Customers() {
           </div>
 
           <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-2 w-full lg:w-auto justify-start sm:justify-end">
-            {reviewCount > 0 && (
+            {reviewCount > 0 && hasPermission("APPROVE_CUSTOMER") && (
               <Link to="/review-queue" className="flex items-center justify-center gap-1 vw-btn-secondary h-7 sm:h-8 md:h-9 px-2 sm:px-3 text-[10px] sm:text-xs md:text-[13px] font-semibold border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 transition-colors rounded-lg">
                 <AlertCircle size={12} className="shrink-0 sm:w-3.5 sm:h-3.5" /> <span className="truncate">Review ({reviewCount})</span>
               </Link>
             )}
-            <Link to="/pending-accounts" className="flex items-center justify-center gap-1 vw-btn-secondary h-7 sm:h-8 md:h-9 px-2 sm:px-3 text-[10px] sm:text-xs md:text-[13px] font-semibold border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors rounded-lg">
-              <Clock size={12} className="shrink-0 sm:w-3.5 sm:h-3.5" /> <span className="truncate">Approvals ({pendingCount})</span>
-            </Link>
-            <Link to="/customer-onboard" className="vw-btn-primary h-7 sm:h-8 md:h-9 px-2.5 sm:px-3 text-[10px] sm:text-xs md:text-[13px] font-semibold col-span-2 sm:col-span-1 flex items-center justify-center gap-1 shadow-xs rounded-lg">
-              + <span className="truncate">Add Customer</span>
-            </Link>
+            {hasPermission("APPROVE_CUSTOMER") && (
+              <Link to="/pending-accounts" className="flex items-center justify-center gap-1 vw-btn-secondary h-7 sm:h-8 md:h-9 px-2 sm:px-3 text-[10px] sm:text-xs md:text-[13px] font-semibold border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 transition-colors rounded-lg">
+                <Clock size={12} className="shrink-0 sm:w-3.5 sm:h-3.5" /> <span className="truncate">Approvals ({pendingCount})</span>
+              </Link>
+            )}
+            {hasPermission("CREATE_CUSTOMER") && (
+              <Link to="/customer-onboard" className="vw-btn-primary h-7 sm:h-8 md:h-9 px-2.5 sm:px-3 text-[10px] sm:text-xs md:text-[13px] font-semibold col-span-2 sm:col-span-1 flex items-center justify-center gap-1 shadow-xs rounded-lg">
+                + <span className="truncate">Add Customer</span>
+              </Link>
+            )}
           </div>
         </div>
 

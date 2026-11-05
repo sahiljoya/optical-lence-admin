@@ -19,6 +19,7 @@ import { notify } from "@/lib/notify";
 import {
   MatrixGridView,
   defaultRangeConfigFromProduct,
+  LocationOverrideModal,
 } from "./MatrixEditor";
 import {
   generateProductCode,
@@ -43,6 +44,7 @@ export function CreateProduct() {
 
   const [productData, setProductData] = useState({
     brand: routeSearch?.brand || "",
+    product_image: "",
     index: 1.56,
     base: "Hard Coat (HC)",
     coating: "Standard",
@@ -54,7 +56,7 @@ export function CreateProduct() {
     tier_prices: { courier: 120, stock_a: 110, stock_a_plus: 105, stock_platinum: 100 },
     range_label: "",
     return_status: "Can Take",
-    low_stock_threshold: null,
+    low_stock_threshold: 15,
   });
 
   const [rangeConfig, setRangeConfig] = useState(defaultRangeConfigFromProduct(null));
@@ -66,6 +68,13 @@ export function CreateProduct() {
   const [locOverrideMap, setLocOverrideMap] = useState({});
   const [naMap, setNaMap] = useState({});
   const [bulkQty, setBulkQty] = useState("");
+  // Reserve Stock State (Floor 4 Main / Ground Floor Staging)
+  const [reserveQtyMap, setReserveQtyMap] = useState({});
+  const [reserveLocMap, setReserveLocMap] = useState({});
+  const [bulkReserveQty, setBulkReserveQty] = useState("");
+  const [bulkReserveLoc, setBulkReserveLoc] = useState("FL4");
+  const [bulkReserveLocObj, setBulkReserveLocObj] = useState(null);
+  const [showBulkReserveModal, setShowBulkReserveModal] = useState(false);
 
   const isProgressiveFamily =
     productData.lens_type === "Progressive" ||
@@ -206,6 +215,14 @@ export function CreateProduct() {
     setLocOverrideMap((prev) => ({ ...prev, [key]: locObj || locId }));
   }, []);
 
+  const handleReserveQtyChange = useCallback((key, val) => {
+    setReserveQtyMap((prev) => ({ ...prev, [key]: val }));
+  }, []);
+
+  const handleReserveLocChange = useCallback((key, val) => {
+    setReserveLocMap((prev) => ({ ...prev, [key]: val }));
+  }, []);
+
   const handleToggleNA = useCallback((key) => {
     setNaMap((prev) => {
       const next = { ...prev };
@@ -224,6 +241,18 @@ export function CreateProduct() {
       return next;
     });
     setLocOverrideMap((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setReserveQtyMap((prev) => {
+      if (prev[key] === undefined) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+    setReserveLocMap((prev) => {
       if (!prev[key]) return prev;
       const next = { ...prev };
       delete next[key];
@@ -318,7 +347,7 @@ export function CreateProduct() {
   const handleApplyBulkQty = () => {
     const val = parseInt(bulkQty);
     if (isNaN(val) || val < 0) {
-      notify.warning("Please enter a valid positive quantity.");
+      notify.warning("Please enter a valid positive quantity for Running Stock.");
       return;
     }
     const next = { ...qtyMap };
@@ -329,17 +358,42 @@ export function CreateProduct() {
       }
     });
     setQtyMap(next);
-    notify.success(`Set quantity = ${val} for active cells.`);
+    notify.success(`Set running quantity = ${val} for active cells.`);
+  };
+
+  const handleApplyBulkReserveQty = () => {
+    const val = parseInt(bulkReserveQty);
+    if (isNaN(val) || val < 0) {
+      notify.warning("Please enter a valid positive quantity for Reserve Stock.");
+      return;
+    }
+    const nextQ = { ...reserveQtyMap };
+    const nextL = { ...reserveLocMap };
+    generatedCells.forEach((c) => {
+      const k = cellKey(c);
+      if (!naMap[k]) {
+        nextQ[k] = val;
+        nextL[k] = bulkReserveLocObj || bulkReserveLoc || "FL4";
+      }
+    });
+    setReserveQtyMap(nextQ);
+    setReserveLocMap(nextL);
+    const locLabelDesc =
+      bulkReserveLocObj?.label || (bulkReserveLoc === "GROUND" ? "Ground Floor Dock" : "Floor 4 Main Reserve");
+    notify.success(`Set reserve quantity = ${val} (${locLabelDesc}) for active cells.`);
   };
 
   const handleClearAllQty = () => {
     setQtyMap({});
     setLocOverrideMap({});
     setNaMap({});
+    setReserveQtyMap({});
+    setReserveLocMap({});
+    setBulkReserveLocObj(null);
     notify.info("All cell quantities and statuses cleared.");
   };
 
-  // Step 2: Save Product & Matrix together
+  // Step 2: Save Product & Matrix together (Running Stock & Reserve Stock)
   const handleSaveAll = async () => {
     if (!productData.brand) {
       notify.warning("Brand is required.");
@@ -386,25 +440,66 @@ export function CreateProduct() {
 
       const newProductId = prodRes.data._id;
 
-      // 2. Format & Save Matrix Cells with quantities & locations
-      const powerCells = generatedCells.map((c) => {
-        const key = cellKey(c);
-        const isNA = !!naMap[key];
-        const qty = isNA ? 0 : (parseInt(qtyMap[key]) || 0);
-        const locOverride = locOverrideMap[key];
-        const locId = locOverride?.id || (typeof locOverride === "string" ? locOverride : null);
-        const isValidLocId = locId && /^[0-9a-fA-F]{24}$/.test(String(locId));
-        return {
-          sph: c.sph,
-          cyl: c.cyl,
-          axis: c.axis,
-          add: c.add,
-          locations: !isNA && qty > 0 && isValidLocId ? [{ warehouse_location_id: locId, quantity: qty }] : [],
-          quantity: qty,
-          total_quantity: qty,
-          status: isNA ? "out_of_stock" : c.status,
-        };
-      });
+      // 2. Pre-resolve or find reserve locations (Floor 4 Main Reserve & Ground Floor Staging)
+      let fl4LocId = null;
+      let groundLocId = null;
+      try {
+        const [fl4Res, groundRes] = await Promise.all([
+          warehouseApi.findOrCreateShelf({
+            floor: 4,
+            rack: "RESERVE",
+            start_shelf: "MAIN",
+            end_shelf: "MAIN",
+            description: "Floor 4 · Main In-Warehouse Reserve",
+          }),
+          warehouseApi.findOrCreateShelf({
+            floor: 0,
+            rack: "DOCK",
+            start_shelf: "STAGING",
+            end_shelf: "STAGING",
+            description: "Ground Floor · Dock Staging Area",
+          }),
+        ]);
+        if (fl4Res?.error === false) fl4LocId = fl4Res.data?._id;
+        if (groundRes?.error === false) groundLocId = groundRes.data?._id;
+      } catch (locErr) {
+        console.warn("Could not pre-resolve reserve locations:", locErr);
+      }
+
+      // 3. Format & Save Running Matrix Cells (Floors 1-3)
+      const powerCells = await Promise.all(
+        generatedCells.map(async (c) => {
+          const key = cellKey(c);
+          const isNA = !!naMap[key];
+          const qty = isNA ? 0 : (parseInt(qtyMap[key]) || 0);
+          const locOverride = locOverrideMap[key];
+          let locId = locOverride?.id || (typeof locOverride === "string" ? locOverride : null);
+          if (!locId && locOverride && typeof locOverride === "object" && locOverride.floor) {
+            try {
+              const res = await warehouseApi.findOrCreateShelf({
+                floor: Number(locOverride.floor),
+                rack: locOverride.rack,
+                start_shelf: String(locOverride.startShelf || "1"),
+                end_shelf: String(locOverride.endShelf || locOverride.startShelf || "1"),
+              });
+              if (res?.error === false && res?.data?._id) locId = res.data._id;
+            } catch (e) {
+              console.warn("Could not find/create running location:", e);
+            }
+          }
+          const isValidLocId = locId && /^[0-9a-fA-F]{24}$/.test(String(locId));
+          return {
+            sph: c.sph,
+            cyl: c.cyl,
+            axis: c.axis,
+            add: c.add,
+            locations: !isNA && qty > 0 && isValidLocId ? [{ warehouse_location_id: locId, quantity: qty }] : [],
+            quantity: qty,
+            total_quantity: qty,
+            status: isNA ? "out_of_stock" : c.status,
+          };
+        })
+      );
 
       const matrixRes = await productApi.updateMatrix({
         productId: newProductId,
@@ -412,8 +507,58 @@ export function CreateProduct() {
         powerCells,
       });
 
+      // 4. Format & Save Reserve Matrix Cells (Floor 4 / Ground Floor)
+      const reservePowerCells = await Promise.all(
+        generatedCells.map(async (c) => {
+          const key = cellKey(c);
+          const isNA = !!naMap[key];
+          const rQty = isNA ? 0 : (parseInt(reserveQtyMap[key]) || 0);
+          const rLoc = reserveLocMap[key] || "FL4";
+          let targetLocId = null;
+          if (rLoc && typeof rLoc === "object" && rLoc.id) {
+            targetLocId = rLoc.id;
+          } else if (rLoc && typeof rLoc === "object" && rLoc.floor !== undefined) {
+            try {
+              const res = await warehouseApi.findOrCreateShelf({
+                floor: Number(rLoc.floor),
+                rack: rLoc.rack,
+                start_shelf: String(rLoc.startShelf || "1"),
+                end_shelf: String(rLoc.endShelf || rLoc.startShelf || "1"),
+              });
+              if (res?.error === false && res?.data?._id) targetLocId = res.data._id;
+            } catch (e) {
+              console.warn("Could not find/create reserve location:", e);
+            }
+          } else if (rLoc === "GROUND") {
+            targetLocId = groundLocId;
+          } else if (rLoc === "FL4" || (!rLoc && rQty > 0)) {
+            targetLocId = fl4LocId;
+          }
+          const isValidTarget = targetLocId && /^[0-9a-fA-F]{24}$/.test(String(targetLocId));
+          return {
+            sph: c.sph,
+            cyl: c.cyl,
+            axis: c.axis,
+            add: c.add,
+            locations: !isNA && rQty > 0 && isValidTarget ? [{ warehouse_location_id: targetLocId, quantity: rQty }] : [],
+            quantity: rQty,
+            total_quantity: rQty,
+            status: isNA ? "out_of_stock" : "available",
+          };
+        })
+      );
+
+      const hasAnyReserve = reservePowerCells.some((c) => c.total_quantity > 0);
+      if (hasAnyReserve) {
+        await productApi.updateMatrix({
+          productId: newProductId,
+          godownId: "reserve_godown_1",
+          powerCells: reservePowerCells,
+        });
+      }
+
       if (matrixRes.error !== false) {
-        notify.warning("Product created, but matrix save had an issue: " + matrixRes.message);
+        notify.warning("Product created, but running matrix save had an issue: " + matrixRes.message);
       } else {
         notify.success(`Product (${prodRes.data?.product_code || sku}) and Power Matrix saved successfully!`);
       }
@@ -603,8 +748,10 @@ export function CreateProduct() {
                     className="w-full h-9 sm:h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
                   >
                     <option value="1.49">1.49</option>
+                    <option value="1.50">1.50</option>
                     <option value="1.56">1.56</option>
                     <option value="1.59">1.59</option>
+                    <option value="1.60">1.60</option>
                     <option value="1.61">1.61</option>
                     <option value="1.67">1.67</option>
                     <option value="1.74">1.74</option>
@@ -622,8 +769,12 @@ export function CreateProduct() {
                     className="w-full h-9 sm:h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
                   >
                     <option value="55">55 DIA</option>
+                    <option value="60">60 DIA</option>
                     <option value="65">65 DIA</option>
                     <option value="70">70 DIA</option>
+                    <option value="72">72 DIA</option>
+                    <option value="75">75 DIA</option>
+                    <option value="80">80 DIA</option>
                   </select>
                 </div>
                 <div>
@@ -638,6 +789,28 @@ export function CreateProduct() {
                     <option value="commodity">Commodity</option>
                     <option value="high_value">High Value</option>
                   </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5">
+                    Product Envelope Photo (Image URL)
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="url"
+                      placeholder="https://... (lens packet photo URL)"
+                      value={productData.product_image || ""}
+                      onChange={(e) => setProductData({ ...productData, product_image: e.target.value })}
+                      className="w-full h-9 sm:h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
+                    />
+                    {productData.product_image && (
+                      <img
+                        src={productData.product_image}
+                        alt="Preview"
+                        className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    )}
+                  </div>
                 </div>
               </div>
 
@@ -1004,40 +1177,73 @@ export function CreateProduct() {
           </div>
 
           {/* Tools & Actions Card */}
-          <div className="vw-card p-3 sm:p-4 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 sm:gap-4">
+          <div className="vw-card p-3 sm:p-4 flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-3 sm:gap-4">
             {/* Quick Bulk Stock Fill */}
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
-              <Package size={15} className="text-emerald-600 shrink-0" />
-              <span className="text-[11px] sm:text-xs font-bold text-slate-700 shrink-0">
-                Bulk Fill Stock:
-              </span>
-              <input
-                type="number"
-                min="0"
-                value={bulkQty}
-                onChange={(e) => setBulkQty(e.target.value)}
-                placeholder="Qty per cell"
-                className="w-20 sm:w-24 h-8 px-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-center font-mono focus:outline-none focus:border-blue-500 shadow-xs"
-              />
-              <button
-                type="button"
-                onClick={handleApplyBulkQty}
-                className="h-8 px-2.5 sm:px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] sm:text-[11px] rounded-lg transition-colors cursor-pointer shadow-xs whitespace-nowrap"
-              >
-                Apply to All ({generatedCells.length})
-              </button>
+            <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto">
+              {/* Running Bulk Fill */}
+              <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 p-1 rounded-xl">
+                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/80 px-1.5 py-0.5 rounded font-mono">
+                  Running:
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={bulkQty}
+                  onChange={(e) => setBulkQty(e.target.value)}
+                  placeholder="Qty"
+                  className="w-16 h-7 px-1.5 bg-white border border-slate-200 rounded text-xs text-center font-mono focus:outline-none focus:border-emerald-500 shadow-2xs"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyBulkQty}
+                  className="h-7 px-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] rounded transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                >
+                  Apply
+                </button>
+              </div>
+
+              {/* Reserve Bulk Fill */}
+              <div className="flex items-center gap-1.5 bg-amber-50/70 border border-amber-200 p-1 rounded-xl">
+                <span className="text-[10px] font-bold text-amber-800 bg-amber-100/80 px-1.5 py-0.5 rounded font-mono">
+                  Reserve:
+                </span>
+                <input
+                  type="number"
+                  min="0"
+                  value={bulkReserveQty}
+                  onChange={(e) => setBulkReserveQty(e.target.value)}
+                  placeholder="Qty"
+                  className="w-16 h-7 px-1.5 bg-white border border-amber-200 rounded text-xs text-center font-mono focus:outline-none focus:border-amber-500 shadow-2xs"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowBulkReserveModal(true)}
+                  className="h-7 px-2 bg-white hover:bg-amber-100/70 border border-amber-300 text-amber-800 font-semibold text-[10px] rounded transition-colors cursor-pointer shadow-2xs max-w-[130px] truncate"
+                  title="Select bulk Floor, Rack & Shelf for Reserve Stock"
+                >
+                  {bulkReserveLocObj?.label || (bulkReserveLoc === "GROUND" ? "GND (Dock)" : "FL4 (Reserve)")}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyBulkReserveQty}
+                  className="h-7 px-2 bg-amber-600 hover:bg-amber-700 text-white font-bold text-[10px] rounded transition-colors cursor-pointer shadow-2xs whitespace-nowrap"
+                >
+                  Apply
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={handleClearAllQty}
-                className="h-8 px-2 text-slate-400 hover:text-rose-600 text-[10px] sm:text-[11px] font-bold transition-colors ml-1 cursor-pointer"
+                className="h-7 px-2 text-slate-400 hover:text-rose-600 text-[10px] sm:text-[11px] font-bold transition-colors cursor-pointer ml-1"
                 title="Clear all entered stock"
               >
-                Clear
+                Clear All
               </button>
             </div>
 
             {/* Step Controls */}
-            <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto justify-end">
+            <div className="flex items-center gap-2 sm:gap-3 w-full xl:w-auto justify-end">
               <button
                 type="button"
                 onClick={() => setCurrentStep(1)}
@@ -1064,7 +1270,7 @@ export function CreateProduct() {
                 POWER MATRIX STOCK GRID ({generatedCells.length} Total Cells)
               </h4>
               <span className="text-[10px] sm:text-[11px] text-slate-500 italic">
-                Enter quantity directly, mark cell as N/A, or assign warehouse shelf range per cell
+                Enter Running stock (Floors 1-3) &amp; Reserve stock (Floor 4 or Ground) per power cell
               </span>
             </div>
 
@@ -1073,9 +1279,14 @@ export function CreateProduct() {
               qtyMap={qtyMap}
               naMap={naMap}
               locOverrideMap={locOverrideMap}
+              reserveQtyMap={reserveQtyMap}
+              reserveLocMap={reserveLocMap}
               onQtyChange={handleQtyChange}
               onToggleNA={handleToggleNA}
               onLocChange={handleLocChange}
+              onReserveQtyChange={handleReserveQtyChange}
+              onReserveLocChange={handleReserveLocChange}
+              showReserve={true}
               racks={racks}
               matrixTypeInfo={matrixTypeInfo}
               maxHeight="max-h-[65vh]"
@@ -1113,6 +1324,26 @@ export function CreateProduct() {
           }
         }}
       />
+
+      {showBulkReserveModal && (
+        <LocationOverrideModal
+          racks={racks}
+          initialLoc={bulkReserveLocObj}
+          allowedFloors={[4, 0]}
+          title="Set Bulk Reserve Shelf Range (Floor 4 / Ground)"
+          onConfirm={(id, locObj) => {
+            setBulkReserveLocObj(locObj);
+            setBulkReserveLoc(locObj?.floor === 0 ? "GROUND" : "FL4");
+            setShowBulkReserveModal(false);
+          }}
+          onClear={() => {
+            setBulkReserveLocObj(null);
+            setBulkReserveLoc("FL4");
+            setShowBulkReserveModal(false);
+          }}
+          onClose={() => setShowBulkReserveModal(false)}
+        />
+      )}
     </>
   );
 }

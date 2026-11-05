@@ -6,21 +6,72 @@ import { PowerInput } from "@/components/common/PowerInput";
 import { buildGridFromCells, cellKey, formatPower, getMatrixTypeInfo } from "./matrixHelpers";
 
 // Shelf Range Location Picker Modal: Floor -> Rack -> Start Shelf -> End Shelf (NO box selection)
-function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onClose }) {
-  const [floor, setFloor] = useState(initialLoc?.floor || "");
+export function LocationOverrideModal({
+  racks = [],
+  initialLoc,
+  allowedFloors = [1, 2, 3],
+  title = "Set Shelf Range for Cell",
+  onConfirm,
+  onClear,
+  onClose,
+}) {
+  const [floor, setFloor] = useState(
+    initialLoc?.floor !== undefined && initialLoc?.floor !== null
+      ? Number(initialLoc.floor)
+      : allowedFloors.length > 0
+        ? allowedFloors[0]
+        : 1
+  );
   const [rack, setRack] = useState(initialLoc?.rack || "");
-  const [startShelf, setStartShelf] = useState(initialLoc?.startShelf || "");
-  const [endShelf, setEndShelf] = useState(initialLoc?.endShelf || "");
+  const [startShelf, setStartShelf] = useState(initialLoc?.startShelf || initialLoc?.shelf || "");
+  const [endShelf, setEndShelf] = useState(initialLoc?.endShelf || initialLoc?.startShelf || initialLoc?.shelf || "");
   const [isResolving, setIsResolving] = useState(false);
   const [resolvedLocation, setResolvedLocation] = useState(null);
 
   const racksForFloor = racks.filter((r) => String(r.floor) === String(floor));
-  const selectedRack = racksForFloor.find((r) => r.rack === rack);
+
+  // Fallback racks if no racks are configured for this floor in DB yet
+  const availableRacks = useMemo(() => {
+    if (racksForFloor.length > 0) return racksForFloor;
+    const fNum = Number(floor);
+    if (fNum === 0) {
+      return [
+        { rack: "DOCK", shelf_count: 10 },
+        { rack: "STAGING", shelf_count: 10 },
+        { rack: "R1", shelf_count: 10 },
+        { rack: "R2", shelf_count: 10 },
+      ];
+    }
+    if (fNum === 4) {
+      return [
+        { rack: "MAIN", shelf_count: 10 },
+        { rack: "RESERVE", shelf_count: 10 },
+        { rack: "R1", shelf_count: 10 },
+        { rack: "R2", shelf_count: 10 },
+        { rack: "R3", shelf_count: 10 },
+      ];
+    }
+    return [
+      { rack: "R1", shelf_count: 10 },
+      { rack: "R2", shelf_count: 10 },
+      { rack: "R3", shelf_count: 10 },
+    ];
+  }, [racksForFloor, floor]);
+
+  const selectedRack = availableRacks.find((r) => r.rack === rack);
   const shelfCount = selectedRack?.shelf_count || 10;
   const shelfOptions = Array.from({ length: shelfCount }, (_, i) => i + 1);
 
+  const formatFloorPrefix = (f) => (Number(f) === 0 ? "GND" : `FL${f}`);
+  const getFloorOptionLabel = (f) => {
+    const fNum = Number(f);
+    if (fNum === 0) return "Ground Floor (Dock / Staging)";
+    if (fNum === 4) return "Floor 4 (Reserve Godown)";
+    return `Floor ${f} (Running Stock)`;
+  };
+
   const handleFloorChange = (f) => {
-    setFloor(f);
+    setFloor(Number(f));
     setRack("");
     setStartShelf("");
     setEndShelf("");
@@ -48,7 +99,7 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
   };
 
   useEffect(() => {
-    if (!floor || !rack || !startShelf) {
+    if (floor === "" || floor === undefined || floor === null || !rack || !startShelf) {
       setResolvedLocation(null);
       return;
     }
@@ -59,14 +110,15 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
       .then((res) => {
         if (cancelled) return;
         setIsResolving(false);
-        const spanLabel = `FL${floor}-${rack} (Sh ${startShelf}${endShelf && endShelf !== startShelf ? `..${endShelf}` : ""})`;
+        const prefix = formatFloorPrefix(floor);
+        const spanLabel = `${prefix}-${rack} (Sh ${startShelf}${endShelf && endShelf !== startShelf ? `..${endShelf}` : ""})`;
         if (res.error === false && res.data && res.data.length > 0) {
           const loc = res.data[0];
           setResolvedLocation({
             id: loc._id,
             code: loc.location_code,
             label: spanLabel,
-            floor,
+            floor: Number(floor),
             rack,
             startShelf,
             endShelf: endShelf || startShelf,
@@ -75,7 +127,7 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
           setResolvedLocation({
             id: null,
             label: spanLabel,
-            floor,
+            floor: Number(floor),
             rack,
             startShelf,
             endShelf: endShelf || startShelf,
@@ -85,11 +137,12 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
       .catch(() => {
         if (!cancelled) {
           setIsResolving(false);
-          const spanLabel = `FL${floor}-${rack} (Sh ${startShelf}${endShelf && endShelf !== startShelf ? `..${endShelf}` : ""})`;
+          const prefix = formatFloorPrefix(floor);
+          const spanLabel = `${prefix}-${rack} (Sh ${startShelf}${endShelf && endShelf !== startShelf ? `..${endShelf}` : ""})`;
           setResolvedLocation({
             id: null,
             label: spanLabel,
-            floor,
+            floor: Number(floor),
             rack,
             startShelf,
             endShelf: endShelf || startShelf,
@@ -100,6 +153,32 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
       cancelled = true;
     };
   }, [floor, rack, startShelf, endShelf]);
+
+  const handleApply = async () => {
+    if (!resolvedLocation) return;
+    setIsResolving(true);
+    let finalLoc = { ...resolvedLocation };
+    if (!finalLoc.id) {
+      try {
+        const desc = `${getFloorOptionLabel(floor)} · ${rack} · Shelf ${startShelf}${endShelf && endShelf !== startShelf ? `..${endShelf}` : ""}`;
+        const res = await warehouseApi.findOrCreateShelf({
+          floor: Number(floor),
+          rack,
+          start_shelf: String(startShelf),
+          end_shelf: String(endShelf || startShelf),
+          description: desc,
+        });
+        if (res?.error === false && res?.data?._id) {
+          finalLoc.id = res.data._id;
+          finalLoc.code = res.data.location_code;
+        }
+      } catch (err) {
+        console.warn("Could not auto-create warehouse shelf location:", err);
+      }
+    }
+    setIsResolving(false);
+    onConfirm(finalLoc.id || finalLoc.label, finalLoc);
+  };
 
   const selectClass =
     "w-full h-9 sm:h-10 px-2.5 sm:px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all disabled:bg-slate-100 disabled:text-slate-400";
@@ -115,11 +194,11 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
       >
         <div className="px-4 sm:px-5 py-3 sm:py-3.5 border-b border-slate-100 flex justify-between items-center bg-slate-50/80">
           <h3 className="font-bold text-slate-900 text-xs sm:text-sm flex items-center gap-1.5">
-            <MapPin size={15} className="text-emerald-600" /> Set Shelf Range for Cell
+            <MapPin size={15} className="text-emerald-600" /> {title}
           </h3>
-          <button 
+          <button
             type="button"
-            onClick={onClose} 
+            onClick={onClose}
             className="p-1 text-slate-400 hover:text-slate-700 hover:bg-slate-200/70 rounded-xl transition-colors cursor-pointer"
           >
             <X size={16} />
@@ -129,31 +208,35 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
         <div className="p-3.5 sm:p-5 flex flex-col gap-3">
           <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
             <div>
-              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Floor</label>
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                Floor
+              </label>
               <select
                 value={floor}
                 onChange={(e) => handleFloorChange(e.target.value)}
                 className={selectClass}
               >
                 <option value="">-- Select --</option>
-                {[1, 2, 3, 4].map((f) => (
+                {allowedFloors.map((f) => (
                   <option key={f} value={f}>
-                    Floor {f}
+                    {getFloorOptionLabel(f)}
                   </option>
                 ))}
               </select>
             </div>
 
             <div>
-              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">Rack</label>
+              <label className="block text-[10px] sm:text-[11px] font-bold text-slate-600 mb-1 uppercase tracking-wider">
+                Rack
+              </label>
               <select
                 value={rack}
                 onChange={(e) => handleRackChange(e.target.value)}
-                disabled={!floor}
+                disabled={floor === "" || floor === undefined}
                 className={selectClass}
               >
                 <option value="">-- Select --</option>
-                {racksForFloor.map((r) => (
+                {availableRacks.map((r) => (
                   <option key={r.rack} value={r.rack}>
                     Rack {r.rack}
                   </option>
@@ -212,8 +295,8 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
         <div className="p-3 sm:p-4 border-t border-slate-100 bg-slate-50/80 flex flex-col gap-2">
           <button
             type="button"
-            onClick={() => resolvedLocation && onConfirm(resolvedLocation.id || resolvedLocation.label, resolvedLocation)}
-            disabled={!floor || !rack || !startShelf || isResolving}
+            onClick={handleApply}
+            disabled={floor === "" || floor === undefined || !rack || !startShelf || isResolving}
             className="vw-btn-primary h-9 sm:h-10 text-xs sm:text-[13px] font-semibold rounded-xl shadow-xs cursor-pointer disabled:opacity-50"
           >
             {isResolving ? "Resolving..." : "Apply Shelf Range"}
@@ -231,7 +314,7 @@ function LocationOverrideModal({ racks = [], initialLoc, onConfirm, onClear, onC
   );
 }
 
-// Memoized matrix cell with N/A support and Shelf Range location picker
+// Memoized matrix cell with N/A support, Running Shelf Range location picker, and Reserve Stock inputs
 export const MatrixCell = memo(function MatrixCell({
   cellKey: key,
   qty,
@@ -243,22 +326,28 @@ export const MatrixCell = memo(function MatrixCell({
   onQtyChange,
   onToggleNA,
   onLocChange,
+  reserveQty,
+  reserveLoc = "FL4",
+  onReserveQtyChange,
+  onReserveLocChange,
+  showReserve = true,
   readOnly = false,
 }) {
-  const [showModal, setShowModal] = useState(false);
+  const [showRunModal, setShowRunModal] = useState(false);
+  const [showResModal, setShowResModal] = useState(false);
 
   if (isNA) {
     return (
-      <td className="p-1 border-b border-r border-slate-200 bg-slate-100/80 text-center align-middle select-none">
-        <div className="flex flex-col items-center justify-center gap-0.5 py-0.5">
-          <span className="text-[9px] sm:text-[10px] font-bold text-slate-400 bg-slate-200/80 px-1.5 py-0.5 rounded tracking-wide font-mono">
+      <td className="p-1 border-b border-r border-slate-200 bg-slate-100/90 text-center align-middle select-none min-w-[110px] w-[110px] sm:min-w-[125px] sm:w-[125px]">
+        <div className="flex flex-col items-center justify-center gap-1.5 py-8">
+          <span className="text-[10px] sm:text-[11px] font-bold text-slate-400 bg-slate-200 px-2 py-0.5 rounded tracking-wider font-mono">
             N/A
           </span>
           {!readOnly && (
             <button
               type="button"
               onClick={() => onToggleNA(key)}
-              className="text-[9px] text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
+              className="text-[10px] text-blue-600 hover:text-blue-800 underline font-medium cursor-pointer"
               title="Enable this power cell"
             >
               Enable
@@ -272,29 +361,75 @@ export const MatrixCell = memo(function MatrixCell({
   const effectiveLoc = locEntry || (typeof hasOverride === "object" ? hasOverride : null);
   const displayLocText = locLabel || effectiveLoc?.label || (hasOverride ? "✓ shelf set" : "+ shelf");
   const quantity = parseInt(qty) || 0;
+  const reserveQuantity = parseInt(reserveQty) || 0;
+
+  const effectiveResLoc = typeof reserveLoc === "object" ? reserveLoc : null;
+  const displayResLocText =
+    effectiveResLoc?.label ||
+    (typeof reserveLoc === "string" && reserveLoc.length > 0 && reserveLoc !== "FL4" && reserveLoc !== "GROUND"
+      ? reserveLoc
+      : reserveLoc === "GROUND"
+        ? "GND (Dock)"
+        : reserveLoc === "FL4"
+          ? "FL4 (Reserve)"
+          : "+ res shelf");
 
   if (readOnly) {
     return (
       <td
-        className={`p-1 border-b border-r border-slate-100 text-center align-middle transition-colors ${
-          quantity > 0 ? "bg-emerald-50/40" : "bg-white"
+        className={`p-1.5 border-b border-r border-slate-100 text-center align-top transition-colors min-w-[110px] w-[110px] sm:min-w-[125px] sm:w-[125px] ${
+          quantity > 0 || reserveQuantity > 0 ? "bg-emerald-50/30" : "bg-white"
         }`}
       >
-        <div className="flex flex-col items-center justify-center py-0.5">
-          <span
-            className={`font-mono text-[11px] sm:text-xs ${
-              quantity > 0 ? "text-emerald-700 font-bold" : "text-slate-300"
-            }`}
-          >
-            {quantity > 0 ? quantity : "—"}
-          </span>
-          {quantity > 0 && displayLocText && displayLocText !== "+ shelf" && displayLocText !== "✓ shelf set" && (
+        <div className="flex flex-col items-center justify-center py-1 gap-1">
+          {/* Running Qty & Loc */}
+          <div className="bg-slate-50 border border-slate-200 rounded p-1 w-full flex flex-col items-center">
+            <div className="flex items-center justify-between w-full font-mono text-[9px] text-slate-500 mb-0.5">
+              <span className="font-bold text-emerald-700 bg-emerald-100 px-1 rounded">RUN</span>
+              <span className="text-slate-400">Qty</span>
+            </div>
             <span
-              className="text-[8px] sm:text-[9px] text-slate-500 font-mono mt-0.5 px-1 py-0.2 bg-slate-100 rounded border border-slate-200 truncate max-w-[70px]"
-              title={displayLocText}
+              className={`font-mono text-xs sm:text-[13px] ${
+                quantity > 0 ? "text-emerald-700 font-bold" : "text-slate-300"
+              }`}
             >
-              {displayLocText}
+              {quantity > 0 ? quantity : "—"}
             </span>
+            {quantity > 0 && displayLocText && displayLocText !== "+ shelf" && displayLocText !== "✓ shelf set" && (
+              <span
+                className="text-[8px] sm:text-[9px] text-slate-600 font-mono mt-0.5 px-1 py-0.2 bg-white rounded border border-slate-200 truncate w-full"
+                title={displayLocText}
+              >
+                {displayLocText}
+              </span>
+            )}
+          </div>
+
+          {/* Reserve Qty & Loc */}
+          {showReserve && (
+            <div className="bg-amber-50/60 border border-amber-200/80 rounded p-1 w-full flex flex-col items-center">
+              <div className="flex items-center justify-between w-full font-mono text-[9px] text-slate-500 mb-0.5">
+                <span className="font-bold text-amber-800 bg-amber-100 px-1 rounded">RES</span>
+                <span className="text-slate-400 font-mono">
+                  {effectiveResLoc?.floor === 0 || reserveLoc === "GROUND" ? "GND" : "FL4"}
+                </span>
+              </div>
+              <span
+                className={`font-mono text-xs sm:text-[13px] ${
+                  reserveQuantity > 0 ? "text-amber-800 font-bold" : "text-slate-300"
+                }`}
+              >
+                {reserveQuantity > 0 ? reserveQuantity : "—"}
+              </span>
+              {reserveQuantity > 0 && displayResLocText && displayResLocText !== "+ res shelf" && (
+                <span
+                  className="text-[8px] sm:text-[9px] text-amber-900 font-mono mt-0.5 px-1 py-0.2 bg-white rounded border border-amber-200 truncate w-full"
+                  title={displayResLocText}
+                >
+                  {displayResLocText}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </td>
@@ -302,54 +437,108 @@ export const MatrixCell = memo(function MatrixCell({
   }
 
   return (
-    <td className="p-1 border-b border-r border-slate-100 hover:bg-emerald-50/50 transition-colors align-top group">
-      <div className="flex items-center gap-1">
+    <td className="p-1 border-b border-r border-slate-100 hover:bg-emerald-50/20 transition-colors align-top group min-w-[110px] w-[110px] sm:min-w-[125px] sm:w-[125px]">
+      {/* 1. RUNNING STOCK SECTION (Floors 1-3) */}
+      <div className="bg-slate-50/90 border border-slate-200 rounded-lg p-1.5 mb-1.5 shadow-2xs">
+        <div className="flex items-center justify-between gap-1 mb-1">
+          <span className="text-[9px] font-bold text-emerald-700 bg-emerald-100 px-1.5 py-0.2 rounded font-mono">
+            RUN
+          </span>
+          <button
+            type="button"
+            onClick={() => onToggleNA(key)}
+            className="text-[9px] font-bold px-1.5 py-0.2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded transition-colors cursor-pointer"
+            title="Mark cell as N/A (Not Available)"
+          >
+            N/A
+          </button>
+        </div>
         <input
           type="number"
           min="0"
           value={qty}
           onChange={(e) => onQtyChange(key, e.target.value)}
           placeholder="Qty"
-          className="w-full text-center h-6 sm:h-7 text-[11px] sm:text-xs focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 rounded bg-transparent font-medium font-mono"
+          className="w-full text-center h-7 text-xs sm:text-[13px] font-bold font-mono focus:outline-none focus:bg-white focus:ring-1 focus:ring-emerald-500 rounded bg-white border border-slate-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
         />
         <button
           type="button"
-          onClick={() => onToggleNA(key)}
-          className="text-[9px] font-bold px-1 py-0.5 text-slate-300 hover:text-rose-600 hover:bg-rose-50 rounded border border-transparent hover:border-rose-200 transition-colors shrink-0 cursor-pointer"
-          title="Mark cell as N/A (No stock / location)"
-        >
-          N/A
-        </button>
-      </div>
-
-      {parseInt(qty) > 0 && (
-        <button
-          type="button"
-          onClick={() => setShowModal(true)}
-          className={`w-full text-[9px] sm:text-[10px] mt-0.5 rounded px-1 py-0.5 truncate border transition-colors cursor-pointer ${
+          onClick={() => setShowRunModal(true)}
+          className={`w-full h-6 text-[9px] sm:text-[10px] mt-1 rounded px-1 truncate border transition-colors flex items-center justify-center cursor-pointer ${
             hasOverride || effectiveLoc
-              ? "bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 font-medium"
+              ? "bg-emerald-50 border-emerald-300 text-emerald-700 font-semibold shadow-2xs"
               : "bg-white border-slate-200 text-slate-400 hover:border-blue-400 hover:text-blue-600"
           }`}
-          title="Set shelf range for this power"
+          title="Set shelf range for Running stock (Floors 1-3)"
         >
           {displayLocText}
         </button>
+      </div>
+
+      {/* 2. RESERVE STOCK SECTION (Floor 4 / Ground Floor) */}
+      {showReserve && (
+        <div className="bg-amber-50/60 border border-amber-200/90 rounded-lg p-1.5 flex flex-col shadow-2xs">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-[9px] font-bold text-amber-800 bg-amber-100 px-1.5 py-0.2 rounded font-mono">
+              RES
+            </span>
+          </div>
+          <input
+            type="number"
+            min="0"
+            value={reserveQty ?? ""}
+            onChange={(e) => onReserveQtyChange && onReserveQtyChange(key, e.target.value)}
+            placeholder="Res Qty"
+            className="w-full text-center h-7 text-xs sm:text-[13px] font-bold font-mono focus:outline-none focus:bg-white focus:ring-1 focus:ring-amber-500 rounded bg-white border border-amber-200 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <button
+            type="button"
+            onClick={() => setShowResModal(true)}
+            className={`w-full h-6 text-[9px] sm:text-[10px] mt-1 rounded px-1 truncate border transition-colors flex items-center justify-center cursor-pointer ${
+              effectiveResLoc || (typeof reserveLoc === "string" && reserveLoc && reserveLoc !== "+ res shelf")
+                ? "bg-amber-100 border-amber-300 text-amber-800 font-semibold shadow-2xs"
+                : "bg-white border-amber-200 text-amber-600/70 hover:border-amber-400 hover:text-amber-800"
+            }`}
+            title="Set shelf range for Reserve stock (Floor 4 / Ground)"
+          >
+            {displayResLocText}
+          </button>
+        </div>
       )}
 
-      {showModal && (
+      {showRunModal && (
         <LocationOverrideModal
           racks={racks}
           initialLoc={effectiveLoc}
+          allowedFloors={[1, 2, 3]}
+          title="Set Running Shelf Range (Floors 1-3)"
           onConfirm={(id, locObj) => {
             onLocChange(key, id, locObj);
-            setShowModal(false);
+            setShowRunModal(false);
           }}
           onClear={() => {
             onLocChange(key, "", null);
-            setShowModal(false);
+            setShowRunModal(false);
           }}
-          onClose={() => setShowModal(false)}
+          onClose={() => setShowRunModal(false)}
+        />
+      )}
+
+      {showResModal && (
+        <LocationOverrideModal
+          racks={racks}
+          initialLoc={effectiveResLoc}
+          allowedFloors={[4, 0]}
+          title="Set Reserve Shelf Range (Floor 4 / Ground)"
+          onConfirm={(id, locObj) => {
+            onReserveLocChange && onReserveLocChange(key, locObj || id);
+            setShowResModal(false);
+          }}
+          onClear={() => {
+            onReserveLocChange && onReserveLocChange(key, "");
+            setShowResModal(false);
+          }}
+          onClose={() => setShowResModal(false)}
         />
       )}
     </td>
@@ -865,6 +1054,7 @@ export function MatrixEditor({
             racks={racks}
             matrixTypeInfo={matrixTypeInfo}
             readOnly={readOnly}
+            showReserve={false}
           />
         </div>
       )}
@@ -877,9 +1067,14 @@ export function MatrixGridView({
   qtyMap = {},
   naMap = {},
   locOverrideMap = {},
+  reserveQtyMap = {},
+  reserveLocMap = {},
   onQtyChange,
   onToggleNA,
   onLocChange,
+  onReserveQtyChange,
+  onReserveLocChange,
+  showReserve = true,
   racks = [],
   matrixTypeInfo,
   maxHeight = "max-h-[560px]",
@@ -887,8 +1082,9 @@ export function MatrixGridView({
 }) {
   const grid = useMemo(() => buildGridFromCells(cells), [cells]);
 
-  const { grandTotal, rowTotals, colTotals } = useMemo(() => {
+  const { grandTotal, reserveGrandTotal, rowTotals, colTotals } = useMemo(() => {
     let grand = 0;
+    let resGrand = 0;
     const rt = {};
     const ct = {};
     grid.rowKeys.forEach((rk) => {
@@ -905,13 +1101,15 @@ export function MatrixGridView({
         const key = cellKey(cell);
         if (naMap[key]) return; // Skip N/A cells from total calculation
         const qty = parseInt(qtyMap[key]) || 0;
+        const rQty = parseInt(reserveQtyMap[key]) || 0;
         rt[rk] += qty;
         ct[ck] += qty;
         grand += qty;
+        resGrand += rQty;
       });
     });
-    return { grandTotal: grand, rowTotals: rt, colTotals: ct };
-  }, [grid, qtyMap, naMap]);
+    return { grandTotal: grand, reserveGrandTotal: resGrand, rowTotals: rt, colTotals: ct };
+  }, [grid, qtyMap, reserveQtyMap, naMap]);
 
   if (cells.length === 0) return null;
 
@@ -931,12 +1129,12 @@ export function MatrixGridView({
               {grid.colKeys.map((ck) => (
                 <th
                   key={ck}
-                  className="p-1.5 sm:p-2 border-b border-r border-slate-200 min-w-[56px] sm:min-w-[64px] font-bold text-slate-700 text-[10px] sm:text-xs font-mono"
+                  className="p-1.5 sm:p-2 border-b border-r border-slate-200 min-w-[110px] w-[110px] sm:min-w-[125px] sm:w-[125px] font-bold text-slate-700 text-[10px] sm:text-xs font-mono"
                 >
                   {grid.cols.get(ck).label}
                 </th>
               ))}
-              <th className="p-1.5 sm:p-2 border-b border-slate-200 min-w-[56px] sm:min-w-[64px] font-bold text-slate-700 bg-slate-200 text-[10px] sm:text-xs">
+              <th className="p-1.5 sm:p-2 border-b border-slate-200 min-w-[80px] sm:min-w-[90px] font-bold text-slate-700 bg-slate-200 text-[10px] sm:text-xs">
                 TOTAL
               </th>
             </tr>
@@ -953,7 +1151,7 @@ export function MatrixGridView({
                     return (
                       <td
                         key={ck}
-                        className="p-1 border-b border-r border-slate-200 bg-amber-50/70 text-center text-amber-500/70 text-[9px] sm:text-[10px] select-none font-mono"
+                        className="p-1 border-b border-r border-slate-200 bg-amber-50/70 text-center text-amber-500/70 text-[9px] sm:text-[10px] select-none font-mono min-w-[110px] w-[110px] sm:min-w-[125px] sm:w-[125px]"
                         title="Excluded by Cross rule (|SPH| ≥ |CYL|)"
                       >
                         ×
@@ -975,11 +1173,16 @@ export function MatrixGridView({
                       onQtyChange={onQtyChange}
                       onToggleNA={onToggleNA}
                       onLocChange={onLocChange}
+                      reserveQty={reserveQtyMap[key] || ""}
+                      reserveLoc={reserveLocMap[key] || "FL4"}
+                      onReserveQtyChange={onReserveQtyChange}
+                      onReserveLocChange={onReserveLocChange}
+                      showReserve={showReserve}
                       readOnly={readOnly}
                     />
                   );
                 })}
-                <td className="p-1 border-b border-slate-100 bg-slate-50 font-bold text-slate-700 text-[11px] sm:text-xs font-mono">
+                <td className="p-1 border-b border-slate-100 bg-slate-50 font-bold text-slate-700 text-[11px] sm:text-xs font-mono min-w-[80px] sm:min-w-[90px]">
                   {rowTotals[rk] || 0}
                 </td>
               </tr>
@@ -991,12 +1194,17 @@ export function MatrixGridView({
               {grid.colKeys.map((ck) => (
                 <td
                   key={ck}
-                  className="p-1 border-r border-slate-200 bg-slate-200 font-bold text-slate-700 text-[11px] sm:text-xs font-mono"
+                  className="p-1 border-r border-slate-200 bg-slate-200 font-bold text-slate-700 text-[11px] sm:text-xs font-mono min-w-[110px] w-[110px] sm:min-w-[125px] sm:w-[125px]"
                 >
                   {colTotals[ck] || 0}
                 </td>
               ))}
-              <td className="p-1 bg-slate-300 font-bold text-slate-900 text-[11px] sm:text-xs font-mono">{grandTotal}</td>
+              <td className="p-1 bg-slate-300 font-bold text-slate-900 text-[11px] sm:text-xs font-mono min-w-[80px] sm:min-w-[90px]">
+                <div>Run: {grandTotal}</div>
+                {reserveGrandTotal > 0 && (
+                  <div className="text-[10px] text-amber-900 font-normal">Res: {reserveGrandTotal}</div>
+                )}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -1030,9 +1238,16 @@ export function defaultRangeConfigFromProduct(product) {
   const maxS = product?.max_sph ?? -4;
   const minC = product?.min_cyl ?? 0;
   const maxC = product?.max_cyl ?? -2;
+  const stepS = product?.step_sph ? String(product.step_sph) : "0.25";
+  const stepC = product?.step_cyl ? String(product.step_cyl) : "0.25";
+  const axisVal = product?.axis !== undefined && product?.axis !== null ? String(product.axis) : (product?.axis_rule || "");
+  const minAddVal = product?.min_add !== undefined && product?.min_add !== null ? formatPower(product.min_add) : "+1.00";
+  const maxAddVal = product?.max_add !== undefined && product?.max_add !== null ? formatPower(product.max_add) : "+3.00";
+  const stepAddVal = product?.step_add !== undefined && product?.step_add !== null ? String(product.step_add) : "0.25";
+
   return {
-    sph: { min: formatPower(minS), max: formatPower(maxS), step: "0.25" },
-    cylBlocks: [{ min: formatPower(minC), max: formatPower(maxC), step: "0.25", axis: "" }],
-    add: { min: "+1.00", max: "+3.00", step: "0.25" },
+    sph: { min: formatPower(minS), max: formatPower(maxS), step: stepS },
+    cylBlocks: [{ min: formatPower(minC), max: formatPower(maxC), step: stepC, axis: axisVal }],
+    add: { min: minAddVal, max: maxAddVal, step: stepAddVal },
   };
 }

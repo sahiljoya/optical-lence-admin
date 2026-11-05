@@ -71,6 +71,7 @@ export const customerService = {
   getCustomerLimitRequests: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/limit-requests`),
   getCustomerDiscountRequests: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/discount-requests`),
   getDiscountRequestsQueue: (params = {}) => makeRequestAuth("post", "/admin/discount-request/list", params),
+  createDiscountRequest: (data) => makeRequestAuth("post", "/admin/discount-request/create", data),
   actionDiscountRequest: (data) => makeRequestAuth("post", "/admin/discount-request/action", data),
 
   getCustomerNotes: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/notes`),

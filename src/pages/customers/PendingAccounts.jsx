@@ -8,10 +8,12 @@ import { customerService } from "@/services/customerService";
 import { StatusPill } from "@/components/common/StatusPill";
 import { notify } from "@/lib/notify";
 import { hasPermission } from "@/lib/permissions";
+import { getItem } from "@/services/storage";
 import "@/styles/veriwide.css";
 
 export function PendingAccounts() {
   const navigate = useNavigate();
+  const isOwnerAdmin = getItem("admin_user")?.role?.name === "admin";
   const [pendingCustomers, setPendingCustomers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isPending, setIsPending] = useState(false);
@@ -42,6 +44,11 @@ export function PendingAccounts() {
   };
 
   useEffect(() => {
+    if (!hasPermission("APPROVE_CUSTOMER")) {
+      notify.error("Access denied. Only Owner and Accounts team can view customer approvals.");
+      navigate({ to: "/customers" });
+      return;
+    }
     fetchPending();
   }, []);
 
@@ -169,7 +176,7 @@ export function PendingAccounts() {
                         onClick={() => setSelectedCustomer(c)}
                         className="vw-btn-primary h-7 sm:h-8 px-2.5 sm:px-3 text-[10px] sm:text-[11px] md:text-[12px] font-semibold whitespace-nowrap cursor-pointer rounded-lg shadow-xs"
                       >
-                        {c.approval_status === "PENDING_OWNER" ? "Owner Approve" : "Review & Verify"}
+                        {isOwnerAdmin ? (c.approval_status === "PENDING_OWNER" ? "Owner Final Sign-Off" : "Review & Activate") : (c.approval_status === "PENDING_OWNER" ? "Awaiting Owner" : "Review & Verify")}
                       </button>
                     ) : (
                       <span className="text-[10px] sm:text-[11px] md:text-[12px] text-slate-400 italic">View only</span>
@@ -460,7 +467,8 @@ export function PendingAccounts() {
                   form="verifyForm"
                   className="w-full sm:w-auto vw-btn-primary h-9 sm:h-10 px-5 text-xs sm:text-[13px] font-semibold flex items-center justify-center gap-2 rounded-xl cursor-pointer shadow-xs disabled:opacity-60"
                 >
-                  {isPending ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />} Sign-Off & Approve
+                  {isPending ? <Loader2 size={15} className="animate-spin" /> : <ShieldCheck size={15} />}
+                  {isOwnerAdmin ? "Direct Sign-Off & Activate" : (isOwnerStep ? "Owner Sign-Off & Activate" : "Verify & Send to Owner")}
                 </button>
               </div>
             </div>
