@@ -31,6 +31,7 @@ import {
 import { PowerInput } from "@/components/common/PowerInput";
 import { DeptBadge } from "@/components/common/DeptBadge";
 import { AddBrandModal } from "@/components/products/AddBrandModal";
+import { ImageUploadInput } from "@/components/common/ImageUploadInput";
 import "@/styles/veriwide.css";
 
 export function EditProduct() {
@@ -970,6 +971,16 @@ export function EditProduct() {
                   value={productData.low_stock_threshold}
                   onChange={(e) => setProductData({ ...productData, low_stock_threshold: Math.max(1, parseInt(e.target.value) || 15) })}
                   className="w-full sm:w-1/2 h-9 px-3 bg-white border border-slate-200 rounded-lg text-xs font-mono font-bold text-slate-800 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Product Envelope Photo */}
+              <div className="mt-3.5 sm:mt-4 pt-3.5 sm:pt-4 border-t border-slate-100">
+                <ImageUploadInput
+                  label="Product Envelope Photo"
+                  value={productData.product_image || ""}
+                  onChange={(url) => setProductData({ ...productData, product_image: url })}
+                  id="edit-product-image"
                 />
               </div>
             </div>

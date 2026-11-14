@@ -31,6 +31,7 @@ import {
 import { PowerInput } from "@/components/common/PowerInput";
 import { DeptBadge } from "@/components/common/DeptBadge";
 import { AddBrandModal } from "@/components/products/AddBrandModal";
+import { ImageUploadInput } from "@/components/common/ImageUploadInput";
 import "@/styles/veriwide.css";
 
 export function CreateProduct() {
@@ -790,27 +791,13 @@ export function CreateProduct() {
                     <option value="high_value">High Value</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5">
-                    Product Envelope Photo (Image URL)
-                  </label>
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="url"
-                      placeholder="https://... (lens packet photo URL)"
-                      value={productData.product_image || ""}
-                      onChange={(e) => setProductData({ ...productData, product_image: e.target.value })}
-                      className="w-full h-9 sm:h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
-                    />
-                    {productData.product_image && (
-                      <img
-                        src={productData.product_image}
-                        alt="Preview"
-                        className="w-9 h-9 rounded-lg object-cover border border-slate-200 shrink-0 bg-white"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      />
-                    )}
-                  </div>
+                <div className="col-span-1 sm:col-span-2">
+                  <ImageUploadInput
+                    label="Product Envelope Photo"
+                    value={productData.product_image || ""}
+                    onChange={(url) => setProductData({ ...productData, product_image: url })}
+                    id="create-product-image"
+                  />
                 </div>
               </div>
 
