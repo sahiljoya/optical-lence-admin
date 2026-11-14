@@ -104,7 +104,7 @@ export function CreateOrder() {
   const subtotal = useMemo(() => cart.reduce((s, c) => s + c.qty * c.unitPrice, 0), [cart]);
   const gstRate = selectedCustomer?.negotiated_gst_rate || 5;
   const gstAmount = +(subtotal * gstRate / 100).toFixed(2);
-  const urgentSurcharge = isUrgent ? (platformSettings?.urgent_delivery_charge ?? 100) : 0;
+  const urgentSurcharge = isUrgent && platformSettings?.is_urgent_delivery_enabled ? (platformSettings?.urgent_delivery_charge ?? 100) : 0;
   // Cartage packaging charge is applied during dispatch based on actual cartons
   const cartageCharge = 0;
   const totalAmount = subtotal + gstAmount + urgentSurcharge;
@@ -303,12 +303,20 @@ export function CreateOrder() {
                 <SelectItem value="Cheque">Cheque</SelectItem>
               </SelectContent>
             </Select>
-            <button
-              onClick={() => setIsUrgent(!isUrgent)}
-              className={`h-9 rounded-lg text-[12px] font-bold flex items-center justify-center gap-1.5 border transition-colors ${isUrgent ? "bg-rose-500 text-white border-rose-600" : "bg-white text-slate-600 border-slate-200"}`}
-            >
-              <Zap size={14} className={isUrgent ? "text-yellow-300 fill-yellow-300" : "text-rose-500"} /> Urgent Delivery {isUrgent ? `(+₹${platformSettings?.urgent_delivery_charge ?? 100})` : ""}
-            </button>
+            {platformSettings?.is_urgent_delivery_enabled ? (
+              <button
+                type="button"
+                onClick={() => setIsUrgent(!isUrgent)}
+                className={`h-9 rounded-lg text-[12px] font-bold flex items-center justify-center gap-1.5 border transition-colors ${isUrgent ? "bg-rose-500 text-white border-rose-600" : "bg-white text-slate-600 border-slate-200"}`}
+              >
+                <Zap size={14} className={isUrgent ? "text-yellow-300 fill-yellow-300" : "text-rose-500"} /> Urgent Delivery {isUrgent ? `(+₹${platformSettings?.urgent_delivery_charge ?? 100})` : ""}
+              </button>
+            ) : (
+              <div className="h-9 px-3 rounded-lg text-[11px] font-bold text-slate-400 bg-slate-100 border border-slate-200 flex items-center justify-between">
+                <span className="flex items-center gap-1.5"><Zap size={13} className="text-slate-400" /> Urgent Delivery</span>
+                <span className="text-[10px] font-black uppercase text-slate-500 bg-slate-200 px-2 py-0.5 rounded">Disabled in Settings</span>
+              </div>
+            )}
 
             <div className="border-t border-slate-100 pt-3 flex flex-col gap-1.5">
               <div className="flex justify-between text-[13px] text-slate-500">

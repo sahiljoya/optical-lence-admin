@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   ClipboardList,
   MapPin,
@@ -6,7 +6,10 @@ import {
   Loader2,
   ArrowRight,
   Send,
-  AlertCircle
+  AlertCircle,
+  Search,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { orderApi } from "../../services/orderApi";
 import { DispatchOrderModal } from "@/components/orders/DispatchOrderModal";
@@ -27,6 +30,32 @@ export function PickList() {
   const [detail, setDetail] = useState(null);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [isAdvancing, setIsAdvancing] = useState(false);
+
+  // Queue Pagination and Search State
+  const [search, setSearch] = useState("");
+  const [queuePage, setQueuePage] = useState(1);
+  const [queuePageSize, setQueuePageSize] = useState(10);
+
+  const filteredQueue = useMemo(() => {
+    if (!search.trim()) return queue;
+    const q = search.toLowerCase().trim();
+    return queue.filter((o) => {
+      const orderNum = (o.order_number || o._id || "").toLowerCase();
+      const custName = (o.customer_id?.company_name || o.customer_id?.name || "").toLowerCase();
+      const city = (o.customer_id?.city || "").toLowerCase();
+      return orderNum.includes(q) || custName.includes(q) || city.includes(q);
+    });
+  }, [queue, search]);
+
+  const totalQueuePages = Math.ceil(filteredQueue.length / queuePageSize) || 1;
+  const paginatedQueue = useMemo(() => {
+    const start = (queuePage - 1) * queuePageSize;
+    return filteredQueue.slice(start, start + queuePageSize);
+  }, [filteredQueue, queuePage, queuePageSize]);
+
+  useEffect(() => {
+    setQueuePage(1);
+  }, [search]);
 
   // Unified Dispatch Modal State
   const [showDispatchModal, setShowDispatchModal] = useState(false);
@@ -110,18 +139,35 @@ export function PickList() {
         {/* Left Queue */}
         <div className="vw-card overflow-hidden">
           <div className="p-3 border-b border-slate-100 bg-slate-50 text-[11px] font-bold text-slate-500 uppercase flex items-center justify-between">
-            <span>Queue ({queue.length})</span>
+            <span>Queue ({filteredQueue.length})</span>
             <span className="text-[10px] text-slate-400 font-normal">Auto-sorted by priority</span>
           </div>
+
+          {/* Search Box */}
+          <div className="p-2 border-b border-slate-100 bg-white">
+            <div className="relative">
+              <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search order # or customer..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full h-8 pl-8 pr-2 text-[11px] bg-slate-50 border border-slate-200 rounded-md focus:outline-none focus:border-blue-500 font-medium"
+              />
+            </div>
+          </div>
+
           {loadingQueue ? (
             <div className="p-8 text-center text-slate-500 text-[13px] flex items-center justify-center gap-2">
               <Loader2 size={16} className="animate-spin" /> Loading...
             </div>
-          ) : queue.length === 0 ? (
-            <div className="p-8 text-center text-slate-500 text-[13px]">Nothing to pick right now.</div>
+          ) : filteredQueue.length === 0 ? (
+            <div className="p-8 text-center text-slate-500 text-[13px]">
+              {search.trim() ? "No matching orders found." : "Nothing to pick right now."}
+            </div>
           ) : (
-            <div className="divide-y divide-slate-100 max-h-[70vh] overflow-y-auto">
-              {queue.map((o) => (
+            <div className="divide-y divide-slate-100 max-h-[60vh] overflow-y-auto">
+              {paginatedQueue.map((o) => (
                 <button
                   key={o._id}
                   onClick={() => setSelectedId(o._id)}
@@ -152,6 +198,36 @@ export function PickList() {
                   </div>
                 </button>
               ))}
+            </div>
+          )}
+
+          {/* Queue Pagination Footer */}
+          {!loadingQueue && filteredQueue.length > 0 && (
+            <div className="p-2.5 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between text-[11px] text-slate-500">
+              <span>
+                {Math.min((queuePage - 1) * queuePageSize + 1, filteredQueue.length)}–{Math.min(queuePage * queuePageSize, filteredQueue.length)} of {filteredQueue.length}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => setQueuePage((p) => Math.max(1, p - 1))}
+                  disabled={queuePage === 1}
+                  className="w-6 h-6 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  title="Previous"
+                >
+                  <ChevronLeft size={13} />
+                </button>
+                <span className="text-[10px] font-semibold text-slate-700 px-1">
+                  {queuePage}/{totalQueuePages}
+                </span>
+                <button
+                  onClick={() => setQueuePage((p) => Math.min(totalQueuePages, p + 1))}
+                  disabled={queuePage === totalQueuePages}
+                  className="w-6 h-6 flex items-center justify-center rounded border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                  title="Next"
+                >
+                  <ChevronRight size={13} />
+                </button>
+              </div>
             </div>
           )}
         </div>

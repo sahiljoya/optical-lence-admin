@@ -112,7 +112,7 @@ export function Customers() {
   const filtered = customers.filter(c => filterTier === "all" || c.pricing_tier === filterTier);
   const totalPages = Math.ceil(total / itemsPerPage);
 
-  const toCsvValue = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const toCsvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
 
   const handleExportCsv = async () => {
     setExporting(true);
@@ -121,32 +121,120 @@ export function Customers() {
         approval_status: "APPROVED",
         is_active: activeTab === "active",
         search: search || undefined,
-        limit: 2000
+        limit: 5000,
       });
-      const list = res.data?.list || [];
-      const rows = [
-        ["Company Name", "Contact Name", "Phone", "City", "Pricing Tier", "Credit Limit", "Status"],
-        ...list.map(c => [
-          c.company_name || "",
-          c.name || "",
-          c.phone || "",
-          c.city || "",
-          (c.pricing_tier || "").replace(/_/g, " "),
-          c.credit_limit || 0,
-          c.is_active === false ? "Frozen" : "Active"
-        ])
+
+      let list = res.data?.list || [];
+      if (filterTier !== "all") {
+        list = list.filter((c) => c.pricing_tier === filterTier);
+      }
+
+      if (list.length === 0) {
+        notify.warning("No customer records found matching the current filters.");
+        setExporting(false);
+        return;
+      }
+
+      const headers = [
+        "Company / Shop Name",
+        "Owner / Contact Name",
+        "Phone Number",
+        "WhatsApp Number",
+        "Landline / Alt Phone",
+        "Email Address",
+        "Full Address",
+        "City",
+        "State",
+        "Pincode",
+        "Country",
+        "GST Number",
+        "PAN Number",
+        "Aadhaar Number",
+        "Pricing Tier",
+        "Credit Limit (INR)",
+        "Used Balance (INR)",
+        "Available Balance (INR)",
+        "Account Status",
+        "Payment Term",
+        "Stock Grade",
+        "Payment Risk Grade",
+        "Preferred Courier",
+        "Assigned Salesperson",
+        "Salesperson Phone",
+        "Entity",
+        "Account Status (Active/Frozen)",
+        "Registration Date",
       ];
-      const csv = rows.map(r => r.map(toCsvValue).join(",")).join("\n");
-      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+
+      const rows = [
+        headers,
+        ...list.map((c) => {
+          const limit = Number(c.credit_limit) || 0;
+          const used = Number(c.used_balance) || 0;
+          const available =
+            c.current_balance !== undefined && c.current_balance !== null
+              ? Number(c.current_balance) || 0
+              : limit - used;
+
+          let regDate = "";
+          if (c.createdAt) {
+            try {
+              const d = new Date(c.createdAt);
+              if (!isNaN(d.getTime())) regDate = d.toISOString().slice(0, 10);
+            } catch {
+              regDate = "";
+            }
+          }
+
+          const tierFormatted = c.pricing_tier
+            ? String(c.pricing_tier).replace(/_/g, " ").toUpperCase()
+            : "STANDARD";
+
+          return [
+            c.company_name || "",
+            c.name || "",
+            c.phone || "",
+            c.whatsapp_number || "",
+            c.landline_number || "",
+            c.email || "",
+            c.address || "",
+            c.city || "",
+            c.state || "",
+            c.pincode || "",
+            c.country || "India",
+            c.gst_no || "Unregistered",
+            c.pan_number || "",
+            c.adhar_number || "",
+            tierFormatted,
+            limit,
+            used,
+            available,
+            c.account_status || "Credit",
+            (c.payment_term || "cash").replace(/_/g, " "),
+            c.stock_grade || "—",
+            c.payment_grade || "Normal",
+            c.preferred_courier || "—",
+            c.assigned_salesperson?.name || "Direct / Unassigned",
+            c.assigned_salesperson?.phone || "—",
+            c.entity || "—",
+            c.is_active === false ? "Frozen" : "Active",
+            regDate,
+          ];
+        }),
+      ];
+
+      const csvContent = rows.map((r) => r.map(toCsvCell).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `customers-${activeTab}-${new Date().toISOString().slice(0, 10)}.csv`;
+      const tierSuffix = filterTier !== "all" ? `-${filterTier}` : "";
+      a.download = `customers-${activeTab}${tierSuffix}-${new Date().toISOString().slice(0, 10)}.csv`;
       document.body.appendChild(a);
       a.click();
       a.remove();
       URL.revokeObjectURL(url);
-      notify.success(`Exported ${list.length} customers.`);
+      notify.success(`Exported ${list.length} customers to CSV.`);
     } catch (err) {
       notify.error(err.message || "Failed to export customers.");
     } finally {

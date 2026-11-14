@@ -3,7 +3,7 @@ import { Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { 
   Search, Plus, Filter, Package, Power, X, Loader2, AlertTriangle, 
   ArrowLeft, ArrowRight, LayoutGrid, List, Sparkles, Layers, FileSpreadsheet,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Pencil
 } from "lucide-react";
 import { productApi, brandApi } from "../../services/productApi";
 import { formatPower } from "./matrixHelpers";
@@ -11,6 +11,8 @@ import { notify } from "@/lib/notify";
 import { useConfirm } from "@/hooks/useConfirm";
 import { ImportProductsModal } from "@/components/products/ImportProductsModal";
 import { UploadMatrixModal } from "@/components/products/UploadMatrixModal";
+import { EditBrandModal } from "@/components/products/EditBrandModal";
+import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
 const displayPower = (val) => {
@@ -47,6 +49,7 @@ export function Products() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [selectedMatrixProduct, setSelectedMatrixProduct] = useState(null);
   const [showMatrixModal, setShowMatrixModal] = useState(false);
+  const [editingBrand, setEditingBrand] = useState(null);
   const { confirm, confirmDialog } = useConfirm();
 
   // Debounce search input so we dont query on every keystroke
@@ -123,11 +126,23 @@ export function Products() {
     }
   };
 
+  const handleBrandUpdated = (updatedBrand) => {
+    fetchBrands();
+    if (selectedBrand && editingBrand && selectedBrand.toLowerCase() === editingBrand.name.toLowerCase()) {
+      if (updatedBrand?.name && updatedBrand.name !== editingBrand.name) {
+        navigate({ to: "/products", search: { brand: updatedBrand.name } });
+      } else {
+        fetchProducts();
+      }
+    }
+  };
+
   // Brands list for Level 1
   const allBrandsList = useMemo(() => {
     return brands.map((b) => ({
-      _id: b.id || b.name,
-      name: b.name.trim(),
+      ...b,
+      _id: b._id || b.id || b.name,
+      name: (b.name || "").trim(),
       image: b.image,
       description: b.description || "Lens Brand",
       product_count: b.product_count || 0,
@@ -239,24 +254,28 @@ export function Products() {
             <span>Slow & Dead Stock</span>
           </Link>
 
-          <button
-            type="button"
-            onClick={() => setShowImportModal(true)}
-            className="w-full sm:w-auto bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 h-8 sm:h-9 md:h-10 px-3 sm:px-3.5 text-[11px] sm:text-xs md:text-[13px] font-semibold gap-1.5 flex items-center justify-center rounded-xl cursor-pointer shadow-xs whitespace-nowrap transition-colors"
-            title="Bulk Import / Update Products from Excel"
-          >
-            <FileSpreadsheet size={15} className="text-emerald-600 shrink-0" />
-            <span>Import Excel</span>
-          </button>
+          {hasPermission("MANAGE_PRODUCTS") && (
+            <button
+              type="button"
+              onClick={() => setShowImportModal(true)}
+              className="w-full sm:w-auto bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 h-8 sm:h-9 md:h-10 px-3 sm:px-3.5 text-[11px] sm:text-xs md:text-[13px] font-semibold gap-1.5 flex items-center justify-center rounded-xl cursor-pointer shadow-xs whitespace-nowrap transition-colors"
+              title="Bulk Import / Update Products from Excel"
+            >
+              <FileSpreadsheet size={15} className="text-emerald-600 shrink-0" />
+              <span>Import Excel</span>
+            </button>
+          )}
 
-          <Link 
-            to="/products/new"
-            search={selectedBrand ? { brand: selectedBrand } : {}}
-            className="w-full sm:w-auto vw-btn-primary h-8 sm:h-9 md:h-10 px-3 sm:px-4 text-[11px] sm:text-xs md:text-[13px] font-semibold gap-1.5 flex items-center justify-center rounded-xl cursor-pointer shadow-xs whitespace-nowrap"
-          >
-            <Plus size={15} className="shrink-0" />
-            <span>New Series</span>
-          </Link>
+          {hasPermission("MANAGE_PRODUCTS") && (
+            <Link 
+              to="/products/new"
+              search={selectedBrand ? { brand: selectedBrand } : {}}
+              className="w-full sm:w-auto vw-btn-primary h-8 sm:h-9 md:h-10 px-3 sm:px-4 text-[11px] sm:text-xs md:text-[13px] font-semibold gap-1.5 flex items-center justify-center rounded-xl cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              <Plus size={15} className="shrink-0" />
+              <span>New Series</span>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -346,9 +365,24 @@ export function Products() {
                         </div>
                       )}
                       <div className="min-w-0 flex-1">
-                        <h4 className="font-bold text-slate-900 text-sm sm:text-base group-hover:text-blue-600 transition-colors truncate">
-                          {b.name}
-                        </h4>
+                        <div className="flex items-center justify-between gap-1">
+                          <h4 className="font-bold text-slate-900 text-sm sm:text-base group-hover:text-blue-600 transition-colors truncate">
+                            {b.name}
+                          </h4>
+                          {hasPermission("MANAGE_PRODUCTS") && (
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingBrand(b);
+                              }}
+                              className="p-1 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors cursor-pointer shrink-0"
+                              title="Edit Brand"
+                            >
+                              <Pencil size={13} />
+                            </button>
+                          )}
+                        </div>
                         <span className="inline-block mt-0.5 text-[10px] sm:text-[11px] font-semibold text-blue-700 bg-blue-50 border border-blue-100 px-2 py-0.2 rounded-full">
                           {count} Series
                         </span>
@@ -397,15 +431,35 @@ export function Products() {
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  navigate({ to: "/products", search: {} });
-                }}
-                className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
-              >
-                Change Brand
-              </button>
+              <div className="flex items-center gap-2">
+                {hasPermission("MANAGE_PRODUCTS") && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const bObj = brands.find((br) => (br.name || "").trim().toLowerCase() === selectedBrand.trim().toLowerCase());
+                      if (bObj) {
+                        setEditingBrand(bObj);
+                      } else {
+                        setEditingBrand({ name: selectedBrand });
+                      }
+                    }}
+                    className="px-2.5 py-1 text-xs font-semibold text-slate-700 bg-slate-100 hover:bg-slate-200 hover:text-blue-600 rounded-lg flex items-center gap-1.5 transition-colors cursor-pointer"
+                    title="Edit Brand Name and Logo"
+                  >
+                    <Pencil size={12} />
+                    <span>Edit Brand</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => {
+                    navigate({ to: "/products", search: {} });
+                  }}
+                  className="text-xs font-semibold text-blue-600 hover:text-blue-700 cursor-pointer"
+                >
+                  Change Brand
+                </button>
+              </div>
             </div>
           )}
 
@@ -842,6 +896,13 @@ export function Products() {
           setSelectedMatrixProduct(null);
         }}
         onSuccess={handleRefreshAll}
+      />
+
+      <EditBrandModal
+        isOpen={!!editingBrand}
+        onClose={() => setEditingBrand(null)}
+        brand={editingBrand}
+        onBrandUpdated={handleBrandUpdated}
       />
     </>
   );

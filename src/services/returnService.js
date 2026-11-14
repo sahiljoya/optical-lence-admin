@@ -1,7 +1,7 @@
 import { makeRequestAuth } from "@/config/apiClient";
 
 export const returnService = {
-  getReturns: (params) => makeRequestAuth("get", "/admin/returns/list", null, { params }),
+  getReturns: (params = {}) => makeRequestAuth("get", "/admin/returns/list", params),
   getKPIs: () => makeRequestAuth("get", "/admin/returns/kpis"),
   getReturnDetail: (id) => makeRequestAuth("get", `/admin/returns/detail/${id}`),
   createReturn: (data) => makeRequestAuth("post", "/admin/returns/create", data),

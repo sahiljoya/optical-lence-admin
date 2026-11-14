@@ -978,7 +978,7 @@ export function CustomerDetails() {
             <h3 className="text-[12px] font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
               <ImageIcon size={14}/> KYC Documents & Photos
             </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2.5 sm:gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-2 gap-2.5 sm:gap-3 max-h-[300px] overflow-y-auto pr-1 custom-scrollbar">
               {[
                 { label: "GST Certificate", img: data.gst_image },
                 { label: "PAN Card", img: data.pan_image },
@@ -1156,7 +1156,7 @@ export function CustomerDetails() {
                   </div>
 
                   {data.logged_in_devices && data.logged_in_devices.length > 0 ? (
-                    <div className="space-y-2">
+                    <div className="space-y-2 max-h-[320px] overflow-y-auto pr-1.5 custom-scrollbar">
                       {data.logged_in_devices.map((dev, idx) => (
                         <div
                           key={dev.device_id || idx}
@@ -1384,6 +1384,74 @@ export function CustomerDetails() {
             </div>
           </div>
 
+          {/* Active Cart & Recent Orders Row */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Active Cart */}
+            <div className="bg-white rounded-xl border border-border shadow-sm flex flex-col h-[340px]">
+              <div className="p-4 sm:p-5 border-b border-border bg-slate-50/50 flex items-center justify-between shrink-0">
+                <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2">
+                  <ShoppingCart size={16} className="text-amber-500"/> Active Cart
+                </h3>
+                {cartItems.length > 0 && (
+                  <span className="text-[11px] font-bold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                    {cartItems.length} {cartItems.length === 1 ? "item" : "items"}
+                  </span>
+                )}
+              </div>
+              <div className="p-4 sm:p-5 space-y-3 flex-1 overflow-y-auto custom-scrollbar">
+                {cartItems.length > 0 ? cartItems.map(item => (
+                  <div key={item._id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 shadow-sm rounded-lg hover:border-slate-300 transition-colors">
+                    <div>
+                      <div className="font-semibold text-[13px] text-slate-800">
+                        {[item.product_id?.brand, item.product_id?.index, item.product_id?.base, item.product_id?.coating].filter(Boolean).join(" ") || "Product"}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-1">SPH {item.sph} / CYL {item.cyl}{item.axis != null ? ` / AXIS ${item.axis}` : ""}{item.add != null ? ` / ADD ${item.add}` : ""}</div>
+                      {item.added_by && (item.added_by._id?.toString() !== id?.toString()) && (
+                        <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-1.5 py-0.5 inline-block mt-1.5 font-semibold uppercase tracking-wide">
+                          Added by: {item.added_by.name}
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-[14px] text-slate-900">₹{item.unit_price}</div>
+                      <div className="text-[11px] font-medium text-slate-500">Qty: {item.quantity}</div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-slate-500 text-[13px]">Cart is empty.</div>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Orders */}
+            <div className="bg-white rounded-xl border border-border shadow-sm flex flex-col h-[340px]">
+              <div className="p-4 sm:p-5 border-b border-border bg-slate-50/50 flex items-center justify-between shrink-0">
+                <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2">
+                  <Package size={16} className="text-emerald-500"/> Recent Orders
+                </h3>
+                <Link to="/orders" className="text-[12px] text-blue-600 hover:underline font-semibold">View All</Link>
+              </div>
+              <div className="divide-y divide-slate-100 flex-1 overflow-y-auto custom-scrollbar">
+                {recentOrders.length > 0 ? recentOrders.slice(0,10).map(ord => (
+                  <div key={ord._id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                    <div>
+                      <div className="font-bold text-[13px] text-blue-600 cursor-pointer hover:underline">{ord.order_number}</div>
+                      <div className="text-[11px] text-slate-500 mt-1">{new Date(ord.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} • <span className="font-medium text-slate-700">{ord.items?.length || 0} items</span></div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold text-[13px] text-slate-900">₹{ord.total_amount?.toLocaleString()}</div>
+                      <div className="text-[11px] text-emerald-600 font-semibold mt-1 bg-emerald-50 px-1.5 py-0.5 rounded-sm inline-block">{ord.status}</div>
+                    </div>
+                  </div>
+                )) : (
+                  <div className="text-center py-8 text-slate-500 text-[13px]">No recent orders.</div>
+                )}
+              </div>
+            </div>
+
+          </div>
+
           {/* Section: Special Negotiated Pricing (Floor-Protected Sub-List) */}
           <div className="bg-white rounded-xl border border-border shadow-sm overflow-hidden flex flex-col">
             <div className="p-5 border-b border-border bg-slate-50/50">
@@ -1513,9 +1581,9 @@ export function CustomerDetails() {
             </form>
 
             {/* List of Active Negotiated Prices */}
-            <div className="overflow-x-auto w-full">
+            <div className="overflow-x-auto overflow-y-auto max-h-[260px] w-full custom-scrollbar">
               <table className="w-full text-left text-[13px] min-w-[560px]">
-                <thead className="bg-slate-50 border-b border-border text-[11px] uppercase tracking-wider text-slate-500">
+                <thead className="bg-slate-50 border-b border-border text-[11px] uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
                   <tr>
                     <th className="py-2.5 px-4 sm:px-5 font-semibold">Product Description</th>
                     <th className="py-2.5 px-3 sm:px-4 font-semibold text-right">Standard Rate</th>
@@ -1572,9 +1640,9 @@ export function CustomerDetails() {
               </h3>
               <p className="text-[12px] text-slate-500 mt-0.5">Requests raised by sales staff to increase this customer's credit limit.</p>
             </div>
-            <div className="overflow-x-auto w-full">
+            <div className="overflow-x-auto overflow-y-auto max-h-[240px] w-full custom-scrollbar">
               <table className="w-full text-left text-[13px] min-w-[600px]">
-                <thead className="bg-slate-50 border-b border-border text-[11px] uppercase tracking-wider text-slate-500">
+                <thead className="bg-slate-50 border-b border-border text-[11px] uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
                   <tr>
                     <th className="py-2.5 px-4 sm:px-5 font-semibold">Requested By</th>
                     <th className="py-2.5 px-3 sm:px-4 font-semibold text-right">Current → Requested</th>
@@ -1636,9 +1704,9 @@ export function CustomerDetails() {
                 Special product rate requests submitted by Sales & Accounts teams (Floor-price protected).
               </p>
             </div>
-            <div className="overflow-x-auto w-full">
+            <div className="overflow-x-auto overflow-y-auto max-h-[240px] w-full custom-scrollbar">
               <table className="w-full text-left text-[13px] min-w-[720px]">
-                <thead className="bg-slate-50 border-b border-border text-[11px] uppercase tracking-wider text-slate-500">
+                <thead className="bg-slate-50 border-b border-border text-[11px] uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
                   <tr>
                     <th className="py-2.5 px-4 sm:px-5 font-semibold">Product</th>
                     <th className="py-2.5 px-3 sm:px-4 font-semibold">Requested By</th>
@@ -1745,9 +1813,9 @@ export function CustomerDetails() {
                 <Plus size={16}/> Add Staff
               </button>
             </div>
-            <div className="overflow-x-auto w-full">
+            <div className="overflow-x-auto overflow-y-auto max-h-[260px] w-full custom-scrollbar">
               <table className="w-full text-left text-[13px] min-w-[620px]">
-                <thead className="bg-white border-b border-border">
+                <thead className="bg-white border-b border-border sticky top-0 z-10 shadow-2xs">
                   <tr>
                     <th className="py-3 px-5 font-semibold text-slate-500">Staff Name</th>
                     <th className="py-3 px-5 font-semibold text-slate-500">Contact</th>
@@ -1803,72 +1871,13 @@ export function CustomerDetails() {
             </div>
           </div>
 
-          {/* Active Cart & Recent Orders Row */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Active Cart */}
-            <div className="bg-white rounded-xl border border-border shadow-sm flex flex-col">
-              <div className="p-5 border-b border-border bg-slate-50/50">
-                <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2"><ShoppingCart size={16} className="text-amber-500"/> Active Cart</h3>
-              </div>
-              <div className="p-5 space-y-3 flex-1">
-                {cartItems.length > 0 ? cartItems.map(item => (
-                  <div key={item._id} className="flex items-center justify-between p-3.5 bg-white border border-slate-200 shadow-sm rounded-lg hover:border-slate-300 transition-colors">
-                    <div>
-                      <div className="font-semibold text-[13px] text-slate-800">
-                        {[item.product_id?.brand, item.product_id?.index, item.product_id?.base, item.product_id?.coating].filter(Boolean).join(" ") || "Product"}
-                      </div>
-                      <div className="text-[11px] text-slate-500 mt-1">SPH {item.sph} / CYL {item.cyl}{item.axis != null ? ` / AXIS ${item.axis}` : ""}{item.add != null ? ` / ADD ${item.add}` : ""}</div>
-                      {item.added_by && (item.added_by._id?.toString() !== id?.toString()) && (
-                        <div className="text-[10px] text-amber-700 bg-amber-50 border border-amber-200 rounded-sm px-1.5 py-0.5 inline-block mt-1.5 font-semibold uppercase tracking-wide">
-                          Added by: {item.added_by.name}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-[14px] text-slate-900">₹{item.unit_price}</div>
-                      <div className="text-[11px] font-medium text-slate-500">Qty: {item.quantity}</div>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="text-center py-8 text-slate-500 text-[13px]">Cart is empty.</div>
-                )}
-              </div>
-            </div>
-
-            {/* Recent Orders */}
-            <div className="bg-white rounded-xl border border-border shadow-sm flex flex-col">
-              <div className="p-5 border-b border-border bg-slate-50/50 flex items-center justify-between">
-                <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2"><Package size={16} className="text-emerald-500"/> Recent Orders</h3>
-                <Link to="/orders" className="text-[12px] text-blue-600 hover:underline font-semibold">View All</Link>
-              </div>
-              <div className="divide-y divide-slate-100 flex-1">
-                {recentOrders.length > 0 ? recentOrders.slice(0,5).map(ord => (
-                  <div key={ord._id} className="p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
-                    <div>
-                      <div className="font-bold text-[13px] text-blue-600 cursor-pointer hover:underline">{ord.order_number}</div>
-                      <div className="text-[11px] text-slate-500 mt-1">{new Date(ord.createdAt).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })} • <span className="font-medium text-slate-700">{ord.items?.length || 0} items</span></div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-bold text-[13px] text-slate-900">₹{ord.total_amount?.toLocaleString()}</div>
-                      <div className="text-[11px] text-emerald-600 font-semibold mt-1 bg-emerald-50 px-1.5 py-0.5 rounded-sm inline-block">{ord.status}</div>
-                    </div>
-                  </div>
-                )) : (
-                  <div className="text-center py-8 text-slate-500 text-[13px]">No recent orders.</div>
-                )}
-              </div>
-            </div>
-
-          </div>
-
           {/* CRM Visit & Call Notes */}
           <div className="bg-white rounded-xl border border-border shadow-sm flex flex-col">
             <div className="p-5 border-b border-border bg-slate-50/50 flex items-center justify-between">
               <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2"><History size={16} className="text-purple-500"/> Visit & Call Notes</h3>
               <button onClick={() => setShowNoteModal(true)} className="text-[12px] text-blue-600 hover:underline font-semibold flex items-center gap-1"><Plus size={14}/> Add Note</button>
             </div>
-            <div className="divide-y divide-slate-100">
+            <div className="divide-y divide-slate-100 max-h-[260px] overflow-y-auto custom-scrollbar">
               {loadingNotes ? (
                 <div className="text-center py-8 text-slate-500 text-[13px]">Loading notes...</div>
               ) : notes.length > 0 ? notes.map(n => (

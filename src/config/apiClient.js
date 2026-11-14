@@ -2,8 +2,8 @@ import axios from "axios";
 import { handleResponse } from "./authService";
 import { getItem } from "@/services/storage";
 
-const BACKEND_URL = "https://opticale-backend.onrender.com/api/v1";
-// const BACKEND_URL = "http://localhost:8080/api/v1";
+// const BACKEND_URL = "https://opticale-backend.onrender.com/api/v1";
+const BACKEND_URL = "http://localhost:8080/api/v1";
 
 /**
  * Make an unauthenticated API request
@@ -31,7 +31,15 @@ export const makeRequest = async (
     };
 
     if (method.toLowerCase() === "get") {
-      config.params = data;
+      if (data && typeof data === "object" && data.params) {
+        config.params = data.params;
+      } else if (data && typeof data === "object") {
+        config.params = data;
+      } else if (isFile && typeof isFile === "object" && isFile.params) {
+        config.params = isFile.params;
+      } else {
+        config.params = data || {};
+      }
     } else {
       config.data = data;
     }
@@ -72,7 +80,15 @@ export const makeRequestAuth = async (
     };
 
     if (method.toLowerCase() === "get") {
-      config.params = data;
+      if (data && typeof data === "object" && data.params) {
+        config.params = data.params;
+      } else if (data && typeof data === "object") {
+        config.params = data;
+      } else if (isFile && typeof isFile === "object" && isFile.params) {
+        config.params = isFile.params;
+      } else {
+        config.params = data || {};
+      }
     } else {
       config.data = data;
     }

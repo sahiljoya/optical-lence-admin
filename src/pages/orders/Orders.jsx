@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { OrderActions } from "./components/OrderActions";
 import { orderApi } from "@/services/orderApi";
 import { notify } from "@/lib/notify";
+import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
 const STATUS_CONFIG = {
@@ -61,7 +62,9 @@ function StatusBadge({ status, reason, trackingId, isBackorder, backorderReason 
 export function Orders() {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [activeTab, setActiveTab] = useState("all");
   const [filterDate, setFilterDate] = useState("all_time");
   const [urgentOnly, setUrgentOnly] = useState(false);
@@ -69,12 +72,48 @@ export function Orders() {
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [tabCounts, setTabCounts] = useState({
+    total: 0,
+    awaiting: 0,
+    pending: 0,
+    processing: 0,
+    dispatched: 0,
+    delivered: 0,
+    hold: 0,
+    cancelled: 0,
+    urgent: 0,
+  });
+
+  // Debounce search
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setCurrentPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset page when any filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, filterDate, urgentOnly, pageSize]);
 
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const res = await orderApi.getRecentOrders();
-      const mapped = (res?.data || []).map(o => {
+      const res = await orderApi.getOrderList({
+        page: currentPage,
+        limit: pageSize,
+        status: activeTab,
+        urgentOnly,
+        filterDate,
+        search: debouncedSearch || undefined,
+      });
+      const data = res?.data || {};
+      const rawList = data.list || [];
+      const mapped = rawList.map((o) => {
         const ownerId = o.customer_id?._id ? String(o.customer_id._id) : null;
         const placerId = o.placed_by?._id ? String(o.placed_by._id) : null;
         const placedBy = placerId && placerId !== ownerId ? o.placed_by.name : "Owner";
@@ -82,24 +121,44 @@ export function Orders() {
           id: o.order_number || o._id,
           dbId: o._id,
           customer: o.customer_id?.company_name || o.customer_id?.name || "Customer",
+          customerPhone: o.customer_id?.phone || "",
           city: o.customer_id?.city || "N/A",
           date: o.createdAt,
-          amount: o.total_amount || 0,
+          subtotal: Number(o.subtotal) || 0,
+          gstRate: Number(o.gst_rate) || 0,
+          gstAmount: Number(o.gst_amount) || 0,
+          amount: Number(o.total_amount) || 0,
           status: o.status,
+          orderType: o.order_type || "parcel",
+          paymentMode: o.payment_mode || "Credit",
           items: Array.isArray(o.items) ? o.items.length : 0,
           totalQty: Array.isArray(o.items) ? o.items.reduce((s, it) => s + (it.requested_quantity || 1), 0) : 0,
+          allocatedQty: Array.isArray(o.items) ? o.items.reduce((s, it) => s + (it.allocated_quantity || 0), 0) : 0,
           isUrgent: !!o.is_urgent,
-          isBackorder: !!o.is_stock_wait || (Array.isArray(o.items) && o.items.some(it => it.is_backorder)),
+          urgentSurcharge: Number(o.urgent_surcharge) || 0,
+          isBackorder: !!o.is_stock_wait || (Array.isArray(o.items) && o.items.some((it) => it.is_backorder)),
           placedBy,
           trackingId: o.tracking_number || "",
-          deliveryPartner: o.delivery_partner || "DTDC"
+          deliveryPartner: o.delivery_partner || "DTDC",
+          cartonsCount: Number(o.cartons_count) || 0,
+          cartageCharge: Number(o.cartage_charge) || 0,
+          isCartageFree: !!o.is_cartage_free,
+          shippedWeightKg: Number(o.shipped_weight_kg) || 0,
+          raw: o,
         };
       });
       setOrders(mapped);
+      setTotalOrders(data.total || 0);
+      setTotalPages(data.totalPages || 1);
+      if (data.tabCounts) {
+        setTabCounts(data.tabCounts);
+      }
     } catch (err) {
       console.error("Could not load orders:", err);
       notify.error(err.message || "Could not load orders");
       setOrders([]);
+      setTotalOrders(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
@@ -107,98 +166,168 @@ export function Orders() {
 
   useEffect(() => {
     fetchOrders();
-  }, []);
+  }, [currentPage, pageSize, activeTab, filterDate, urgentOnly, debouncedSearch]);
 
-  // Reset to page 1 whenever filters change
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [search, activeTab, filterDate, urgentOnly, pageSize]);
-
-  // Counts for tabs & KPI summary (cancelled orders are hidden from "All Orders")
-  const counts = useMemo(() => {
-    const total = orders.filter(o => o.status !== "CANCELLED").length;
-    const awaiting = orders.filter(o => o.status === "AWAITING_STOCK" || o.status === "awaiting_stock").length;
-    const newOrConfirmed = orders.filter(o => ["PLACED", "pending", "CONFIRMED", "confirmed"].includes(o.status)).length;
-    const pickingPacking = orders.filter(o => ["PICKING", "processing", "PACKING", "packing"].includes(o.status)).length;
-    const dispatched = orders.filter(o => ["DISPATCHED", "shipped"].includes(o.status)).length;
-    const delivered = orders.filter(o => ["DELIVERED", "delivered"].includes(o.status)).length;
-    const hold = orders.filter(o => ["HOLD", "blocked"].includes(o.status)).length;
-    const urgent = orders.filter(o => o.isUrgent).length;
-    const cancelled = orders.filter(o => o.status === "CANCELLED" || o.status === "cancelled").length;
-    return { total, awaiting, newOrConfirmed, pickingPacking, dispatched, delivered, hold, urgent, cancelled };
-  }, [orders]);
+  const counts = tabCounts;
 
   const tabs = [
     { id: "all", label: "All Orders", count: counts.total },
     { id: "AWAITING_STOCK", label: "Awaiting Stock", count: counts.awaiting, isWarning: true },
-    { id: "pending", label: "New & Confirmed", count: counts.newOrConfirmed },
-    { id: "processing", label: "Picking / Packing", count: counts.pickingPacking },
+    { id: "pending", label: "New & Confirmed", count: counts.pending },
+    { id: "processing", label: "Picking / Packing", count: counts.processing },
     { id: "shipped", label: "Dispatched", count: counts.dispatched },
     { id: "blocked", label: "On Hold", count: counts.hold },
     { id: "delivered", label: "Delivered", count: counts.delivered },
     { id: "cancelled", label: "Cancelled", count: counts.cancelled },
   ];
 
-  // Filtering Logic
-  const filteredOrders = useMemo(() => {
-    return orders.filter(o => {
-      // Tab matching
-      let matchesTab = true;
-      if (activeTab === "all") {
-        matchesTab = o.status !== "CANCELLED";
-      } else if (activeTab === "AWAITING_STOCK") {
-        matchesTab = o.status === "AWAITING_STOCK" || o.status === "awaiting_stock";
-      } else if (activeTab === "pending") {
-        matchesTab = ["PLACED", "pending", "CONFIRMED", "confirmed"].includes(o.status);
-      } else if (activeTab === "processing") {
-        matchesTab = ["PICKING", "processing", "PACKING", "packing"].includes(o.status);
-      } else if (activeTab === "shipped") {
-        matchesTab = ["DISPATCHED", "shipped"].includes(o.status);
-      } else if (activeTab === "blocked") {
-        matchesTab = ["HOLD", "blocked"].includes(o.status);
-      } else if (activeTab === "delivered") {
-        matchesTab = ["DELIVERED", "delivered"].includes(o.status);
-      } else if (activeTab === "cancelled") {
-        matchesTab = o.status === "CANCELLED" || o.status === "cancelled";
-      }
-
-      // Urgent toggle
-      if (urgentOnly && !o.isUrgent) {
-        return false;
-      }
-
-      // Search matching
-      const q = search.trim().toLowerCase();
-      const matchesSearch = !q || 
-        o.id.toLowerCase().includes(q) || 
-        o.customer.toLowerCase().includes(q) ||
-        o.city.toLowerCase().includes(q) ||
-        (o.trackingId && o.trackingId.toLowerCase().includes(q));
-
-      // Date matching
-      let matchesDate = true;
-      if (filterDate !== "all_time") {
-        const orderDate = new Date(o.date);
-        const now = new Date();
-        if (filterDate === "today") {
-          matchesDate = orderDate.toDateString() === now.toDateString();
-        } else if (filterDate === "this_week") {
-          const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-          matchesDate = orderDate >= sevenDaysAgo;
-        } else if (filterDate === "this_month") {
-          matchesDate = orderDate.getMonth() === now.getMonth() && orderDate.getFullYear() === now.getFullYear();
-        }
-      }
-
-      return matchesTab && matchesSearch && matchesDate;
-    }).sort((a, b) => (b.isUrgent ? 1 : 0) - (a.isUrgent ? 1 : 0));
-  }, [orders, activeTab, search, filterDate, urgentOnly]);
-
-  // Pagination Slice
-  const totalPages = Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = startIndex + pageSize;
-  const paginatedOrders = filteredOrders.slice(startIndex, endIndex);
+  const endIndex = Math.min(currentPage * pageSize, totalOrders);
+
+  const toCsvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+
+  const handleExportCsv = async () => {
+    setExporting(true);
+    try {
+      // Fetch matching records directly from backend with active filters and up to 5000 limit
+      const payload = {
+        status: activeTab,
+        urgentOnly,
+        filterDate,
+        search: search || undefined,
+        limit: 5000,
+      };
+
+      const res = await orderApi.getOrderList(payload);
+      const list = res.data?.list || [];
+
+      if (list.length === 0) {
+        notify.warning("No orders found matching the current filters.");
+        setExporting(false);
+        return;
+      }
+
+      const headers = [
+        "Order Number",
+        "Order Date",
+        "Order Time",
+        "Customer / Company Name",
+        "Customer Phone",
+        "City / Destination",
+        "State",
+        "Full Address",
+        "GST Number",
+        "Pricing Tier",
+        "Placed By",
+        "Order Status",
+        "Order Type",
+        "Is Urgent",
+        "Urgent Surcharge (INR)",
+        "Stock Backorder",
+        "Unique Items Count",
+        "Total Ordered Qty (Pcs)",
+        "Total Allocated Qty (Pcs)",
+        "Subtotal (INR)",
+        "GST Rate (%)",
+        "GST Amount (INR)",
+        "Total Amount (INR)",
+        "Payment Mode",
+        "Delivery Partner",
+        "Tracking / AWB Number",
+        "Cartons Count",
+        "Cartage Charge (INR)",
+        "Cartage Free",
+        "Shipped Weight (Kg)",
+      ];
+
+      const rows = [
+        headers,
+        ...list.map((o) => {
+          let dateStr = "";
+          let timeStr = "";
+          if (o.createdAt) {
+            try {
+              const d = new Date(o.createdAt);
+              if (!isNaN(d.getTime())) {
+                dateStr = d.toISOString().slice(0, 10);
+                timeStr = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+              }
+            } catch {
+              dateStr = String(o.createdAt);
+            }
+          }
+
+          const statusConfig = STATUS_CONFIG[o.status];
+          const statusLabel = statusConfig?.label || String(o.status || "").replace(/_/g, " ");
+
+          const ownerId = o.customer_id?._id ? String(o.customer_id._id) : null;
+          const placerId = o.placed_by?._id ? String(o.placed_by._id) : null;
+          const placedByName = placerId && placerId !== ownerId ? (o.placed_by?.name || "Staff") : "Owner";
+
+          const totalReqQty = Array.isArray(o.items)
+            ? o.items.reduce((s, it) => s + (Number(it.requested_quantity) || 1), 0)
+            : 0;
+          const totalAllocQty = Array.isArray(o.items)
+            ? o.items.reduce((s, it) => s + (Number(it.allocated_quantity) || 0), 0)
+            : 0;
+          const isBackorder =
+            !!o.is_stock_wait || (Array.isArray(o.items) && o.items.some((it) => it.is_backorder));
+
+          return [
+            o.order_number || o._id || "",
+            dateStr,
+            timeStr,
+            o.customer_id?.company_name || o.customer_id?.name || "Customer",
+            o.customer_id?.phone || "",
+            o.customer_id?.city || "",
+            o.customer_id?.state || "",
+            o.customer_id?.address || "",
+            o.customer_id?.gst_no || "Unregistered",
+            (o.customer_id?.pricing_tier || "STANDARD").replace(/_/g, " ").toUpperCase(),
+            placedByName,
+            statusLabel,
+            String(o.order_type || "parcel").toUpperCase(),
+            o.is_urgent ? "YES (Rush)" : "No",
+            Number(o.urgent_surcharge) || 0,
+            isBackorder ? "YES (Awaiting)" : "No",
+            Array.isArray(o.items) ? o.items.length : 0,
+            totalReqQty,
+            totalAllocQty,
+            Number(o.subtotal) || 0,
+            Number(o.gst_rate) || 0,
+            Number(o.gst_amount) || 0,
+            Number(o.total_amount) || 0,
+            o.payment_mode || "Credit",
+            o.delivery_partner || "—",
+            o.tracking_number || "—",
+            Number(o.cartons_count) || 0,
+            Number(o.cartage_charge) || 0,
+            o.is_cartage_free ? "Yes" : "No",
+            Number(o.shipped_weight_kg) || 0,
+          ];
+        }),
+      ];
+
+      const csvContent = rows.map((r) => r.map(toCsvCell).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const urgentSuffix = urgentOnly ? "-urgent" : "";
+      const dateSuffix = filterDate !== "all_time" ? `-${filterDate}` : "";
+      a.download = `orders-${activeTab}${urgentSuffix}${dateSuffix}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      notify.success(`Exported ${list.length} orders from database to CSV.`);
+    } catch (err) {
+      console.error("Order CSV export error:", err);
+      notify.error(err.message || "Failed to export orders to CSV.");
+    } finally {
+      setExporting(false);
+    }
+  };
 
   return (
     <>
@@ -224,15 +353,25 @@ export function Orders() {
           >
             <RefreshCw size={13} className={`sm:w-3.5 sm:h-3.5 ${loading ? "animate-spin" : ""}`} /> Refresh
           </button>
-          <button className="flex items-center justify-center gap-1 sm:gap-1.5 vw-btn-secondary h-8 sm:h-9 px-2 sm:px-3 text-[11px] sm:text-xs md:text-[13px] rounded-xl font-medium cursor-pointer">
-            <Download size={13} className="sm:w-3.5 sm:h-3.5" /> Export
-          </button>
-          <Link 
-            to="/orders/new" 
-            className="flex items-center justify-center gap-1 sm:gap-1.5 vw-btn-primary h-8 sm:h-9 px-2.5 sm:px-4 text-[11px] sm:text-xs md:text-[13px] rounded-xl font-semibold cursor-pointer shadow-xs whitespace-nowrap"
-          >
-            + New Order
-          </Link>
+          {hasPermission("EXPORT_DATA") && (
+            <button 
+              onClick={handleExportCsv}
+              disabled={exporting || loading}
+              className="flex items-center justify-center gap-1 sm:gap-1.5 vw-btn-secondary h-8 sm:h-9 px-2 sm:px-3 text-[11px] sm:text-xs md:text-[13px] rounded-xl font-medium cursor-pointer"
+              title="Export filtered orders to CSV"
+            >
+              <Download size={13} className={`sm:w-3.5 sm:h-3.5 ${exporting ? "animate-bounce" : ""}`} /> 
+              {exporting ? "Exporting..." : "Export"}
+            </button>
+          )}
+          {hasPermission("PLACE_ORDER") && (
+            <Link 
+              to="/orders/new" 
+              className="flex items-center justify-center gap-1 sm:gap-1.5 vw-btn-primary h-8 sm:h-9 px-2.5 sm:px-4 text-[11px] sm:text-xs md:text-[13px] rounded-xl font-semibold cursor-pointer shadow-xs whitespace-nowrap"
+            >
+              + New Order
+            </Link>
+          )}
         </div>
       </div>
 
@@ -433,7 +572,7 @@ export function Orders() {
               </tr>
             </thead>
             <tbody>
-              {paginatedOrders.length > 0 ? paginatedOrders.map((o) => {
+              {orders.length > 0 ? orders.map((o) => {
                 const isAwaiting = o.status === "AWAITING_STOCK" || o.status === "awaiting_stock";
                 return (
                   <tr 
@@ -549,18 +688,36 @@ export function Orders() {
           </table>
         </div>
 
-        {/* Smart Pagination Bar */}
+        {/* Smart Server-Side Pagination Bar */}
         <div className="flex flex-col sm:flex-row items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200 bg-slate-50/70 gap-2.5 sm:gap-3">
-          <div className="text-[11px] sm:text-xs text-slate-500 text-center sm:text-left">
-            Showing <strong className="font-semibold text-slate-700">{filteredOrders.length === 0 ? 0 : startIndex + 1}</strong> to <strong className="font-semibold text-slate-700">{Math.min(endIndex, filteredOrders.length)}</strong> of <strong className="font-semibold text-slate-700">{filteredOrders.length}</strong> orders
+          <div className="flex items-center gap-3 text-[11px] sm:text-xs text-slate-500 text-center sm:text-left">
+            <span>
+              Showing <strong className="font-semibold text-slate-700">{totalOrders === 0 ? 0 : startIndex + 1}</strong> to <strong className="font-semibold text-slate-700">{endIndex}</strong> of <strong className="font-semibold text-slate-700">{totalOrders.toLocaleString("en-IN")}</strong> orders
+            </span>
+            <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200">
+              <span className="text-slate-400">Rows:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setCurrentPage(1);
+                }}
+                className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
           </div>
 
           {totalPages > 1 && (
             <div className="flex items-center gap-1 sm:gap-1.5">
               {/* Prev Button */}
               <button
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
+                onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1 || loading}
                 className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
                 title="Previous Page"
               >
@@ -569,16 +726,16 @@ export function Orders() {
 
               {/* Page Number Buttons */}
               {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
-                // Show pages close to current page
                 if (
-                  pageNum === 1 || 
-                  pageNum === totalPages || 
+                  pageNum === 1 ||
+                  pageNum === totalPages ||
                   Math.abs(pageNum - currentPage) <= 1
                 ) {
                   return (
                     <button
                       key={pageNum}
                       onClick={() => setCurrentPage(pageNum)}
+                      disabled={loading}
                       className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors border cursor-pointer ${
                         currentPage === pageNum
                           ? "bg-blue-600 text-white border-blue-600 shadow-xs"
@@ -601,8 +758,8 @@ export function Orders() {
 
               {/* Next Button */}
               <button
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
+                onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages || loading}
                 className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
                 title="Next Page"
               >

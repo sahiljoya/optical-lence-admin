@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import {
   AlertTriangle, Clock, ShieldAlert, Ban, Tag, RefreshCcw, Search,
-  Package, CheckCircle, IndianRupee, Eye, ArrowRight, XCircle, Check
+  Package, CheckCircle, IndianRupee, Eye, ArrowRight, XCircle, Check,
+  ChevronLeft, ChevronRight
 } from "lucide-react";
 import { notify } from "@/lib/notify";
 import { productApi } from "@/services/productApi";
@@ -13,6 +14,9 @@ export function AgingStock() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [items, setItems] = useState([]);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalPages, setTotalPages] = useState(1);
   const [totalCount, setTotalCount] = useState(0);
   const [kpis, setKpis] = useState({
     deadStockCount: 0,
@@ -29,19 +33,20 @@ export function AgingStock() {
   const [discountPrice, setDiscountPrice] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const loadData = async () => {
+  const loadData = async (targetPage = page, targetLimit = pageSize) => {
     try {
       setLoading(true);
       const res = await productApi.getAgingStock({
         tab: activeTab,
         search: search.trim(),
-        page: 1,
-        limit: 50
+        page: targetPage,
+        limit: targetLimit
       });
 
       if (res?.data) {
         setItems(res.data.items || []);
         setTotalCount(res.data.total || 0);
+        setTotalPages(Math.ceil((res.data.total || 0) / targetLimit) || 1);
         if (res.data.kpis) {
           setKpis(res.data.kpis);
         }
@@ -55,12 +60,27 @@ export function AgingStock() {
   };
 
   useEffect(() => {
-    loadData();
+    setPage(1);
+    loadData(1, pageSize);
   }, [activeTab]);
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== page) {
+      setPage(newPage);
+      loadData(newPage, pageSize);
+    }
+  };
+
+  const handlePageSizeChange = (newPageSize) => {
+    setPageSize(newPageSize);
+    setPage(1);
+    loadData(1, newPageSize);
+  };
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
-    loadData();
+    setPage(1);
+    loadData(1, pageSize);
   };
 
   const handleOpenClearance = (prod) => {
@@ -316,6 +336,84 @@ export function AgingStock() {
               ))}
             </tbody>
           </table>
+        </div>
+
+        {/* Smart Server-Side Pagination Bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200 bg-slate-50/70 gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-3 text-[11px] sm:text-xs text-slate-500 text-center sm:text-left">
+            <span>
+              Showing <strong className="font-semibold text-slate-700">{totalCount === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong className="font-semibold text-slate-700">{Math.min(page * pageSize, totalCount)}</strong> of <strong className="font-semibold text-slate-700">{totalCount.toLocaleString("en-IN")}</strong> products
+            </span>
+            <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200">
+              <span className="text-slate-400">Rows:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+                <option value={100}>100</option>
+              </select>
+            </div>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1 sm:gap-1.5">
+              {/* Prev Button */}
+              <button
+                onClick={() => handlePageChange(Math.max(1, page - 1))}
+                disabled={page === 1 || loading}
+                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                title="Previous Page"
+              >
+                <ChevronLeft size={15} />
+              </button>
+
+              {/* Page Number Buttons */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                if (
+                  pageNum === 1 ||
+                  pageNum === totalPages ||
+                  Math.abs(pageNum - page) <= 1
+                ) {
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      disabled={loading}
+                      className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors border cursor-pointer ${
+                        page === pageNum
+                          ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                }
+
+                if (pageNum === 2 && page > 3) {
+                  return <span key="ellipsis-start" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                }
+                if (pageNum === totalPages - 1 && page < totalPages - 2) {
+                  return <span key="ellipsis-end" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                }
+                return null;
+              })}
+
+              {/* Next Button */}
+              <button
+                onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages || loading}
+                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                title="Next Page"
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

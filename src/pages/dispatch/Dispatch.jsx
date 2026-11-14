@@ -18,7 +18,9 @@ import {
   Trash2,
   Loader2,
   Lock,
-  AlertCircle
+  AlertCircle,
+  ChevronLeft,
+  ChevronRight
 } from "lucide-react";
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { DispatchOrderModal } from "@/components/orders/DispatchOrderModal";
@@ -45,6 +47,15 @@ export function Dispatch() {
   // UI Filters
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState("packing"); // "packing" | "dispatched" | "delivered"
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+
+  // Reset pagination when active tab or search query changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, search]);
 
   // Dispatch Action Modal State
   const [showDispatchModal, setShowDispatchModal] = useState(false);
@@ -135,6 +146,12 @@ export function Dispatch() {
       );
     });
   }, [activeOrders, search]);
+
+  const totalDispatchPages = Math.ceil(filteredOrders.length / pageSize) || 1;
+  const paginatedOrders = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return filteredOrders.slice(start, start + pageSize);
+  }, [filteredOrders, currentPage, pageSize]);
 
   // Open Dispatch Modal
   const handleDispatchClick = (order) => {
@@ -363,32 +380,33 @@ export function Dispatch() {
             <Loader2 size={18} className="animate-spin text-blue-600" /> Loading live dispatch orders...
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-[750px]">
-              <thead>
-                <tr className="bg-slate-50/80 border-b border-slate-100 text-[12px] uppercase tracking-wider text-slate-500">
-                  <th className="px-5 py-4 font-bold">Order Details</th>
-                  <th className="px-5 py-4 font-bold">Destination</th>
-                  <th className="px-5 py-4 font-bold">Shipping Info</th>
-                  <th className="px-5 py-4 font-bold text-center">Status</th>
-                  <th className="px-5 py-4 font-bold text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filteredOrders.length === 0 ? (
-                  <tr>
-                    <td colSpan="5" className="px-5 py-12 text-center">
-                      <div className="flex flex-col items-center justify-center">
-                        <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
-                          <PackageCheck size={20} className="text-slate-400" />
-                        </div>
-                        <h3 className="text-[14px] font-bold text-slate-700">No orders found</h3>
-                        <p className="text-[13px] text-slate-500 mt-1">No orders in this stage matching your filter.</p>
-                      </div>
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left border-collapse min-w-[750px]">
+                <thead>
+                  <tr className="bg-slate-50/80 border-b border-slate-100 text-[12px] uppercase tracking-wider text-slate-500">
+                    <th className="px-5 py-4 font-bold">Order Details</th>
+                    <th className="px-5 py-4 font-bold">Destination</th>
+                    <th className="px-5 py-4 font-bold">Shipping Info</th>
+                    <th className="px-5 py-4 font-bold text-center">Status</th>
+                    <th className="px-5 py-4 font-bold text-center">Actions</th>
                   </tr>
-                ) : null}
-                {filteredOrders.map((order) => {
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-5 py-12 text-center">
+                        <div className="flex flex-col items-center justify-center">
+                          <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
+                            <PackageCheck size={20} className="text-slate-400" />
+                          </div>
+                          <h3 className="text-[14px] font-bold text-slate-700">No orders found</h3>
+                          <p className="text-[13px] text-slate-500 mt-1">No orders in this stage matching your filter.</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : null}
+                  {paginatedOrders.map((order) => {
                   const customerName = order.customer_id?.company_name || order.customer_id?.name || "Direct Customer";
                   const city = order.customer_id?.city || "—";
                   const itemsCount = order.items?.length || 0;
@@ -493,6 +511,87 @@ export function Dispatch() {
               </tbody>
             </table>
           </div>
+
+          {/* Dispatch Pagination Bar */}
+          <div className="flex flex-col sm:flex-row items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200 bg-slate-50/70 gap-2.5 sm:gap-3">
+            <div className="flex items-center gap-3 text-[11px] sm:text-xs text-slate-500 text-center sm:text-left">
+              <span>
+                Showing <strong className="font-semibold text-slate-700">{filteredOrders.length === 0 ? 0 : (currentPage - 1) * pageSize + 1}</strong> to <strong className="font-semibold text-slate-700">{Math.min(currentPage * pageSize, filteredOrders.length)}</strong> of <strong className="font-semibold text-slate-700">{filteredOrders.length.toLocaleString("en-IN")}</strong> orders
+              </span>
+              <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200">
+                <span className="text-slate-400">Rows:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
+                >
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={50}>50</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+            </div>
+
+            {totalDispatchPages > 1 && (
+              <div className="flex items-center gap-1 sm:gap-1.5">
+                {/* Prev Button */}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                  title="Previous Page"
+                >
+                  <ChevronLeft size={15} />
+                </button>
+
+                {/* Page Number Buttons */}
+                {Array.from({ length: totalDispatchPages }, (_, i) => i + 1).map((pageNum) => {
+                  if (
+                    pageNum === 1 ||
+                    pageNum === totalDispatchPages ||
+                    Math.abs(pageNum - currentPage) <= 1
+                  ) {
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors border cursor-pointer ${
+                          currentPage === pageNum
+                            ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                            : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  }
+
+                  if (pageNum === 2 && currentPage > 3) {
+                    return <span key="ellipsis-start" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                  }
+                  if (pageNum === totalDispatchPages - 1 && currentPage < totalDispatchPages - 2) {
+                    return <span key="ellipsis-end" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                  }
+                  return null;
+                })}
+
+                {/* Next Button */}
+                <button
+                  onClick={() => setCurrentPage((p) => Math.min(totalDispatchPages, p + 1))}
+                  disabled={currentPage === totalDispatchPages}
+                  className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                  title="Next Page"
+                >
+                  <ChevronRight size={15} />
+                </button>
+              </div>
+            )}
+          </div>
+        </>
         )}
       </div>
 

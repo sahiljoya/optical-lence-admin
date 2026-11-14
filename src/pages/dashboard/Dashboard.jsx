@@ -34,6 +34,7 @@ function CardHead({ icon, title, note, right }) {
 }
 
 function Spark({ data, color }) {
+  if (!data || data.length < 2) return null;
   const w = 90, h = 28, max = Math.max(...data), min = Math.min(...data);
   const pts = data.map((v, i) => [(i / (data.length - 1)) * w, h - 2 - ((v - min) / (max - min || 1)) * (h - 6)]);
   const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)},${p[1].toFixed(1)}`).join(" ");
@@ -46,8 +47,12 @@ function Spark({ data, color }) {
 }
 
 function Kpis({ kpis }) {
+  const colClass = kpis.length <= 3
+    ? "grid-cols-1 sm:grid-cols-2 md:grid-cols-3"
+    : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6";
+
   return (
-    <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
+    <div className={`grid gap-2.5 sm:gap-3 ${colClass}`}>
       {kpis.map((k) => {
         const I = ICONS[k.icon];
         const color = `var(--t-${k.theme}-ic)`;
@@ -95,6 +100,15 @@ function Kpis({ kpis }) {
 
 export function Dashboard() {
   const user = getItem("admin_user");
+  const canViewReports = hasPermission("VIEW_REPORTS");
+  const canViewBilling = hasPermission("VIEW_BILLING");
+  const canApproveCredit = hasPermission("APPROVE_CREDIT_LIMIT");
+  const canApproveCustomer = hasPermission("APPROVE_CUSTOMER");
+  const canCreateCustomer = hasPermission("CREATE_CUSTOMER");
+  const canManageDispatch = hasPermission("MANAGE_DISPATCH");
+  const canViewInventory = hasPermission("VIEW_INVENTORY");
+  const canPlaceOrder = hasPermission("PLACE_ORDER");
+
   const [range, setRange] = useState("this-month");
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
@@ -116,13 +130,28 @@ export function Dashboard() {
         months.push({ monthNum: d.getMonth() + 1, year: d.getFullYear(), label: MONTH_SHORT[d.getMonth()] });
       }
 
+      // 1. Only query monthly revenue by day if user has VIEW_REPORTS permission
+      const revenuePromises = canViewReports
+        ? months.map((m) => dashboardService.getRevenueOrdersByDay(m.monthNum, m.year))
+        : [];
+
+      // 2. Only query billing accounts if user has VIEW_BILLING permission
+      const billingPromise = canViewBilling
+        ? billingService.getAccounts()
+        : Promise.resolve({ data: [] });
+
+      // 3. Only query credit limit queue if user has credit approval or billing permission
+      const limitPromise = (canApproveCredit || canViewBilling)
+        ? customerService.getLimitIncreaseQueue()
+        : Promise.resolve({ data: [] });
+
       const results = await Promise.allSettled([
         dashboardService.getStats(),
         orderApi.getPickQueue(),
         orderApi.getRecentOrders(),
-        billingService.getAccounts(),
-        customerService.getLimitIncreaseQueue(),
-        ...months.map((m) => dashboardService.getRevenueOrdersByDay(m.monthNum, m.year)),
+        billingPromise,
+        limitPromise,
+        ...revenuePromises,
       ]);
       if (cancelled) return;
 
@@ -130,7 +159,13 @@ export function Dashboard() {
 
       setStats(statsRes.status === "fulfilled" ? statsRes.value.data : null);
       setPickQueueCount(pickRes.status === "fulfilled" ? (pickRes.value.data || []).length : 0);
-      setBillingAccounts(billingRes.status === "fulfilled" ? billingRes.value.data || [] : []);
+      setBillingAccounts(
+        billingRes.status === "fulfilled"
+          ? (Array.isArray(billingRes.value.data)
+              ? billingRes.value.data
+              : billingRes.value.data?.list || [])
+          : []
+      );
       setLimitQueueCount(limitRes.status === "fulfilled" ? (limitRes.value.data || []).length : 0);
 
       if (recentRes.status === "fulfilled") {
@@ -141,18 +176,21 @@ export function Dashboard() {
         setOrdersTodayCount(count);
       }
 
-      const monthlyData = months.map((m, idx) => {
-        const r = monthRes[idx];
-        const days = r && r.status === "fulfilled" ? r.value.data || [] : [];
-        const revenue = days.reduce((s, d) => s + (d.dailyTotalRevenue || 0), 0);
-        const orderCount = days.reduce((s, d) => s + (d.dailyOrderCount || 0), 0);
-        const lensTotals = {};
-        days.forEach((d) => (d.breakdown || []).forEach((b) => {
-          const key = b.lens_type || "Others";
-          lensTotals[key] = (lensTotals[key] || 0) + (b.totalRevenue || 0);
-        }));
-        return { ...m, revenue, orderCount, lensTotals };
-      });
+      let monthlyData = [];
+      if (canViewReports) {
+        monthlyData = months.map((m, idx) => {
+          const r = monthRes[idx];
+          const days = r && r.status === "fulfilled" ? r.value.data || [] : [];
+          const revenue = days.reduce((s, d) => s + (d.dailyTotalRevenue || 0), 0);
+          const orderCount = days.reduce((s, d) => s + (d.dailyOrderCount || 0), 0);
+          const lensTotals = {};
+          days.forEach((d) => (d.breakdown || []).forEach((b) => {
+            const key = b.lens_type || "Others";
+            lensTotals[key] = (lensTotals[key] || 0) + (b.totalRevenue || 0);
+          }));
+          return { ...m, revenue, orderCount, lensTotals };
+        });
+      }
 
       setMonthsWindow(monthlyData);
       setLoading(false);
@@ -160,7 +198,7 @@ export function Dashboard() {
 
     load();
     return () => { cancelled = true; };
-  }, []);
+  }, [canViewReports, canViewBilling, canApproveCredit]);
 
   const curr = monthsWindow[6];
   const prev = monthsWindow[5];
@@ -191,35 +229,124 @@ export function Dashboard() {
     : null;
 
   const kpis = useMemo(() => {
-    if (!curr) return [];
-    const salesSpark = salesAmount.map((d) => d.v);
-    const ordersSpark = monthsWindow.map((m) => m.orderCount || 0);
-    const avgOrderValueSpark = monthsWindow.map((m) => (m.orderCount ? Math.round(m.revenue / m.orderCount) : 0));
+    const items = [];
 
-    const salesDelta = pctDelta(curr.revenue, prev?.revenue);
-    const ordersDelta = pctDelta(curr.orderCount, prev?.orderCount);
-    const currAov = curr.orderCount ? curr.revenue / curr.orderCount : 0;
-    const prevAov = prev?.orderCount ? prev.revenue / prev.orderCount : 0;
-    const aovDelta = pctDelta(currAov, prevAov);
+    // 1. Total Sales (MTD) - Financial (requires VIEW_REPORTS)
+    if (canViewReports && curr) {
+      const salesSpark = salesAmount.map((d) => d.v);
+      const salesDelta = pctDelta(curr.revenue, prev?.revenue);
+      items.push({
+        theme: "blue",
+        icon: "BarChart3",
+        label: "Total Sales (MTD)",
+        value: inrLakh(curr.revenue),
+        delta: salesDelta !== null ? `${Math.abs(salesDelta).toFixed(1)}%` : "—",
+        dir: (salesDelta ?? 0) >= 0 ? "up" : "down",
+        good: (salesDelta ?? 0) >= 0,
+        spark: salesSpark,
+      });
+    }
 
-    const totalLensRevenue = Object.values(curr.lensTotals || {}).reduce((s, v) => s + v, 0);
-    const topLens = Object.entries(curr.lensTotals || {}).sort((a, b) => b[1] - a[1])[0];
+    // 2. Total Orders - Operational (visible to all staff)
+    const ordersSpark = canViewReports ? monthsWindow.map((m) => m.orderCount || 0) : [];
+    const ordersDelta = canViewReports && curr ? pctDelta(curr.orderCount, prev?.orderCount) : null;
+    items.push({
+      theme: "green",
+      icon: "Package",
+      label: "Total Orders",
+      value: (stats?.kpis?.totalOrders ?? 0).toLocaleString("en-IN"),
+      delta: canViewReports && ordersDelta !== null ? `${Math.abs(ordersDelta).toFixed(1)}%` : undefined,
+      dir: (ordersDelta ?? 0) >= 0 ? "up" : "down",
+      good: (ordersDelta ?? 0) >= 0,
+      sub: !canViewReports ? "All time orders" : undefined,
+      spark: canViewReports ? ordersSpark : undefined,
+    });
 
-    return [
-      { theme: "blue", icon: "BarChart3", label: "Total Sales (MTD)", value: inrLakh(curr.revenue), delta: salesDelta !== null ? `${Math.abs(salesDelta).toFixed(1)}%` : "—", dir: (salesDelta ?? 0) >= 0 ? "up" : "down", good: (salesDelta ?? 0) >= 0, spark: salesSpark },
-      { theme: "green", icon: "Package", label: "Total Orders", value: (stats?.kpis?.totalOrders ?? 0).toLocaleString("en-IN"), delta: ordersDelta !== null ? `${Math.abs(ordersDelta).toFixed(1)}%` : "—", dir: (ordersDelta ?? 0) >= 0 ? "up" : "down", good: (ordersDelta ?? 0) >= 0, spark: ordersSpark },
-      { theme: "purple", icon: "Tag", label: "Avg Order Value", value: inr(currAov), delta: aovDelta !== null ? `${Math.abs(aovDelta).toFixed(1)}%` : "—", dir: (aovDelta ?? 0) >= 0 ? "up" : "down", good: (aovDelta ?? 0) >= 0, spark: avgOrderValueSpark },
-      { theme: "orange", icon: "Truck", label: "Pending Dispatch", value: String(pickQueueCount), sub: "Needs dispatch", spark: ordersSpark },
-      { theme: "teal", icon: "Trophy", label: "Top Selling Lens", value: topLens ? topLens[0] : "—", sub: topLens && totalLensRevenue ? `(${Math.round((topLens[1] / totalLensRevenue) * 100)}% of sales)` : "No sales yet", spark: salesSpark },
-      { theme: "pink", icon: "Wallet", label: "Outstanding", value: inrLakh(totalOutstanding), sub: `${accountsWithBalance.length} active accounts`, spark: salesSpark },
-    ];
-  }, [curr, prev, stats, pickQueueCount, accountsWithBalance.length, totalOutstanding, monthsWindow, salesAmount]);
+    // 3. Avg Order Value - Financial (requires VIEW_REPORTS)
+    if (canViewReports && curr) {
+      const currAov = curr.orderCount ? curr.revenue / curr.orderCount : 0;
+      const prevAov = prev?.orderCount ? prev.revenue / prev.orderCount : 0;
+      const aovDelta = pctDelta(currAov, prevAov);
+      const avgOrderValueSpark = monthsWindow.map((m) => (m.orderCount ? Math.round(m.revenue / m.orderCount) : 0));
+      items.push({
+        theme: "purple",
+        icon: "Tag",
+        label: "Avg Order Value",
+        value: inr(currAov),
+        delta: aovDelta !== null ? `${Math.abs(aovDelta).toFixed(1)}%` : "—",
+        dir: (aovDelta ?? 0) >= 0 ? "up" : "down",
+        good: (aovDelta ?? 0) >= 0,
+        spark: avgOrderValueSpark,
+      });
+    }
+
+    // 4. Pending Dispatch - Operational (visible to all staff)
+    items.push({
+      theme: "orange",
+      icon: "Truck",
+      label: "Pending Dispatch",
+      value: String(pickQueueCount),
+      sub: "Needs dispatch",
+      spark: canViewReports ? ordersSpark : undefined,
+    });
+
+    // 5. Top Selling Lens - Analytical (requires VIEW_REPORTS)
+    if (canViewReports && curr) {
+      const totalLensRevenue = Object.values(curr.lensTotals || {}).reduce((s, v) => s + v, 0);
+      const topLens = Object.entries(curr.lensTotals || {}).sort((a, b) => b[1] - a[1])[0];
+      const salesSpark = salesAmount.map((d) => d.v);
+      items.push({
+        theme: "teal",
+        icon: "Trophy",
+        label: "Top Selling Lens",
+        value: topLens ? topLens[0] : "—",
+        sub: topLens && totalLensRevenue ? `(${Math.round((topLens[1] / totalLensRevenue) * 100)}% of sales)` : "No sales yet",
+        spark: salesSpark,
+      });
+    }
+
+    // 6. Outstanding Market Debt - Billing (requires VIEW_BILLING)
+    if (canViewBilling) {
+      const salesSpark = canViewReports ? salesAmount.map((d) => d.v) : [];
+      items.push({
+        theme: "pink",
+        icon: "Wallet",
+        label: "Outstanding",
+        value: inrLakh(totalOutstanding),
+        sub: `${accountsWithBalance.length} active accounts`,
+        spark: canViewReports ? salesSpark : undefined,
+      });
+    }
+
+    // Operational extra tile for non-financial staff: Orders Today
+    if (!canViewReports && !canViewBilling) {
+      items.push({
+        theme: "blue",
+        icon: "BarChart3",
+        label: "Orders Today",
+        value: String(ordersTodayCount),
+        sub: "Placed today",
+      });
+    }
+
+    return items;
+  }, [canViewReports, canViewBilling, curr, prev, stats, pickQueueCount, accountsWithBalance.length, totalOutstanding, monthsWindow, salesAmount, ordersTodayCount]);
 
   const meta = useMemo(() => {
-    if (!curr) return { period: "—", today: "—", active: "—", text: "" };
     const activeCustomers = stats?.kpis?.activeCustomers ?? 0;
     const daysInMonth = (year, monthNum) => new Date(year, monthNum, 0).getDate();
+    const now = new Date();
+    const currentMonthLabel = `${MONTH_SHORT[now.getMonth()]} ${now.getFullYear()}`;
+    const fullText = `1 ${MONTH_LONG[now.getMonth()]} ${now.getFullYear()} to ${daysInMonth(now.getFullYear(), now.getMonth() + 1)} ${MONTH_LONG[now.getMonth()]} ${now.getFullYear()}`;
 
+    if (!curr) {
+      return {
+        period: currentMonthLabel,
+        today: String(ordersTodayCount),
+        active: activeCustomers ? activeCustomers.toLocaleString("en-IN") : "—",
+        text: fullText,
+      };
+    }
     if (range === "last-month") {
       return {
         period: `${MONTH_SHORT[prev ? MONTH_SHORT.indexOf(prev.label) : 0]} ${prev?.year ?? ""}`,
@@ -257,7 +384,7 @@ export function Dashboard() {
 
   return (
     <>
-      <div className="grid gap-3 sm:gap-4 grid-cols-1 lg:grid-cols-[1fr_310px] xl:grid-cols-[1fr_340px]">
+      <div className={`grid gap-3 sm:gap-4 grid-cols-1 ${canViewBilling ? "lg:grid-cols-[1fr_310px] xl:grid-cols-[1fr_340px]" : ""}`}>
         <div className="vw-card flex flex-col md:flex-row items-start md:items-center gap-3.5 sm:gap-5 p-3.5 sm:p-5 lg:p-6">
           <div className="min-w-0 w-full md:w-auto">
             <div className="text-[9px] sm:text-[10px] md:text-xs text-slate-400 font-medium">Home&nbsp;&nbsp;&gt;&nbsp;&nbsp;Dashboard</div>
@@ -284,35 +411,44 @@ export function Dashboard() {
               ))}
             </div>
             <div className="flex flex-wrap sm:flex-nowrap gap-2 items-center justify-start sm:justify-end">
-              <Select value={range} onValueChange={setRange}>
-                <SelectTrigger className="h-8 sm:h-9 md:h-10 text-[11px] sm:text-xs md:text-[13px] w-full sm:w-[140px] rounded-[10px]"><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="this-month" className="text-xs sm:text-[13px]">This month</SelectItem>
-                  <SelectItem value="last-month" className="text-xs sm:text-[13px]">Last month</SelectItem>
-                  <SelectItem value="last-3" className="text-xs sm:text-[13px]">Last 3 months</SelectItem>
-                </SelectContent>
-              </Select>
-              <Link to="/orders/new" className="vw-btn-primary h-8 sm:h-9 md:h-10 px-3 sm:px-4 inline-flex items-center justify-center text-[11px] sm:text-xs md:text-[13px] font-semibold w-full sm:w-auto shrink-0">+ New Order</Link>
+              {canViewReports && (
+                <Select value={range} onValueChange={setRange}>
+                  <SelectTrigger className="h-8 sm:h-9 md:h-10 text-[11px] sm:text-xs md:text-[13px] w-full sm:w-[140px] rounded-[10px]"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="this-month" className="text-xs sm:text-[13px]">This month</SelectItem>
+                    <SelectItem value="last-month" className="text-xs sm:text-[13px]">Last month</SelectItem>
+                    <SelectItem value="last-3" className="text-xs sm:text-[13px]">Last 3 months</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+              {canPlaceOrder && (
+                <Link to="/orders/new" className="vw-btn-primary h-8 sm:h-9 md:h-10 px-3 sm:px-4 inline-flex items-center justify-center text-[11px] sm:text-xs md:text-[13px] font-semibold w-full sm:w-auto shrink-0">+ New Order</Link>
+              )}
+              {canManageDispatch && !canPlaceOrder && (
+                <Link to="/dispatch" className="vw-btn-primary h-8 sm:h-9 md:h-10 px-3 sm:px-4 inline-flex items-center justify-center text-[11px] sm:text-xs md:text-[13px] font-semibold w-full sm:w-auto shrink-0">Open Dispatch</Link>
+              )}
             </div>
           </div>
         </div>
 
-        <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
-          <CardHead icon={<CreditCard size={15} className="sm:w-4 sm:h-4" />} title="Credit & Receivables" right={<ChevronRight size={16} className="text-slate-400" />} />
-          <div className="space-y-1 sm:space-y-1.5 flex-1 flex flex-col justify-center">
-            {[
-              ["Total outstanding", inr(totalOutstanding)],
-              ["Overdue (60+ days)", inr(overdueAmount), "var(--p-overdue)"],
-              ["Avg payment days", avgPaymentDays !== null ? `${avgPaymentDays} Days` : "—"],
-              ["Credit approvals pending", String(limitQueueCount)],
-            ].map(([l, v, c], i) => (
-              <div key={l} className="flex justify-between items-center py-1 sm:py-2 border-divider" style={{ borderTop: i ? "1px solid var(--divider)" : undefined }}>
-                <span className="text-[10px] sm:text-xs md:text-[13px] text-slate-500 font-medium">{l}</span>
-                <span className="text-[11px] sm:text-xs md:text-sm font-semibold font-mono" style={{ color: c }}>{v}</span>
-              </div>
-            ))}
+        {canViewBilling && (
+          <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
+            <CardHead icon={<CreditCard size={15} className="sm:w-4 sm:h-4" />} title="Credit & Receivables" right={<ChevronRight size={16} className="text-slate-400" />} />
+            <div className="space-y-1 sm:space-y-1.5 flex-1 flex flex-col justify-center">
+              {[
+                ["Total outstanding", inr(totalOutstanding)],
+                ["Overdue (60+ days)", inr(overdueAmount), "var(--p-overdue)"],
+                ["Avg payment days", avgPaymentDays !== null ? `${avgPaymentDays} Days` : "—"],
+                ["Credit approvals pending", String(limitQueueCount)],
+              ].map(([l, v, c], i) => (
+                <div key={l} className="flex justify-between items-center py-1 sm:py-2 border-divider" style={{ borderTop: i ? "1px solid var(--divider)" : undefined }}>
+                  <span className="text-[10px] sm:text-xs md:text-[13px] text-slate-500 font-medium">{l}</span>
+                  <span className="text-[11px] sm:text-xs md:text-sm font-semibold font-mono" style={{ color: c }}>{v}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
       {/* Quick Actions Row */}
@@ -320,44 +456,69 @@ export function Dashboard() {
         <h3 className="text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-400 tracking-wider uppercase shrink-0">Quick Actions</h3>
 
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-2.5 w-full">
-          <Link to="/customer-onboard" className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
-            <span className="p-1 sm:p-1.5 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0"><UserPlus size={13} className="sm:w-4 sm:h-4" /></span>
-            <span className="truncate">Create Customer</span>
-          </Link>
+          {canCreateCustomer && (
+            <Link to="/customer-onboard" className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+              <span className="p-1 sm:p-1.5 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0"><UserPlus size={13} className="sm:w-4 sm:h-4" /></span>
+              <span className="truncate">Create Customer</span>
+            </Link>
+          )}
 
-          <Link to="/billing" search={{ tab: "dues" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-emerald-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
-            <span className="p-1 sm:p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0"><Receipt size={13} className="sm:w-4 sm:h-4" /></span>
-            <span className="truncate">Add Payment</span>
-          </Link>
+          {canViewBilling && (
+            <Link to="/billing" search={{ tab: "dues" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-emerald-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+              <span className="p-1 sm:p-1.5 bg-emerald-50 text-emerald-600 rounded-lg group-hover:bg-emerald-600 group-hover:text-white transition-colors shrink-0"><Receipt size={13} className="sm:w-4 sm:h-4" /></span>
+              <span className="truncate">Add Payment</span>
+            </Link>
+          )}
 
-          <Link to="/billing" search={{ tab: "limit_requests" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-amber-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
-            <span className="p-1 sm:p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition-colors shrink-0"><TrendingUp size={13} className="sm:w-4 sm:h-4" /></span>
-            <span className="truncate">Credit Request</span>
-          </Link>
+          {(canViewBilling || canApproveCredit) && (
+            <Link to="/billing" search={{ tab: "limit_requests" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-amber-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+              <span className="p-1 sm:p-1.5 bg-amber-50 text-amber-600 rounded-lg group-hover:bg-amber-600 group-hover:text-white transition-colors shrink-0"><TrendingUp size={13} className="sm:w-4 sm:h-4" /></span>
+              <span className="truncate">Credit Request</span>
+            </Link>
+          )}
 
-          <Link to="/billing" search={{ tab: "dues" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-indigo-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
-            <span className="p-1 sm:p-1.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0"><Send size={13} className="sm:w-4 sm:h-4" /></span>
-            <span className="truncate">Send Reminder</span>
-          </Link>
+          {canViewBilling && (
+            <Link to="/billing" search={{ tab: "dues" }} className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-indigo-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+              <span className="p-1 sm:p-1.5 bg-indigo-50 text-indigo-600 rounded-lg group-hover:bg-indigo-600 group-hover:text-white transition-colors shrink-0"><Send size={13} className="sm:w-4 sm:h-4" /></span>
+              <span className="truncate">Send Reminder</span>
+            </Link>
+          )}
+
+          {canManageDispatch && (
+            <Link to="/dispatch" className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-orange-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+              <span className="p-1 sm:p-1.5 bg-orange-50 text-orange-600 rounded-lg group-hover:bg-orange-600 group-hover:text-white transition-colors shrink-0"><Truck size={13} className="sm:w-4 sm:h-4" /></span>
+              <span className="truncate">Dispatch Queue</span>
+            </Link>
+          )}
+
+          {(canManageDispatch || canViewInventory) && (
+            <Link to="/pick-list" className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 bg-white border border-slate-200 hover:bg-slate-50 hover:border-blue-200 px-2 sm:px-3 md:px-3.5 py-1.5 sm:py-2 rounded-xl text-[11px] sm:text-xs md:text-[13px] font-semibold text-slate-700 transition-all shadow-xs group">
+              <span className="p-1 sm:p-1.5 bg-blue-50 text-blue-600 rounded-lg group-hover:bg-blue-600 group-hover:text-white transition-colors shrink-0"><Package size={13} className="sm:w-4 sm:h-4" /></span>
+              <span className="truncate">Pick List</span>
+            </Link>
+          )}
         </div>
       </div>
 
       <Kpis kpis={kpis} />
-      <ChartsRow
-        salesAmount={salesAmount}
-        orderCounts={orderCounts}
-        orderCountsAlt={orderCountsAlt}
-        lensMix={lensMix}
-        lensMixAlt={lensMixAlt}
-        totalSalesLabel={curr ? inrLakh(curr.revenue) : undefined}
-        currentMonthLabel={curr ? `${curr.label} ${curr.year}` : undefined}
-        prevMonthLabel={prev ? `${prev.label} ${prev.year}` : undefined}
-        barRangeLabel={orderCounts.length ? `${orderCounts[0].m}–${orderCounts[orderCounts.length - 1].m}` : undefined}
-        barRangeLabelPrev={orderCountsAlt.length ? `${orderCountsAlt[0].m}–${orderCountsAlt[orderCountsAlt.length - 1].m}` : undefined}
-        currentMonthShort={curr?.label}
-      />
 
-      <div className="grid gap-3 sm:gap-5 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+      {canViewReports && (
+        <ChartsRow
+          salesAmount={salesAmount}
+          orderCounts={orderCounts}
+          orderCountsAlt={orderCountsAlt}
+          lensMix={lensMix}
+          lensMixAlt={lensMixAlt}
+          totalSalesLabel={curr ? inrLakh(curr.revenue) : undefined}
+          currentMonthLabel={curr ? `${curr.label} ${curr.year}` : undefined}
+          prevMonthLabel={prev ? `${prev.label} ${prev.year}` : undefined}
+          barRangeLabel={orderCounts.length ? `${orderCounts[0].m}–${orderCounts[orderCounts.length - 1].m}` : undefined}
+          barRangeLabelPrev={orderCountsAlt.length ? `${orderCountsAlt[0].m}–${orderCountsAlt[orderCountsAlt.length - 1].m}` : undefined}
+          currentMonthShort={curr?.label}
+        />
+      )}
+
+      <div className={`grid gap-3 sm:gap-5 grid-cols-1 ${canViewBilling || canViewReports ? "md:grid-cols-2 xl:grid-cols-3" : "md:grid-cols-2"}`}>
 
         {/* 1. Pending Orders */}
         <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
@@ -373,7 +534,11 @@ export function Dashboard() {
                     <div className="font-semibold text-[11px] sm:text-xs md:text-[13px] text-blue-600 truncate">{ord.id}</div>
                     <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mt-0.5 truncate">{ord.shop} • {ord.date}</div>
                   </div>
-                  <div className="font-bold text-[11px] sm:text-xs md:text-[13px] text-slate-800 shrink-0 font-mono">{ord.amount}</div>
+                  {(canViewReports || canViewBilling) && ord.amount ? (
+                    <div className="font-bold text-[11px] sm:text-xs md:text-[13px] text-slate-800 shrink-0 font-mono">{ord.amount}</div>
+                  ) : (
+                    <span className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider px-1.5 sm:px-2 py-0.5 bg-blue-50 text-blue-700 rounded border border-blue-200 shrink-0">{ord.status || "Pending"}</span>
+                  )}
                 </div>
               ))}
             </div>
@@ -382,7 +547,7 @@ export function Dashboard() {
         </div>
 
         {/* 2. Pending Customers (Only for Owner & Accounts with APPROVE_CUSTOMER) */}
-        {hasPermission("APPROVE_CUSTOMER") && (
+        {canApproveCustomer && (
           <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
             <div>
               <CardHead icon={<Users size={15} className="sm:w-4 sm:h-4" />} title="Pending Approvals" note="Needs KYC" />
@@ -405,56 +570,81 @@ export function Dashboard() {
           </div>
         )}
 
-        {/* 3. Pending & Overdue (Monthly Data) */}
-        <div className="vw-card p-3.5 sm:p-5 md:col-span-2 xl:col-span-1 flex flex-col justify-between">
-          <div>
-            <CardHead icon={<AlertCircle size={15} className="sm:w-4 sm:h-4" />} title="Pending & Overdue" note="Monthly Snapshot" />
+        {/* 3. Pending & Overdue (Monthly Data - Only for Financial Roles with VIEW_REPORTS or VIEW_BILLING) */}
+        {(canViewReports || canViewBilling) && (
+          <div className="vw-card p-3.5 sm:p-5 md:col-span-2 xl:col-span-1 flex flex-col justify-between">
+            <div>
+              <CardHead icon={<AlertCircle size={15} className="sm:w-4 sm:h-4" />} title="Pending & Overdue" note="Monthly Snapshot" />
 
-            <div className="mt-2.5 sm:mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2.5 sm:gap-3">
-              {/* This Month */}
-              <div className="p-2.5 sm:p-3.5 rounded-xl border border-blue-100 bg-blue-50/30">
-                <div className="flex items-center gap-1.5 mb-2 text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  <Calendar size={12} className="text-blue-500 shrink-0 sm:w-3.5 sm:h-3.5" /> This Month ({curr?.label ?? ""})
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  <div>
-                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Total Ordered</div>
-                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-800 truncate font-mono">{inr(financials?.thisMonth?.ordered)}</div>
+              <div className="mt-2.5 sm:mt-3 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2.5 sm:gap-3">
+                {/* This Month */}
+                <div className="p-2.5 sm:p-3.5 rounded-xl border border-blue-100 bg-blue-50/30">
+                  <div className="flex items-center gap-1.5 mb-2 text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    <Calendar size={12} className="text-blue-500 shrink-0 sm:w-3.5 sm:h-3.5" /> This Month ({curr?.label ?? ""})
                   </div>
-                  <div>
-                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Payment Received</div>
-                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-emerald-600 truncate font-mono">{inr(financials?.thisMonth?.received)}</div>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div>
+                      <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Total Ordered</div>
+                      <div className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-800 truncate font-mono">{inr(financials?.thisMonth?.ordered)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Payment Received</div>
+                      <div className="text-[11px] sm:text-xs md:text-sm font-bold text-emerald-600 truncate font-mono">{inr(financials?.thisMonth?.received)}</div>
+                    </div>
+                  </div>
+                  <div className="mt-2 pt-1.5 sm:pt-2 border-t border-blue-100/50 flex justify-between items-center">
+                    <span className="text-[9px] sm:text-[10px] md:text-[11px] font-medium text-slate-500">Unpaid / Pending</span>
+                    <span className="text-[11px] sm:text-xs md:text-sm font-bold text-rose-600 font-mono">{inr(financials?.thisMonth?.pending)}</span>
                   </div>
                 </div>
-                <div className="mt-2 pt-1.5 sm:pt-2 border-t border-blue-100/50 flex justify-between items-center">
-                  <span className="text-[9px] sm:text-[10px] md:text-[11px] font-medium text-slate-500">Unpaid / Pending</span>
-                  <span className="text-[11px] sm:text-xs md:text-sm font-bold text-rose-600 font-mono">{inr(financials?.thisMonth?.pending)}</span>
-                </div>
-              </div>
 
-              {/* Last Month */}
-              <div className="p-2.5 sm:p-3.5 rounded-xl border border-slate-200 bg-slate-50/50">
-                <div className="flex items-center gap-1.5 mb-2 text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-600 uppercase tracking-wider">
-                  <Calendar size={12} className="text-slate-400 shrink-0 sm:w-3.5 sm:h-3.5" /> Last Month ({prev?.label ?? ""})
-                </div>
-                <div className="grid grid-cols-2 gap-2 sm:gap-3">
-                  <div>
-                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Total Ordered</div>
-                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-800 truncate font-mono">{inr(financials?.lastMonth?.ordered)}</div>
+                {/* Last Month */}
+                <div className="p-2.5 sm:p-3.5 rounded-xl border border-slate-200 bg-slate-50/50">
+                  <div className="flex items-center gap-1.5 mb-2 text-[9px] sm:text-[10px] md:text-xs font-bold text-slate-600 uppercase tracking-wider">
+                    <Calendar size={12} className="text-slate-400 shrink-0 sm:w-3.5 sm:h-3.5" /> Last Month ({prev?.label ?? ""})
                   </div>
-                  <div>
-                    <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Payment Received</div>
-                    <div className="text-[11px] sm:text-xs md:text-sm font-bold text-emerald-600 truncate font-mono">{inr(financials?.lastMonth?.received)}</div>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div>
+                      <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Total Ordered</div>
+                      <div className="text-[11px] sm:text-xs md:text-sm font-bold text-slate-800 truncate font-mono">{inr(financials?.lastMonth?.ordered)}</div>
+                    </div>
+                    <div>
+                      <div className="text-[9px] sm:text-[10px] md:text-[11px] text-slate-500 mb-0.5">Payment Received</div>
+                      <div className="text-[11px] sm:text-xs md:text-sm font-bold text-emerald-600 truncate font-mono">{inr(financials?.lastMonth?.received)}</div>
+                    </div>
                   </div>
-                </div>
-                <div className="mt-2 pt-1.5 sm:pt-2 border-t border-slate-200 flex justify-between items-center">
-                  <span className="text-[9px] sm:text-[10px] md:text-[11px] font-medium text-slate-500">Overdue (Unpaid)</span>
-                  <span className="text-[11px] sm:text-xs md:text-sm font-bold text-rose-600 font-mono">{inr(financials?.lastMonth?.overdue)}</span>
+                  <div className="mt-2 pt-1.5 sm:pt-2 border-t border-slate-200 flex justify-between items-center">
+                    <span className="text-[9px] sm:text-[10px] md:text-[11px] font-medium text-slate-500">Overdue (Unpaid)</span>
+                    <span className="text-[11px] sm:text-xs md:text-sm font-bold text-rose-600 font-mono">{inr(financials?.lastMonth?.overdue)}</span>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
+        {/* 4. Operational Fulfillment Card (Shown when user has NO financial permissions, e.g. Dispatch/Warehouse) */}
+        {!canViewReports && !canViewBilling && (
+          <div className="vw-card p-3.5 sm:p-5 flex flex-col justify-between">
+            <div>
+              <CardHead icon={<Truck size={15} className="sm:w-4 sm:h-4" />} title="Fulfillment Overview" note="Dispatch & Packing" />
+              <div className="space-y-3 mt-3">
+                <div className="p-3 rounded-xl border border-amber-100 bg-amber-50/40">
+                  <div className="text-[10px] sm:text-xs font-semibold text-amber-900">Pending in Dispatch Queue</div>
+                  <div className="text-xl sm:text-2xl font-bold text-amber-800 mt-0.5">{pickQueueCount} <span className="text-xs font-normal text-amber-700">orders ready for pickup/dispatch</span></div>
+                </div>
+                <div className="p-3 rounded-xl border border-blue-100 bg-blue-50/40">
+                  <div className="text-[10px] sm:text-xs font-semibold text-blue-900">Today's New Orders</div>
+                  <div className="text-xl sm:text-2xl font-bold text-blue-800 mt-0.5">{ordersTodayCount} <span className="text-xs font-normal text-blue-700">orders placed today</span></div>
+                </div>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-4">
+              <Link to="/dispatch" className="text-[11px] sm:text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 py-2 rounded-lg text-center border border-amber-200/60 transition-colors">Dispatch Queue</Link>
+              <Link to="/pick-list" className="text-[11px] sm:text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 py-2 rounded-lg text-center border border-blue-200/60 transition-colors">Pick List</Link>
+            </div>
+          </div>
+        )}
       </div>
     </>
   );

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearch } from "@tanstack/react-router";
-import { Search, Download, FileText, IndianRupee, History, Send, X, ArrowUpRight, ArrowDownLeft, ShieldAlert, CheckCircle, XCircle, Loader2 } from "lucide-react";
+import { Search, Download, FileText, IndianRupee, History, Send, X, ArrowUpRight, ArrowDownLeft, ShieldAlert, CheckCircle, XCircle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from "recharts";
 import { notify } from "@/lib/notify";
 import { customerService } from "@/services/customerService";
@@ -12,6 +12,7 @@ export function Billing() {
   const routeSearch = useSearch({ strict: false });
   const [ledgers, setLedgers] = useState([]);
   const [loadingLedgers, setLoadingLedgers] = useState(true);
+  const [exportingDues, setExportingDues] = useState(false);
   const [chartData, setChartData] = useState([]);
   const [ledgerEntries, setLedgerEntries] = useState([]);
   const [loadingLedgerEntries, setLoadingLedgerEntries] = useState(false);
@@ -62,14 +63,52 @@ export function Billing() {
     }
   };
 
+  // Server-side pagination and debounce state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [totalAccounts, setTotalAccounts] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [kpis, setKpis] = useState({ totalOutstanding: 0, totalHoldDue: 0, totalActiveDue: 0 });
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [ledgerPage, setLedgerPage] = useState(1);
+  const [ledgerTotal, setLedgerTotal] = useState(0);
+
+  // Debounce search input
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setCurrentPage(1);
+    }, 350);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  // Reset page when tab or page size changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, pageSize]);
+
   const fetchLedgers = async () => {
     setLoadingLedgers(true);
     try {
-      const res = await billingService.getAccounts();
-      setLedgers((res.data || []).map(l => ({ ...l, id: l.id || l._id })));
+      const res = await billingService.getAccounts({
+        page: currentPage,
+        limit: pageSize,
+        tab: activeTab,
+        search: debouncedSearch || undefined,
+      });
+      const data = res.data || {};
+      const rawList = Array.isArray(data) ? data : data.list || [];
+      setLedgers(rawList.map((l) => ({ ...l, id: l.id || l._id })));
+      setTotalAccounts(data.total !== undefined ? data.total : rawList.length);
+      setTotalPages(data.totalPages || 1);
+      if (data.kpis) {
+        setKpis(data.kpis);
+      }
     } catch (err) {
-      console.error(err);
+      console.error("Failed to load billing accounts:", err);
       setLedgers([]);
+      setTotalAccounts(0);
+      setTotalPages(1);
     } finally {
       setLoadingLedgers(false);
     }
@@ -89,11 +128,16 @@ export function Billing() {
   const canApproveDiscounts = hasPermission("APPROVE_DISCOUNT");
 
   useEffect(() => {
-    fetchLedgers();
     fetchChartData();
     if (canApproveLimits) fetchLimitRequests();
     if (canApproveDiscounts) fetchDiscountRequests();
   }, []);
+
+  useEffect(() => {
+    if (activeTab === "dues" || activeTab === "all" || activeTab === "hold") {
+      fetchLedgers();
+    }
+  }, [currentPage, pageSize, activeTab, debouncedSearch]);
 
   const tabs = [
     { id: "dues", label: "Outstanding Dues" },
@@ -103,17 +147,7 @@ export function Billing() {
     ...(canApproveDiscounts ? [{ id: "discount_requests", label: "Discount Requests", badge: discountRequests.length }] : []),
   ];
 
-  const filteredLedgers = ledgers.filter(ledger => {
-    let matchesTab = true;
-    if (activeTab === "dues") matchesTab = ledger.used_balance > 0;
-    if (activeTab === "hold") matchesTab = ledger.account_status === "Hold" || ledger.used_balance > ledger.credit_limit;
-    
-    const matchesSearch = ledger.id.toLowerCase().includes(search.toLowerCase()) || 
-                          ledger.customer.toLowerCase().includes(search.toLowerCase()) ||
-                          ledger.city.toLowerCase().includes(search.toLowerCase());
-    return matchesTab && matchesSearch;
-  });
-
+  // For request tabs, we filter client-side since requests are fewer in number
   const filteredRequests = limitRequests.filter(req => {
     const customerName = req.customer_id?.company_name || req.customer_id?.name || "";
     const s = search.toLowerCase();
@@ -127,9 +161,13 @@ export function Billing() {
     return customerName.toLowerCase().includes(s) || productName.toLowerCase().includes(s);
   });
 
-  const totalOutstanding = ledgers.reduce((sum, item) => sum + item.used_balance, 0);
-  const totalHoldDue = ledgers.filter(l => l.account_status === "Hold" || l.used_balance > l.credit_limit).reduce((sum, item) => sum + item.used_balance, 0);
-  const totalActiveDue = totalOutstanding - totalHoldDue;
+  // Server-computed total company dues (unaffected by page slice)
+  const totalOutstanding = kpis.totalOutstanding;
+  const totalHoldDue = kpis.totalHoldDue;
+  const totalActiveDue = kpis.totalActiveDue;
+
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(currentPage * pageSize, totalAccounts);
 
   const handleReceiveClick = (customer) => {
     setSelectedCustomer(customer);
@@ -137,16 +175,19 @@ export function Billing() {
     setShowReceiveModal(true);
   };
 
-  const handleLedgerClick = async (customer) => {
+  const handleLedgerClick = async (customer, page = 1) => {
     setSelectedCustomer(customer);
     setShowLedgerModal(true);
     setLoadingLedgerEntries(true);
+    setLedgerPage(page);
     try {
-      const res = await customerService.getCustomerLedger(customer.id);
-      setLedgerEntries(res.data?.passbook || []);
+      const res = await customerService.getCustomerLedger(customer.id, { page, limit: 50 });
+      const passbook = res.data?.passbook || [];
+      setLedgerEntries(page === 1 ? passbook : [...ledgerEntries, ...passbook]);
+      setLedgerTotal(res.data?.total || passbook.length);
     } catch (err) {
       console.error(err);
-      setLedgerEntries([]);
+      if (page === 1) setLedgerEntries([]);
     } finally {
       setLoadingLedgerEntries(false);
     }
@@ -244,6 +285,122 @@ export function Billing() {
     }
   };
 
+  const toCsvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+
+  const handleExportDues = async () => {
+    setExportingDues(true);
+    try {
+      const res = await billingService.exportDues({
+        tab: activeTab,
+        search: search || undefined,
+      });
+
+      const list = res.data || [];
+      if (list.length === 0) {
+        notify.warning("No dues or accounts found matching current filters.");
+        setExportingDues(false);
+        return;
+      }
+
+      const headers = [
+        "Company / Shop Name",
+        "Owner / Contact Name",
+        "Phone Number",
+        "WhatsApp Number",
+        "Email Address",
+        "Full Address",
+        "City",
+        "State",
+        "Pincode",
+        "GST Number",
+        "PAN Number",
+        "Pricing Tier",
+        "Account Status",
+        "Payment Term",
+        "Payment Risk Grade",
+        "Credit Limit (INR)",
+        "Outstanding Dues (INR)",
+        "Available Balance (INR)",
+        "Limit Exceeded",
+        "Excess Amount Over Limit (INR)",
+        "Last Payment Date",
+        "Last Payment Amount (INR)",
+        "Last Payment Mode",
+        "Assigned Salesperson",
+        "Salesperson Phone",
+        "Entity",
+      ];
+
+      const rows = [
+        headers,
+        ...list.map((c) => {
+          let lastPayDate = "";
+          if (c.last_payment_date) {
+            try {
+              const d = new Date(c.last_payment_date);
+              if (!isNaN(d.getTime())) {
+                lastPayDate = d.toISOString().slice(0, 10);
+              }
+            } catch {
+              lastPayDate = String(c.last_payment_date);
+            }
+          }
+
+          const tierFormatted = c.pricing_tier
+            ? String(c.pricing_tier).replace(/_/g, " ").toUpperCase()
+            : "STANDARD";
+
+          return [
+            c.company_name || "",
+            c.name || "",
+            c.phone || "",
+            c.whatsapp_number || "",
+            c.email || "",
+            c.address || "",
+            c.city || "",
+            c.state || "",
+            c.pincode || "",
+            c.gst_no || "Unregistered",
+            c.pan_number || "",
+            tierFormatted,
+            c.account_status || "Credit",
+            (c.payment_term || "cash").replace(/_/g, " "),
+            c.payment_grade || "Normal",
+            Number(c.credit_limit) || 0,
+            Number(c.used_balance) || 0,
+            Number(c.available_balance) || 0,
+            c.is_limit_exceeded ? "YES (Exceeded)" : "No",
+            Number(c.excess_amount) || 0,
+            lastPayDate || "—",
+            Number(c.last_payment_amount) || 0,
+            c.last_payment_mode || "—",
+            c.assigned_salesperson_name || "Direct / Unassigned",
+            c.assigned_salesperson_phone || "—",
+            c.entity || "—",
+          ];
+        }),
+      ];
+
+      const csvContent = rows.map((r) => r.map(toCsvCell).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const searchSuffix = search ? "-filtered" : "";
+      a.download = `dues-${activeTab}${searchSuffix}-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      notify.success(`Exported ${list.length} accounts to dues CSV.`);
+    } catch (err) {
+      console.error("Export dues error:", err);
+      notify.error(err.message || "Failed to export dues list.");
+    } finally {
+      setExportingDues(false);
+    }
+  };
+
   const CustomTooltip = ({ active, payload, label }) => {
     if (active && payload && payload.length) {
       return (
@@ -265,9 +422,17 @@ export function Billing() {
           <p className="text-[13px] text-slate-500 mt-1">Manage customer khata, limits, and view statements.</p>
         </div>
         <div className="flex items-center gap-3 w-full sm:w-auto">
-          <button onClick={() => notify.success("Exporting dues list to CSV...")} className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
-            <Download size={16} /> Export Dues
-          </button>
+          {hasPermission("EXPORT_DATA") && (
+            <button 
+              onClick={handleExportDues}
+              disabled={exportingDues}
+              className="flex items-center justify-center gap-2 vw-btn-secondary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none cursor-pointer"
+              title="Export dues to CSV"
+            >
+              <Download size={16} className={exportingDues ? "animate-bounce" : ""} /> 
+              {exportingDues ? "Exporting..." : "Export Dues"}
+            </button>
+          )}
           <button onClick={() => notify.success("Reminders sent to all pending accounts!")} className="flex items-center justify-center gap-2 vw-btn-primary h-10 px-4 w-full sm:w-auto flex-1 sm:flex-none">
             <Send size={16} /> Send Reminders
           </button>
@@ -289,6 +454,18 @@ export function Billing() {
               <div className="flex-1">
                 <p className="text-[11px] text-slate-400 font-bold uppercase">Hold Dues</p>
                 <p className="text-[14px] font-bold text-rose-600 mt-0.5">₹{totalHoldDue.toLocaleString()}</p>
+                {ledgerTotal > ledgerEntries.length && (
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleLedgerClick(selectedCustomer, ledgerPage + 1)}
+                      disabled={loadingLedgerEntries}
+                      className="w-full py-2.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
+                    >
+                      {loadingLedgerEntries ? "Loading more..." : `Load More Transactions (${ledgerEntries.length} of ${ledgerTotal})`}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -476,7 +653,7 @@ export function Billing() {
             <div className="block md:hidden">
               {loadingLedgers ? (
                 <div className="px-5 py-12 text-center text-slate-500 text-[13px]">Loading accounts...</div>
-              ) : filteredLedgers.length === 0 ? (
+              ) : ledgers.length === 0 ? (
                 <div className="px-5 py-12 text-center flex flex-col items-center justify-center">
                   <div className="w-12 h-12 bg-slate-50 rounded-full flex items-center justify-center mb-3">
                     <FileText size={20} className="text-slate-400" />
@@ -486,7 +663,7 @@ export function Billing() {
                 </div>
               ) : (
                 <div className="divide-y divide-slate-100">
-                  {filteredLedgers.map(ledger => (
+                  {ledgers.map(ledger => (
                     <div key={ledger.id} className="p-4 flex flex-col gap-3">
                       <div className="flex justify-between items-start">
                         <div>
@@ -540,7 +717,7 @@ export function Billing() {
                 <tbody className="divide-y divide-slate-100">
                   {loadingLedgers ? (
                     <tr><td colSpan="5" className="px-5 py-12 text-center text-slate-500 text-[13px]">Loading accounts...</td></tr>
-                  ) : filteredLedgers.length === 0 ? (
+                  ) : ledgers.length === 0 ? (
                     <tr>
                       <td colSpan="5" className="px-5 py-12 text-center">
                         <div className="flex flex-col items-center justify-center">
@@ -553,7 +730,7 @@ export function Billing() {
                       </td>
                     </tr>
                   ) : null}
-                  {filteredLedgers.map(ledger => (
+                  {ledgers.map(ledger => (
                     <tr key={ledger.id} className="hover:bg-slate-50/50 transition-colors group">
                       <td className="px-5 py-4">
                         <div className="font-bold text-[14px] text-slate-900">{ledger.customer}</div>
@@ -594,6 +771,84 @@ export function Billing() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Smart Server-Side Pagination Bar for Billing Accounts */}
+            <div className="flex flex-col sm:flex-row items-center justify-between px-5 py-3 border-t border-slate-100 bg-slate-50/70 gap-3">
+              <div className="flex items-center gap-3 text-[12px] text-slate-500">
+                <span>
+                  Showing <strong className="font-semibold text-slate-700">{totalAccounts === 0 ? 0 : startIndex + 1}</strong> to <strong className="font-semibold text-slate-700">{endIndex}</strong> of <strong className="font-semibold text-slate-700">{totalAccounts.toLocaleString("en-IN")}</strong> accounts
+                </span>
+                <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200">
+                  <span className="text-slate-400">Rows:</span>
+                  <select
+                    value={pageSize}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setCurrentPage(1);
+                    }}
+                    className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500"
+                  >
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={50}>50</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+              </div>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1 || loadingLedgers}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                    title="Previous Page"
+                  >
+                    <ChevronLeft size={16} />
+                  </button>
+
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                    if (
+                      pageNum === 1 ||
+                      pageNum === totalPages ||
+                      Math.abs(pageNum - currentPage) <= 1
+                    ) {
+                      return (
+                        <button
+                          key={pageNum}
+                          onClick={() => setCurrentPage(pageNum)}
+                          disabled={loadingLedgers}
+                          className={`min-w-[32px] h-8 px-2 rounded-lg text-xs font-semibold transition-colors border cursor-pointer ${
+                            currentPage === pageNum
+                              ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                              : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                          }`}
+                        >
+                          {pageNum}
+                        </button>
+                      );
+                    }
+
+                    if (pageNum === 2 && currentPage > 3) {
+                      return <span key="ellipsis-start" className="px-1 text-slate-400 text-xs">...</span>;
+                    }
+                    if (pageNum === totalPages - 1 && currentPage < totalPages - 2) {
+                      return <span key="ellipsis-end" className="px-1 text-slate-400 text-xs">...</span>;
+                    }
+                    return null;
+                  })}
+
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages || loadingLedgers}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                    title="Next Page"
+                  >
+                    <ChevronRight size={16} />
+                  </button>
+                </div>
+              )}
             </div>
           </>
         )}
@@ -755,6 +1010,18 @@ export function Billing() {
                     </div>
                   </div>
                 ))}
+                {ledgerTotal > ledgerEntries.length && (
+                  <div className="pt-2 text-center">
+                    <button
+                      type="button"
+                      onClick={() => handleLedgerClick(selectedCustomer, ledgerPage + 1)}
+                      disabled={loadingLedgerEntries}
+                      className="w-full py-2.5 text-xs font-semibold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors cursor-pointer"
+                    >
+                      {loadingLedgerEntries ? "Loading more..." : `Load More Transactions (${ledgerEntries.length} of ${ledgerTotal})`}
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
             

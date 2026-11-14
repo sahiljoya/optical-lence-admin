@@ -3,6 +3,8 @@ import { makeRequestAuth, uploadImageApi, downloadFileAuth } from "@/config/apiC
 export const brandApi = {
   getBrands: () => makeRequestAuth("get", "/admin/brand/list"),
   createBrand: (data) => makeRequestAuth("post", "/admin/brand/create", data),
+  updateBrand: (id, data) => makeRequestAuth("put", `/admin/brand/update/${id}`, data),
+  deleteBrand: (id) => makeRequestAuth("delete", `/admin/brand/delete/${id}`),
   uploadImage: (file) => uploadImageApi(file),
 };
 
@@ -14,7 +16,7 @@ export const productApi = {
   findMyLens: (data) => makeRequestAuth("post", "/admin/product/find-my-lens", data),
   getProducts: (data) => makeRequestAuth("post", "/admin/product/list", data || {}),
   getProductDetail: (id) => makeRequestAuth("get", `/admin/product/detail/${id}`),
-  getAgingStock: (params) => makeRequestAuth("get", "/admin/product/aging-stock", null, { params }),
+  getAgingStock: (params = {}) => makeRequestAuth("get", "/admin/product/aging-stock", params),
   setClearanceAction: (id, data) => makeRequestAuth("post", `/admin/product/${id}/clearance-action`, data),
   bulkExcelUpload: (formData) => makeRequestAuth("post", "/admin/product/bulk-excel-upload", formData, true),
   downloadMasterExcelTemplate: () => downloadFileAuth("/admin/product/bulk-excel-template", "product_master_template.xlsx"),

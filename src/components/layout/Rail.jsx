@@ -18,14 +18,14 @@ export function Rail({ mobileOpen = false, onMobileClose, collapsed = false, onT
     ["Orders", ClipboardList, "/orders", "VIEW_ORDERS"],
     ["Products", Package, "/products", "VIEW_PRODUCTS"],
     ["Find My Lens", Search, "/find-my-lens", "VIEW_INVENTORY"],
-    ["Billing", Receipt, "/billing", "VIEW_CUSTOMERS"],
+    ["Billing", Receipt, "/billing", "VIEW_BILLING"],
     ["Dispatch", Truck, "/dispatch", "MANAGE_DISPATCH"],
-    ["Logistics & Courier Billing", Scale, "/courier-reconciliation", "MANAGE_DISPATCH"],
+    ["Logistics & Courier Billing", Scale, "/courier-reconciliation", "MANAGE_COURIER_BILLING"],
     ["Pick List", ListChecks, "/pick-list", "MANAGE_DISPATCH"],
     ["Reserve Stock", RefreshCw, "/replenishment", "VIEW_INVENTORY"],
-    ["Returns", Undo2, "/returns", hasPermission("VIEW_RETURNS") ? "VIEW_RETURNS" : "VIEW_ORDERS"],
-    ["Reports", BarChart3, "/reports", null],
-    ["Access", KeyRound, "/settings", "MANAGE_USERS"],
+    ["Returns", Undo2, "/returns", "VIEW_RETURNS"],
+    ["Reports", BarChart3, "/reports", "VIEW_REPORTS"],
+    ["Access", KeyRound, "/settings", ["MANAGE_USERS", "MANAGE_ROLES"]],
     ...(isOwnerAdmin ? [["Activity Logs", History, "/logs", null]] : [])
   ].filter(([, , , permission]) => !permission || hasPermission(permission));
 

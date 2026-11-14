@@ -22,4 +22,5 @@ export const orderApi = {
   removeUrgent: (orderId) => makeRequestAuth("post", "/admin/order/remove-urgent", { orderId }),
   createOrder: (data) => makeRequestAuth("post", "/admin/order/create", data),
   getRecentOrders: () => makeRequestAuth("get", "/admin/dashboard/recent-orders"),
+  getOrderList: (params = {}) => makeRequestAuth("post", "/admin/order/list", params),
 };

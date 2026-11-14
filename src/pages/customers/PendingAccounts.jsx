@@ -2,7 +2,8 @@ import { useState, useEffect } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { 
   ArrowLeft, CheckCircle, Clock, ShieldCheck, X, Loader2, AlertCircle,
-  User, Eye, XCircle, FileText, MapPin, Phone, Mail, Building, Image as ImageIcon, AlertTriangle
+  User, Eye, XCircle, FileText, MapPin, Phone, Mail, Building, Image as ImageIcon, AlertTriangle,
+  Search, ChevronLeft, ChevronRight
 } from "lucide-react";
 import { customerService } from "@/services/customerService";
 import { StatusPill } from "@/components/common/StatusPill";
@@ -22,6 +23,14 @@ export function PendingAccounts() {
   const [rejectReason, setRejectReason] = useState("");
   const [isRejecting, setIsRejecting] = useState(false);
   const [previewImage, setPreviewImage] = useState(null);
+
+  // Pagination and Search State
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [search, setSearch] = useState("");
+
   const [formData, setFormData] = useState({
     pricing_tier: "stock_a",
     stock_grade: "Medium",
@@ -30,17 +39,46 @@ export function PendingAccounts() {
     credit_limit: 0
   });
 
-  const fetchPending = async () => {
+  const fetchPending = async (targetPage = page, targetLimit = pageSize, targetSearch = search) => {
     setLoading(true);
     try {
-      const res = await customerService.getPendingCustomers({});
-      setPendingCustomers(res.data.list.map(c => ({ ...c, id: c._id })));
+      const res = await customerService.getPendingCustomers({
+        pageNo: targetPage,
+        size: targetLimit,
+        search: targetSearch.trim() || undefined
+      });
+      const list = res.data?.list || [];
+      setPendingCustomers(list.map((c) => ({ ...c, id: c._id })));
+      const total = res.data?.total || 0;
+      setTotalCount(total);
+      setTotalPages(Math.ceil(total / targetLimit) || 1);
     } catch (err) {
       console.error(err);
       setPendingCustomers([]);
+      setTotalCount(0);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= totalPages && newPage !== page) {
+      setPage(newPage);
+      fetchPending(newPage, pageSize, search);
+    }
+  };
+
+  const handlePageSizeChange = (newSize) => {
+    setPageSize(newSize);
+    setPage(1);
+    fetchPending(1, newSize, search);
+  };
+
+  const handleSearchSubmit = (e) => {
+    e.preventDefault();
+    setPage(1);
+    fetchPending(1, pageSize, search);
   };
 
   useEffect(() => {
@@ -49,7 +87,7 @@ export function PendingAccounts() {
       navigate({ to: "/customers" });
       return;
     }
-    fetchPending();
+    fetchPending(1, pageSize, search);
   }, []);
 
   const isOwnerStep = selectedCustomer?.approval_status === "PENDING_OWNER";
@@ -121,14 +159,40 @@ export function PendingAccounts() {
         <div className="grid grid-cols-2 sm:flex sm:items-center gap-3 sm:gap-6 text-xs sm:text-[13px] bg-white border border-slate-200/90 shadow-xs px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-xl w-full sm:w-auto shrink-0">
           <div className="flex flex-col">
             <span className="text-slate-500 text-[9px] sm:text-[10px] md:text-xs font-medium">Total Pending</span>
-            <span className="font-bold text-slate-800 text-xs sm:text-sm md:text-[15px]">{pendingCustomers.length}</span>
+            <span className="font-bold text-slate-800 text-xs sm:text-sm md:text-[15px]">{totalCount}</span>
           </div>
           <div className="hidden sm:block h-7 sm:h-8 w-px bg-slate-200"></div>
           <div className="flex flex-col border-l border-slate-200 sm:border-l-0 pl-3 sm:pl-0">
             <span className="text-slate-500 text-[9px] sm:text-[10px] md:text-xs font-medium">Needs Verification</span>
-            <span className="font-bold text-amber-600 text-xs sm:text-sm md:text-[15px]">{pendingCustomers.length}</span>
+            <span className="font-bold text-amber-600 text-xs sm:text-sm md:text-[15px]">{totalCount}</span>
           </div>
         </div>
+      </div>
+
+      {/* Quick Search Bar */}
+      <div className="flex items-center gap-3 mt-3 sm:mt-4">
+        <form onSubmit={handleSearchSubmit} className="relative flex-1 sm:max-w-md">
+          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            placeholder="Search by customer, company, or phone..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full h-9 pl-9 pr-3 bg-white border border-slate-200 rounded-lg text-[12px] sm:text-[13px] focus:outline-none focus:border-blue-500 font-medium"
+          />
+        </form>
+        {search && (
+          <button
+            onClick={() => {
+              setSearch("");
+              setPage(1);
+              fetchPending(1, pageSize, "");
+            }}
+            className="h-9 px-3 text-[12px] text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 rounded-lg font-medium transition-colors cursor-pointer"
+          >
+            Clear
+          </button>
+        )}
       </div>
 
       <div className="vw-card flex flex-col mt-2.5 sm:mt-4 overflow-hidden" style={{ padding: 0 }}>
@@ -199,6 +263,83 @@ export function PendingAccounts() {
               )}
             </tbody>
           </table>
+        </div>
+
+        {/* Smart Server-Side Pagination Bar */}
+        <div className="flex flex-col sm:flex-row items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200 bg-slate-50/70 gap-2.5 sm:gap-3">
+          <div className="flex items-center gap-3 text-[11px] sm:text-xs text-slate-500 text-center sm:text-left">
+            <span>
+              Showing <strong className="font-semibold text-slate-700">{totalCount === 0 ? 0 : (page - 1) * pageSize + 1}</strong> to <strong className="font-semibold text-slate-700">{Math.min(page * pageSize, totalCount)}</strong> of <strong className="font-semibold text-slate-700">{totalCount.toLocaleString("en-IN")}</strong> pending approvals
+            </span>
+            <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200">
+              <span className="text-slate-400">Rows:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => handlePageSizeChange(Number(e.target.value))}
+                className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
+              >
+                <option value={10}>10</option>
+                <option value={20}>20</option>
+                <option value={50}>50</option>
+              </select>
+            </div>
+          </div>
+
+          {totalPages > 1 && (
+            <div className="flex items-center gap-1 sm:gap-1.5">
+              {/* Prev Button */}
+              <button
+                onClick={() => handlePageChange(Math.max(1, page - 1))}
+                disabled={page === 1 || loading}
+                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                title="Previous Page"
+              >
+                <ChevronLeft size={15} />
+              </button>
+
+              {/* Page Number Buttons */}
+              {Array.from({ length: totalPages }, (_, i) => i + 1).map((pageNum) => {
+                if (
+                  pageNum === 1 ||
+                  pageNum === totalPages ||
+                  Math.abs(pageNum - page) <= 1
+                ) {
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => handlePageChange(pageNum)}
+                      disabled={loading}
+                      className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors border cursor-pointer ${
+                        page === pageNum
+                          ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                          : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                }
+
+                if (pageNum === 2 && page > 3) {
+                  return <span key="ellipsis-start" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                }
+                if (pageNum === totalPages - 1 && page < totalPages - 2) {
+                  return <span key="ellipsis-end" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                }
+                return null;
+              })}
+
+              {/* Next Button */}
+              <button
+                onClick={() => handlePageChange(Math.min(totalPages, page + 1))}
+                disabled={page === totalPages || loading}
+                className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                title="Next Page"
+              >
+                <ChevronRight size={15} />
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

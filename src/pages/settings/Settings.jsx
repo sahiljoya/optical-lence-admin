@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { ShieldCheck, UserPlus, Key, Mail, Edit, Trash2, CheckCircle2, ShieldAlert, Plus, X, Lock, Power, Package, Loader2, Settings as SettingsIcon, IndianRupee, Truck } from "lucide-react";
+import { ShieldCheck, UserPlus, Key, Mail, Edit, Trash2, CheckCircle2, ShieldAlert, Plus, X, Lock, Power, Package, Loader2, Settings as SettingsIcon, IndianRupee, Truck, Zap } from "lucide-react";
 import { notify } from "@/lib/notify";
 import { userService } from "@/services/userService";
 import { warehouseApi } from "@/services/productApi";
@@ -42,7 +42,7 @@ export function Settings() {
   const [roleForm, setRoleForm] = useState({ role: "", desc: "", permissions: [] });
 
   // Platform Settings (Charges) State
-  const [platformForm, setPlatformForm] = useState({ bulk_cartage_charge: 0, customer_rate_per_kg: 40, urgent_delivery_charge: 0 });
+  const [platformForm, setPlatformForm] = useState({ bulk_cartage_charge: 0, customer_rate_per_kg: 40, urgent_delivery_charge: 0, is_urgent_delivery_enabled: false });
   const [loadingPlatformSettings, setLoadingPlatformSettings] = useState(true);
   const [savingPlatformSettings, setSavingPlatformSettings] = useState(false);
 
@@ -95,7 +95,8 @@ export function Settings() {
         setPlatformForm({
           bulk_cartage_charge: res.data?.bulk_cartage_charge ?? 0,
           customer_rate_per_kg: res.data?.customer_rate_per_kg ?? 40,
-          urgent_delivery_charge: res.data?.urgent_delivery_charge ?? 0
+          urgent_delivery_charge: res.data?.urgent_delivery_charge ?? 0,
+          is_urgent_delivery_enabled: res.data?.is_urgent_delivery_enabled ?? false
         });
       }
     } catch (err) {
@@ -135,7 +136,8 @@ export function Settings() {
       const res = await settingsService.updatePlatformSettings({
         bulk_cartage_charge: Number(platformForm.bulk_cartage_charge) || 0,
         customer_rate_per_kg: Number(platformForm.customer_rate_per_kg) || 0,
-        urgent_delivery_charge: Number(platformForm.urgent_delivery_charge) || 0
+        urgent_delivery_charge: Number(platformForm.urgent_delivery_charge) || 0,
+        is_urgent_delivery_enabled: Boolean(platformForm.is_urgent_delivery_enabled)
       });
       if (res.error === false) {
         notify.success("Platform settings updated successfully!");
@@ -727,9 +729,67 @@ export function Settings() {
                 <div className="p-10 text-center text-slate-500 text-[13px] flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Loading settings...</div>
               ) : (
                 <form onSubmit={handleSavePlatformSettings} className="p-5 flex flex-col gap-5">
+                  {/* Urgent Delivery Master Toggle */}
+                  <div className={`p-4 rounded-xl border transition-all ${
+                    platformForm.is_urgent_delivery_enabled
+                      ? "bg-amber-50/70 border-amber-200"
+                      : "bg-slate-50 border-slate-200"
+                  }`}>
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-start gap-3">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 mt-0.5 ${
+                          platformForm.is_urgent_delivery_enabled
+                            ? "bg-amber-500 text-white shadow-sm"
+                            : "bg-slate-200 text-slate-500"
+                        }`}>
+                          <Zap size={18} className={platformForm.is_urgent_delivery_enabled ? "fill-white" : ""} />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[13px] font-black text-slate-800">Urgent Delivery Service</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                              platformForm.is_urgent_delivery_enabled
+                                ? "bg-emerald-100 text-emerald-700 border border-emerald-300"
+                                : "bg-slate-200 text-slate-600 border border-slate-300"
+                            }`}>
+                              {platformForm.is_urgent_delivery_enabled ? "Enabled" : "Disabled (OFF)"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-slate-500 mt-1">
+                            {platformForm.is_urgent_delivery_enabled
+                              ? "Urgent delivery is currently ACTIVE. Clients and web/mobile apps can choose urgent delivery at checkout."
+                              : "Urgent delivery is currently OFF. The urgent option is completely hidden/disabled on client side."}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Toggle Button */}
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={platformForm.is_urgent_delivery_enabled}
+                        onClick={() => setPlatformForm(prev => ({ ...prev, is_urgent_delivery_enabled: !prev.is_urgent_delivery_enabled }))}
+                        className={`w-12 h-6 flex items-center rounded-full p-1 cursor-pointer transition-colors duration-200 ease-in-out shrink-0 ${
+                          platformForm.is_urgent_delivery_enabled ? "bg-amber-500" : "bg-slate-300"
+                        }`}
+                      >
+                        <div
+                          className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                            platformForm.is_urgent_delivery_enabled ? "translate-x-6" : "translate-x-0"
+                          }`}
+                        />
+                      </button>
+                    </div>
+                  </div>
+
                   <div>
-                    <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Urgent Delivery Charge (₹)</label>
-                    <p className="text-[11px] text-slate-500 mb-2">Added when a customer marks their order as Urgent delivery.</p>
+                    <label className="block text-[12px] font-bold text-slate-700 mb-1.5">
+                      Urgent Delivery Charge (₹)
+                      {!platformForm.is_urgent_delivery_enabled && (
+                        <span className="ml-2 text-[11px] font-medium text-slate-400">(Inactive while service is OFF)</span>
+                      )}
+                    </label>
+                    <p className="text-[11px] text-slate-500 mb-2">Added when a customer marks their order as Urgent delivery (only when enabled).</p>
                     <input
                       type="number" min="0"
                       value={platformForm.urgent_delivery_charge}

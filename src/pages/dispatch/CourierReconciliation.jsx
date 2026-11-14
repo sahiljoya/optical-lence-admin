@@ -20,6 +20,7 @@ import {
   Building2,
   Package,
   History,
+  ChevronLeft,
   ChevronRight,
   ExternalLink,
   Info,
@@ -28,6 +29,7 @@ import {
 import { notify } from "@/lib/notify";
 import { courierService } from "@/services/courierService";
 import { AddCourierModal } from "@/components/settings/AddCourierModal";
+import { hasPermission } from "@/lib/permissions";
 import "@/styles/veriwide.css";
 
 const MONTHS = [
@@ -57,6 +59,7 @@ export function CourierReconciliation() {
 
   // Data State
   const [loading, setLoading] = useState(true);
+  const [exportingCsv, setExportingCsv] = useState(false);
   const [summaryData, setSummaryData] = useState(null);
 
   // Reconciliation Form State (Staff inputs from physical/PDF courier bill)
@@ -78,9 +81,22 @@ export function CourierReconciliation() {
   const [activeTab, setActiveTab] = useState("breakdown"); // "breakdown" | "shipments" | "history"
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Pagination States for Tab 1 (Breakdown) and Tab 2 (Shipments)
+  const [breakdownPage, setBreakdownPage] = useState(1);
+  const [breakdownPageSize, setBreakdownPageSize] = useState(25);
+
+  const [shipmentsPage, setShipmentsPage] = useState(1);
+  const [shipmentsPageSize, setShipmentsPageSize] = useState(25);
+
   // History State
   const [historyList, setHistoryList] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Reset pagination when courier, month, year, or search query changes
+  useEffect(() => {
+    setBreakdownPage(1);
+    setShipmentsPage(1);
+  }, [selectedCourier, selectedMonth, selectedYear, searchQuery]);
 
   // Fetch Courier List on Mount
   useEffect(() => {
@@ -245,36 +261,126 @@ export function CourierReconciliation() {
     }
   };
 
-  // CSV Export for Courier Dispute
-  const handleExportCSV = () => {
-    const shipments = summaryData?.shipments || [];
-    if (!shipments.length) {
-      notify.warning("No shipment records to export for this month.");
+  const toCsvCell = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+
+  // CSV Export for Courier Dispute (Backend Fetch)
+  const handleExportCSV = async () => {
+    if (!selectedCourier) {
+      notify.warning("Please select a courier partner first.");
       return;
     }
 
-    const headers = ["Order Number", "Customer Name", "City", "Tracking / AWB", "Dispatched Date", "Boxes / Cartons", "Weight (Kg)", "Expected Cost (₹)", "Status"];
-    const rows = shipments.map((s) => [
-      `"${s.order_number || ""}"`,
-      `"${s.customer_name || ""}"`,
-      `"${s.city || ""}"`,
-      `"${s.tracking_number || ""}"`,
-      `"${s.shipped_date ? new Date(s.shipped_date).toLocaleDateString("en-IN") : ""}"`,
-      s.cartons_count || 1,
-      s.weight_kg || 1,
-      s.expected_cost || Math.round((s.weight_kg || 1) * ratePerKg),
-      `"${s.status || ""}"`,
-    ]);
+    setExportingCsv(true);
+    try {
+      // Fresh fetch from backend for the selected courier partner, month and year
+      const res = await courierService.getMonthlySummary(selectedCourier, selectedMonth, selectedYear);
+      const data = res?.data || res;
+      let shipments = data?.shipments || [];
 
-    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `courier-manifest-${selectedCourier}-${selectedMonth}-${selectedYear}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    notify.success("Dispute manifest CSV downloaded successfully!");
+      // Filter by search query if user entered a search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        shipments = shipments.filter(
+          (s) =>
+            (s.order_number || "").toLowerCase().includes(q) ||
+            (s.customer_name || "").toLowerCase().includes(q) ||
+            (s.tracking_number || "").toLowerCase().includes(q) ||
+            (s.city || "").toLowerCase().includes(q) ||
+            (s.state || "").toLowerCase().includes(q)
+        );
+      }
+
+      if (!shipments.length) {
+        const monthLabel = MONTHS.find((m) => m.value === Number(selectedMonth))?.label || selectedMonth;
+        notify.warning(`No shipment records found for ${selectedCourier} in ${monthLabel} ${selectedYear}.`);
+        setExportingCsv(false);
+        return;
+      }
+
+      const activeRate = data?.courier?.rate_per_kg || ratePerKg || 0;
+      const invoiceNo = data?.reconciliation?.courier_invoice_number || courierInvoiceNumber || "—";
+      const recStatus = data?.reconciliation?.status || reconcileStatus || "PENDING_AUDIT";
+
+      const headers = [
+        "Courier Partner",
+        "Order Number",
+        "Customer / Company Name",
+        "Contact Person",
+        "Customer Phone",
+        "City",
+        "State",
+        "Tracking / AWB Number",
+        "Dispatched Date",
+        "Dispatched Time",
+        "Boxes / Cartons Count",
+        "Shipped Weight (Kg)",
+        "Courier Rate (INR / Kg)",
+        "Expected Shipping Cost (INR)",
+        "Order Amount (INR)",
+        "Delivery Status",
+        "Courier Invoice Number",
+        "Audit Status",
+      ];
+
+      const rows = [
+        headers,
+        ...shipments.map((s) => {
+          let dateStr = "";
+          let timeStr = "";
+          if (s.shipped_date) {
+            try {
+              const d = new Date(s.shipped_date);
+              if (!isNaN(d.getTime())) {
+                dateStr = d.toISOString().slice(0, 10);
+                timeStr = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+              }
+            } catch {
+              dateStr = String(s.shipped_date);
+            }
+          }
+
+          return [
+            selectedCourier,
+            s.order_number || "",
+            s.customer_name || "",
+            s.contact_name || "",
+            s.phone || "",
+            s.city || "",
+            s.state || "",
+            s.tracking_number || "—",
+            dateStr,
+            timeStr,
+            Number(s.cartons_count) || 1,
+            Number(s.weight_kg) || 1,
+            activeRate,
+            Number(s.expected_cost) || Math.round((Number(s.weight_kg) || 1) * activeRate),
+            Number(s.total_amount) || 0,
+            s.status || "DISPATCHED",
+            invoiceNo,
+            recStatus,
+          ];
+        }),
+      ];
+
+      const csvContent = rows.map((r) => r.map(toCsvCell).join(",")).join("\r\n");
+      const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const cleanMonth = String(selectedMonth).padStart(2, "0");
+      const searchSuffix = searchQuery.trim() ? "-filtered" : "";
+      a.download = `courier-dispute-${selectedCourier}-${selectedYear}-${cleanMonth}${searchSuffix}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      notify.success(`Exported ${shipments.length} shipment records for ${selectedCourier} to dispute CSV.`);
+    } catch (err) {
+      console.error("Dispute CSV export error:", err);
+      notify.error(err.message || "Failed to export dispute manifest.");
+    } finally {
+      setExportingCsv(false);
+    }
   };
 
   // Filtered lists
@@ -284,6 +390,12 @@ export function CourierReconciliation() {
     const q = searchQuery.toLowerCase();
     return list.filter((c) => c.company_name.toLowerCase().includes(q) || c.city.toLowerCase().includes(q));
   }, [summaryData, searchQuery]);
+
+  const totalBreakdownPages = Math.ceil(filteredCustomers.length / breakdownPageSize) || 1;
+  const paginatedCustomers = useMemo(() => {
+    const start = (breakdownPage - 1) * breakdownPageSize;
+    return filteredCustomers.slice(start, start + breakdownPageSize);
+  }, [filteredCustomers, breakdownPage, breakdownPageSize]);
 
   const filteredShipments = useMemo(() => {
     const list = summaryData?.shipments || [];
@@ -297,6 +409,12 @@ export function CourierReconciliation() {
         s.city.toLowerCase().includes(q)
     );
   }, [summaryData, searchQuery]);
+
+  const totalShipmentsPages = Math.ceil(filteredShipments.length / shipmentsPageSize) || 1;
+  const paginatedShipments = useMemo(() => {
+    const start = (shipmentsPage - 1) * shipmentsPageSize;
+    return filteredShipments.slice(start, start + shipmentsPageSize);
+  }, [filteredShipments, shipmentsPage, shipmentsPageSize]);
 
   return (
     <>
@@ -321,12 +439,17 @@ export function CourierReconciliation() {
           >
             <Truck size={16} /> Live Dispatch
           </Link>
-          <button
-            onClick={handleExportCSV}
-            className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[13px] border border-emerald-200 rounded-lg h-10 px-3.5 transition-colors"
-          >
-            <Download size={16} /> Export Dispute CSV
-          </button>
+          {hasPermission("EXPORT_DATA") && (
+            <button
+              onClick={handleExportCSV}
+              disabled={exportingCsv || loading}
+              className="flex items-center gap-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold text-[13px] border border-emerald-200 rounded-lg h-10 px-3.5 transition-colors cursor-pointer"
+              title="Download CSV manifest for dispute filing"
+            >
+              <Download size={16} className={exportingCsv ? "animate-bounce" : ""} /> 
+              {exportingCsv ? "Exporting..." : "Export Dispute CSV"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -727,7 +850,8 @@ export function CourierReconciliation() {
                   No shipments found for {selectedCourier} in this month.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-left text-[13px]">
                     <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100">
                       <tr>
@@ -740,7 +864,7 @@ export function CourierReconciliation() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredCustomers.map((cust) => {
+                      {paginatedCustomers.map((cust) => {
                         const volumePct =
                           systemTotalWeight > 0
                             ? Math.round((cust.total_weight_kg / systemTotalWeight) * 1000) / 10
@@ -778,6 +902,84 @@ export function CourierReconciliation() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Tab 1 Pagination Bar */}
+                <div className="flex flex-col sm:flex-row items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200 bg-slate-50/70 gap-2.5 sm:gap-3">
+                  <div className="flex items-center gap-3 text-[11px] sm:text-xs text-slate-500 text-center sm:text-left">
+                    <span>
+                      Showing <strong className="font-semibold text-slate-700">{filteredCustomers.length === 0 ? 0 : (breakdownPage - 1) * breakdownPageSize + 1}</strong> to <strong className="font-semibold text-slate-700">{Math.min(breakdownPage * breakdownPageSize, filteredCustomers.length)}</strong> of <strong className="font-semibold text-slate-700">{filteredCustomers.length.toLocaleString("en-IN")}</strong> customers
+                    </span>
+                    <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200">
+                      <span className="text-slate-400">Rows:</span>
+                      <select
+                        value={breakdownPageSize}
+                        onChange={(e) => {
+                          setBreakdownPageSize(Number(e.target.value));
+                          setBreakdownPage(1);
+                        }}
+                        className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {totalBreakdownPages > 1 && (
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                      <button
+                        onClick={() => setBreakdownPage((p) => Math.max(1, p - 1))}
+                        disabled={breakdownPage === 1}
+                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft size={15} />
+                      </button>
+
+                      {Array.from({ length: totalBreakdownPages }, (_, i) => i + 1).map((pageNum) => {
+                        if (
+                          pageNum === 1 ||
+                          pageNum === totalBreakdownPages ||
+                          Math.abs(pageNum - breakdownPage) <= 1
+                        ) {
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => setBreakdownPage(pageNum)}
+                              className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors border cursor-pointer ${
+                                breakdownPage === pageNum
+                                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        }
+
+                        if (pageNum === 2 && breakdownPage > 3) {
+                          return <span key="ellipsis-start" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                        }
+                        if (pageNum === totalBreakdownPages - 1 && breakdownPage < totalBreakdownPages - 2) {
+                          return <span key="ellipsis-end" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                        }
+                        return null;
+                      })}
+
+                      <button
+                        onClick={() => setBreakdownPage((p) => Math.min(totalBreakdownPages, p + 1))}
+                        disabled={breakdownPage === totalBreakdownPages}
+                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                        title="Next Page"
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
               )}
             </div>
           )}
@@ -805,7 +1007,8 @@ export function CourierReconciliation() {
                   No shipment records matching filter.
                 </div>
               ) : (
-                <div className="overflow-x-auto">
+                <>
+                  <div className="overflow-x-auto">
                   <table className="w-full text-left text-[13px]">
                     <thead className="bg-slate-50 text-[11px] font-bold uppercase tracking-wider text-slate-500 border-b border-slate-100">
                       <tr>
@@ -820,7 +1023,7 @@ export function CourierReconciliation() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {filteredShipments.map((s) => (
+                      {paginatedShipments.map((s) => (
                         <tr key={s.order_id} className="hover:bg-slate-50/70 transition-colors">
                           <td className="p-3 pl-4 font-mono font-bold text-blue-600">{s.order_number}</td>
                           <td className="p-3">
@@ -862,6 +1065,84 @@ export function CourierReconciliation() {
                     </tbody>
                   </table>
                 </div>
+
+                {/* Tab 2 Pagination Bar */}
+                <div className="flex flex-col sm:flex-row items-center justify-between px-3.5 sm:px-4 py-2.5 sm:py-3 border-t border-slate-200 bg-slate-50/70 gap-2.5 sm:gap-3">
+                  <div className="flex items-center gap-3 text-[11px] sm:text-xs text-slate-500 text-center sm:text-left">
+                    <span>
+                      Showing <strong className="font-semibold text-slate-700">{filteredShipments.length === 0 ? 0 : (shipmentsPage - 1) * shipmentsPageSize + 1}</strong> to <strong className="font-semibold text-slate-700">{Math.min(shipmentsPage * shipmentsPageSize, filteredShipments.length)}</strong> of <strong className="font-semibold text-slate-700">{filteredShipments.length.toLocaleString("en-IN")}</strong> shipments
+                    </span>
+                    <div className="hidden sm:flex items-center gap-1.5 pl-3 border-l border-slate-200">
+                      <span className="text-slate-400">Rows:</span>
+                      <select
+                        value={shipmentsPageSize}
+                        onChange={(e) => {
+                          setShipmentsPageSize(Number(e.target.value));
+                          setShipmentsPage(1);
+                        }}
+                        className="bg-white border border-slate-200 rounded px-1.5 py-0.5 text-xs font-semibold text-slate-700 focus:outline-none focus:border-blue-500 cursor-pointer"
+                      >
+                        <option value={10}>10</option>
+                        <option value={25}>25</option>
+                        <option value={50}>50</option>
+                        <option value={100}>100</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  {totalShipmentsPages > 1 && (
+                    <div className="flex items-center gap-1 sm:gap-1.5">
+                      <button
+                        onClick={() => setShipmentsPage((p) => Math.max(1, p - 1))}
+                        disabled={shipmentsPage === 1}
+                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                        title="Previous Page"
+                      >
+                        <ChevronLeft size={15} />
+                      </button>
+
+                      {Array.from({ length: totalShipmentsPages }, (_, i) => i + 1).map((pageNum) => {
+                        if (
+                          pageNum === 1 ||
+                          pageNum === totalShipmentsPages ||
+                          Math.abs(pageNum - shipmentsPage) <= 1
+                        ) {
+                          return (
+                            <button
+                              key={pageNum}
+                              onClick={() => setShipmentsPage(pageNum)}
+                              className={`min-w-[28px] sm:min-w-[32px] h-7 sm:h-8 px-1.5 sm:px-2 rounded-lg text-[11px] sm:text-xs font-semibold transition-colors border cursor-pointer ${
+                                shipmentsPage === pageNum
+                                  ? "bg-blue-600 text-white border-blue-600 shadow-xs"
+                                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-100"
+                              }`}
+                            >
+                              {pageNum}
+                            </button>
+                          );
+                        }
+
+                        if (pageNum === 2 && shipmentsPage > 3) {
+                          return <span key="ellipsis-start" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                        }
+                        if (pageNum === totalShipmentsPages - 1 && shipmentsPage < totalShipmentsPages - 2) {
+                          return <span key="ellipsis-end" className="px-1 text-slate-400 text-[11px] sm:text-xs">...</span>;
+                        }
+                        return null;
+                      })}
+
+                      <button
+                        onClick={() => setShipmentsPage((p) => Math.min(totalShipmentsPages, p + 1))}
+                        disabled={shipmentsPage === totalShipmentsPages}
+                        className="w-7 h-7 sm:w-8 sm:h-8 flex items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors shadow-xs cursor-pointer"
+                        title="Next Page"
+                      >
+                        <ChevronRight size={15} />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </>
               )}
             </div>
           )}
