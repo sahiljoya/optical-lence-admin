@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import { Link } from "@tanstack/react-router";
 import {
-  Home, Users, ClipboardList, Package, Receipt, Truck, Undo2, BarChart3, KeyRound, Headphones, Search, ListChecks, RefreshCw, X, History, ChevronLeft, ChevronRight, Scale, AlertTriangle
+  Home, Users, ClipboardList, Package, Receipt, Truck, Undo2, BarChart3, KeyRound, Headphones, Search, ListChecks, RefreshCw, X, History, ChevronLeft, ChevronRight, Scale, AlertTriangle, ShoppingCart, Image as ImageIcon
 } from "lucide-react";
 import { hasPermission } from "@/lib/permissions";
 import { getItem } from "@/services/storage";
@@ -17,12 +17,14 @@ export function Rail({ mobileOpen = false, onMobileClose, collapsed = false, onT
     ["Customers", Users, "/customers", "VIEW_CUSTOMERS"],
     ["Orders", ClipboardList, "/orders", "VIEW_ORDERS"],
     ["Products", Package, "/products", "VIEW_PRODUCTS"],
+    ["Marketing Media", ImageIcon, "/media", "VIEW_PRODUCTS"],
     ["Find My Lens", Search, "/find-my-lens", "VIEW_INVENTORY"],
     ["Billing", Receipt, "/billing", "VIEW_BILLING"],
     ["Dispatch", Truck, "/dispatch", "MANAGE_DISPATCH"],
     ["Logistics & Courier Billing", Scale, "/courier-reconciliation", "MANAGE_COURIER_BILLING"],
     ["Pick List", ListChecks, "/pick-list", "MANAGE_DISPATCH"],
     ["Reserve Stock", RefreshCw, "/replenishment", "VIEW_INVENTORY"],
+    ["Purchasing", ShoppingCart, "/purchasing", ["VIEW_PURCHASING", "VIEW_PURCHASE_ORDERS"]],
     ["Returns", Undo2, "/returns", "VIEW_RETURNS"],
     ["Reports", BarChart3, "/reports", "VIEW_REPORTS"],
     ["Access", KeyRound, "/settings", ["MANAGE_USERS", "MANAGE_ROLES"]],

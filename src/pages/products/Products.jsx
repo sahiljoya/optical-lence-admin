@@ -3,7 +3,7 @@ import { Link, useSearch, useNavigate } from "@tanstack/react-router";
 import { 
   Search, Plus, Filter, Package, Power, X, Loader2, AlertTriangle, 
   ArrowLeft, ArrowRight, LayoutGrid, List, Sparkles, Layers, FileSpreadsheet,
-  ChevronLeft, ChevronRight, Pencil
+  ChevronLeft, ChevronRight, Pencil, Image as ImageIcon
 } from "lucide-react";
 import { productApi, brandApi } from "../../services/productApi";
 import { formatPower } from "./matrixHelpers";
@@ -252,6 +252,14 @@ export function Products() {
           >
             <AlertTriangle size={15} className="text-amber-600 shrink-0" />
             <span>Slow & Dead Stock</span>
+          </Link>
+
+          <Link
+            to="/media"
+            className="w-full sm:w-auto bg-purple-50 hover:bg-purple-100 text-purple-900 border border-purple-300 h-8 sm:h-9 md:h-10 px-3 sm:px-3.5 text-[11px] sm:text-xs md:text-[13px] font-semibold gap-1.5 flex items-center justify-center rounded-xl cursor-pointer shadow-xs whitespace-nowrap transition-colors"
+          >
+            <ImageIcon size={15} className="text-purple-600 shrink-0" />
+            <span>Media & Posters</span>
           </Link>
 
           {hasPermission("MANAGE_PRODUCTS") && (
