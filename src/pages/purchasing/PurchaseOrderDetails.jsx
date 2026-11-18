@@ -41,8 +41,9 @@ export function PurchaseOrderDetails() {
     }
   };
 
-  if (loading && !po) return <PurchasingShell icon={ClipboardList} title="Purchase order"><Loading /></PurchasingShell>;
-  if (error || !po) return <PurchasingShell icon={ClipboardList} title="Purchase order"><ErrorNote>{error || "Not found."}</ErrorNote></PurchasingShell>;
+  const crumbs = [{ label: "Orders", to: "/purchasing/orders" }, { label: po?.po_number || id }];
+  if (loading && !po) return <PurchasingShell crumbs={crumbs} icon={ClipboardList} title="Purchase order"><Loading /></PurchasingShell>;
+  if (error || !po) return <PurchasingShell crumbs={crumbs} icon={ClipboardList} title="Purchase order"><ErrorNote>{error || "Not found."}</ErrorNote></PurchasingShell>;
 
   const stage = PO_STAGES.find((s) => s.id === po.stage);
   const next = PO_STAGES[PO_STAGES.findIndex((s) => s.id === po.stage) + 1];
@@ -94,22 +95,22 @@ export function PurchaseOrderDetails() {
       <div className="mb-4"><StageSteps stage={po.stage} /></div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        <BigNumber label="Pairs ordered" value={fmtNum(po.total_ordered)} hint={po.stage === "held" ? "Follows the Product Master until sent" : "Frozen when sent"} tone="orange" />
-        <BigNumber label="Pairs received" value={fmtNum(po.total_received)} hint="Into Godown 1" />
+        <BigNumber label="Pieces ordered" value={fmtNum(po.total_ordered)} hint={po.stage === "held" ? "Follows the Product Master until sent" : "Frozen when sent"} tone="orange" />
+        <BigNumber label="Pieces received" value={fmtNum(po.total_received)} hint="Into Godown 1" />
         <BigNumber label="Product Master total" value={fmtNum(po.pm_total)} hint="When the order was made" />
-        <BigNumber label="PI value / pair" value={po.pi_value_per_pair ? `₹${fmtNum(po.pi_value_per_pair)}` : "—"} hint={po.pi_number || "Not received yet"} />
+        <BigNumber label="PI value / piece" value={po.pi_value_per_piece ? `₹${fmtNum(po.pi_value_per_piece)}` : "—"} hint={po.pi_number || "Not received yet"} />
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
         <Card
           className="min-w-0"
-          title="Pairs by power"
+          title="Pieces by power"
           actions={(
             <Segmented
               label="What the matrix shows"
               value={mode}
               onChange={setMode}
-              options={[{ id: "ordered", label: "Ordered" }, { id: "received", label: "Received" }, { id: "keep", label: "Pairs to keep" }]}
+              options={[{ id: "ordered", label: "Ordered" }, { id: "received", label: "Received" }, { id: "keep", label: "Pieces to keep" }]}
             />
           )}
         >
@@ -163,25 +164,25 @@ export function PurchaseOrderDetails() {
           footer={(
             <>
               <button type="button" className={btnSecondary} onClick={() => setDialog(null)}>Cancel</button>
-              <button type="button" className={btnPrimary} disabled={busy || (next.id === "pi_received" && !Number(form.pi_value_per_pair))} onClick={() => run(() => advancePurchaseOrder(po.id, form), `Moved to ${next.label}.`)}>
+              <button type="button" className={btnPrimary} disabled={busy || (next.id === "pi_received" && !Number(form.pi_value_per_piece))} onClick={() => run(() => advancePurchaseOrder(po.id, form), `Moved to ${next.label}.`)}>
                 {busy && <Loader2 size={14} className="animate-spin" />} Confirm
               </button>
             </>
           )}
         >
           {next.id === "sent" && (
-            <p className="text-[13px] text-slate-600">Send the order to the supplier yourself, then confirm here. From now on the {fmtNum(po.total_ordered)} pairs are frozen and no longer follow the Product Master.</p>
+            <p className="text-[13px] text-slate-600">Send the order to the supplier yourself, then confirm here. From now on the {fmtNum(po.total_ordered)} pieces are frozen and no longer follow the Product Master.</p>
           )}
           {next.id === "pi_received" && (
             <>
-              <p className="text-[13px] text-slate-600">The supplier's proforma invoice has come: payment is made and manufacturing starts. These pairs now count as “being made”.</p>
+              <p className="text-[13px] text-slate-600">The supplier's proforma invoice has come: payment is made and manufacturing starts. These pieces now count as “being made”.</p>
               <div>
                 <label className={labelCls} htmlFor="pi-number">PI number</label>
                 <input id="pi-number" className={inputCls} value={form.pi_number || ""} onChange={(e) => setForm({ ...form, pi_number: e.target.value })} />
               </div>
               <div>
-                <label className={labelCls} htmlFor="pi-value">Value per pair (₹) <span className="text-rose-500">*</span></label>
-                <input id="pi-value" type="number" min="0" className={inputCls} value={form.pi_value_per_pair || ""} onChange={(e) => setForm({ ...form, pi_value_per_pair: e.target.value })} />
+                <label className={labelCls} htmlFor="pi-value">Value per piece (₹) <span className="text-rose-500">*</span></label>
+                <input id="pi-value" type="number" min="0" className={inputCls} value={form.pi_value_per_piece || ""} onChange={(e) => setForm({ ...form, pi_value_per_piece: e.target.value })} />
               </div>
             </>
           )}
@@ -191,7 +192,7 @@ export function PurchaseOrderDetails() {
               <input id="pl-ref" className={inputCls} value={form.packing_list_ref || ""} onChange={(e) => setForm({ ...form, packing_list_ref: e.target.value })} />
             </div>
           )}
-          {next.id === "shipped" && <p className="text-[13px] text-slate-600">The goods have left the supplier. These pairs now count as “on the way”.</p>}
+          {next.id === "shipped" && <p className="text-[13px] text-slate-600">The goods have left the supplier. These pieces now count as “on the way”.</p>}
           <div>
             <label className={labelCls} htmlFor="stage-note">Note (optional)</label>
             <input id="stage-note" className={inputCls} value={form.note || ""} onChange={(e) => setForm({ ...form, note: e.target.value })} />
@@ -209,8 +210,8 @@ export function PurchaseOrderDetails() {
             <>
               <button type="button" className={btnSecondary} onClick={() => setReceiving({})}>Clear all</button>
               <button type="button" className={btnSecondary} onClick={() => setDialog(null)}>Cancel</button>
-              <button type="button" className={btnPrimary} disabled={busy || receiveTotal === 0} onClick={() => run(() => receivePurchaseOrder(po.id, receiving).then((r) => { setReceiving({}); return r; }), "Pairs received into Godown 1.")}>
-                Receive {fmtNum(receiveTotal)} pairs
+              <button type="button" className={btnPrimary} disabled={busy || receiveTotal === 0} onClick={() => run(() => receivePurchaseOrder(po.id, receiving).then((r) => { setReceiving({}); return r; }), "Pieces received into Godown 1.")}>
+                Receive {fmtNum(receiveTotal)} pieces
               </button>
             </>
           )}

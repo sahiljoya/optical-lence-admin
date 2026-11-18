@@ -24,9 +24,7 @@ function SettingsCard({ canManage }) {
     try {
       await savePurchaseSettings({
         ...form,
-        safety_margin_months: Number(form.safety_margin_months) || 0,
-        default_lead_time_months: Number(form.default_lead_time_months) || 4,
-        speed_bands: form.speed_bands.map((b) => ({ ...b, min_pairs: Number(b.min_pairs) || 0 })),
+        speed_bands: form.speed_bands.map((b) => ({ ...b, min_pieces: Number(b.min_pieces) || 0 })),
       });
       notify.success("Settings saved.");
     } catch (e) {
@@ -42,35 +40,16 @@ function SettingsCard({ canManage }) {
 
   return (
     <Card
-      title="Settings"
-      subtitle="Values the client has not finalised yet. They can change without a new release."
+      title="Selling-speed colours"
+      subtitle="Colours for how fast each power sells, on the Super Master grid."
       actions={canManage && <button type="button" className={btnPrimary} disabled={busy} onClick={save}><Save size={14} /> Save settings</button>}
     >
-      <fieldset disabled={!canManage} className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="space-y-3">
-          <h3 className="text-[13px] font-bold text-slate-800">Running-low list</h3>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls} htmlFor="set-lead">Default lead time (months)</label>
-              <input id="set-lead" type="number" min="1" className={inputCls} value={form.default_lead_time_months} onChange={(e) => setForm({ ...form, default_lead_time_months: e.target.value })} />
-            </div>
-            <div>
-              <label className={labelCls} htmlFor="set-margin">Safety margin (months)</label>
-              <input id="set-margin" type="number" min="0" step="0.5" className={inputCls} value={form.safety_margin_months} onChange={(e) => setForm({ ...form, safety_margin_months: e.target.value })} />
-            </div>
-          </div>
-          <p className="text-[12px] text-slate-500">A line shows as running low when its stock and incoming pairs last less than {Number(form.default_lead_time_months) + Number(form.safety_margin_months)} months.</p>
-          <label className="flex items-start gap-2 text-[13px] text-slate-800 cursor-pointer">
-            <input type="checkbox" className="mt-0.5" checked={form.suggest_zero_sale_lines} onChange={(e) => setForm({ ...form, suggest_zero_sale_lines: e.target.checked })} />
-            <span>Also show lines that did not sell (off by default)</span>
-          </label>
-        </div>
-
+      <fieldset disabled={!canManage} className="max-w-xl">
         <div className="space-y-3">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="text-[13px] font-bold text-slate-800">Selling-speed colours</h3>
+            <h3 className="text-[13px] font-bold text-slate-800">Colour bands</h3>
             {canManage && (
-              <button type="button" className={`${btnSecondary} !h-8 !text-[12px]`} onClick={() => setForm({ ...form, speed_bands: [...form.speed_bands, { label: "New band", colour: "#e2e8f0", min_pairs: 0 }] })}>
+              <button type="button" className={`${btnSecondary} !h-8 !text-[12px]`} onClick={() => setForm({ ...form, speed_bands: [...form.speed_bands, { label: "New band", colour: "#e2e8f0", min_pieces: 0 }] })}>
                 <Plus size={13} /> Add band
               </button>
             )}
@@ -86,8 +65,8 @@ function SettingsCard({ canManage }) {
                 <input id={`band-label-${i}`} className={inputCls} value={band.label} onChange={(e) => setBand(i, { label: e.target.value })} />
               </div>
               <div>
-                <label className={labelCls} htmlFor={`band-min-${i}`}>From pairs/mo</label>
-                <input id={`band-min-${i}`} type="number" min="0" className={inputCls} value={band.min_pairs} onChange={(e) => setBand(i, { min_pairs: e.target.value })} />
+                <label className={labelCls} htmlFor={`band-min-${i}`}>From pieces/mo</label>
+                <input id={`band-min-${i}`} type="number" min="0" className={inputCls} value={band.min_pieces} onChange={(e) => setBand(i, { min_pieces: e.target.value })} />
               </div>
               {canManage && (
                 <button type="button" aria-label={`Remove ${band.label}`} className="h-9 grid place-items-center rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 cursor-pointer" onClick={() => setForm({ ...form, speed_bands: form.speed_bands.filter((_, j) => j !== i) })}>
@@ -131,11 +110,11 @@ export function SuppliersSettings() {
   );
 
   return (
-    <PurchasingShell icon={Factory} title="Suppliers & settings" subtitle="Who we buy from, how long they take, and the purchasing settings.">
+    <PurchasingShell crumbs={[{ label: "Orders", to: "/purchasing/orders" }, { label: "Suppliers" }]} icon={Factory} title="Suppliers" subtitle="Who we buy from and how long they take.">
       <div className="space-y-5">
         <Card
           title="Suppliers"
-          subtitle="Lead time decides when a line shows as running low. Default 4 months."
+          subtitle="Lead time = how many months an order takes to arrive. Default 4."
           actions={canManage && <button type="button" className={btnPrimary} onClick={() => setEditing({ ...BLANK })}><Plus size={14} /> Add supplier</button>}
         >
           {loading && !data && <Loading />}

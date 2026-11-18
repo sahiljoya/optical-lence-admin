@@ -36,15 +36,16 @@ import { Route as AdminOrdersNewRouteImport } from './routes/_admin.orders_.new'
 import { Route as AdminProductsIdRouteImport } from './routes/_admin.products_.$id'
 import { Route as AdminProductsNewRouteImport } from './routes/_admin.products_.new'
 import { Route as AdminPurchasingIndexRouteImport } from './routes/_admin.purchasing.index'
+import { Route as AdminPurchasingAlertsRouteImport } from './routes/_admin.purchasing.alerts'
 import { Route as AdminPurchasingSuppliersRouteImport } from './routes/_admin.purchasing.suppliers'
 import { Route as AdminReportsIndexRouteImport } from './routes/_admin.reports.index'
 import { Route as AdminReportsCustomerIdRouteImport } from './routes/_admin.reports.$customerId'
 import { Route as AdminProductsIdEditRouteImport } from './routes/_admin.products_.$id_.edit'
 import { Route as AdminPurchasingOrdersIndexRouteImport } from './routes/_admin.purchasing.orders.index'
 import { Route as AdminPurchasingOrdersIdRouteImport } from './routes/_admin.purchasing.orders.$id'
-import { Route as AdminPurchasingProductMastersIndexRouteImport } from './routes/_admin.purchasing.product-masters.index'
+import { Route as AdminPurchasingOrdersNewRouteImport } from './routes/_admin.purchasing.orders.new'
 import { Route as AdminPurchasingProductMastersIdRouteImport } from './routes/_admin.purchasing.product-masters.$id'
-import { Route as AdminPurchasingSuperMastersIndexRouteImport } from './routes/_admin.purchasing.super-masters.index'
+import { Route as AdminPurchasingProductMastersNewRouteImport } from './routes/_admin.purchasing.product-masters.new'
 import { Route as AdminPurchasingSuperMastersIdRouteImport } from './routes/_admin.purchasing.super-masters.$id'
 
 const AdminRoute = AdminRouteImport.update({
@@ -182,6 +183,11 @@ const AdminPurchasingIndexRoute = AdminPurchasingIndexRouteImport.update({
   path: '/purchasing/',
   getParentRoute: () => AdminRoute,
 } as any)
+const AdminPurchasingAlertsRoute = AdminPurchasingAlertsRouteImport.update({
+  id: '/purchasing/alerts',
+  path: '/purchasing/alerts',
+  getParentRoute: () => AdminRoute,
+} as any)
 const AdminPurchasingSuppliersRoute =
   AdminPurchasingSuppliersRouteImport.update({
     id: '/purchasing/suppliers',
@@ -214,10 +220,10 @@ const AdminPurchasingOrdersIdRoute = AdminPurchasingOrdersIdRouteImport.update({
   path: '/purchasing/orders/$id',
   getParentRoute: () => AdminRoute,
 } as any)
-const AdminPurchasingProductMastersIndexRoute =
-  AdminPurchasingProductMastersIndexRouteImport.update({
-    id: '/purchasing/product-masters/',
-    path: '/purchasing/product-masters/',
+const AdminPurchasingOrdersNewRoute =
+  AdminPurchasingOrdersNewRouteImport.update({
+    id: '/purchasing/orders/new',
+    path: '/purchasing/orders/new',
     getParentRoute: () => AdminRoute,
   } as any)
 const AdminPurchasingProductMastersIdRoute =
@@ -226,10 +232,10 @@ const AdminPurchasingProductMastersIdRoute =
     path: '/purchasing/product-masters/$id',
     getParentRoute: () => AdminRoute,
   } as any)
-const AdminPurchasingSuperMastersIndexRoute =
-  AdminPurchasingSuperMastersIndexRouteImport.update({
-    id: '/purchasing/super-masters/',
-    path: '/purchasing/super-masters/',
+const AdminPurchasingProductMastersNewRoute =
+  AdminPurchasingProductMastersNewRouteImport.update({
+    id: '/purchasing/product-masters/new',
+    path: '/purchasing/product-masters/new',
     getParentRoute: () => AdminRoute,
   } as any)
 const AdminPurchasingSuperMastersIdRoute =
@@ -265,17 +271,18 @@ export interface FileRoutesByFullPath {
   '/orders/new': typeof AdminOrdersNewRoute
   '/products/$id': typeof AdminProductsIdRoute
   '/products/new': typeof AdminProductsNewRoute
+  '/purchasing/alerts': typeof AdminPurchasingAlertsRoute
   '/purchasing/suppliers': typeof AdminPurchasingSuppliersRoute
   '/reports/$customerId': typeof AdminReportsCustomerIdRoute
   '/purchasing/': typeof AdminPurchasingIndexRoute
   '/reports/': typeof AdminReportsIndexRoute
   '/products/$id/edit': typeof AdminProductsIdEditRoute
   '/purchasing/orders/$id': typeof AdminPurchasingOrdersIdRoute
+  '/purchasing/orders/new': typeof AdminPurchasingOrdersNewRoute
   '/purchasing/product-masters/$id': typeof AdminPurchasingProductMastersIdRoute
+  '/purchasing/product-masters/new': typeof AdminPurchasingProductMastersNewRoute
   '/purchasing/super-masters/$id': typeof AdminPurchasingSuperMastersIdRoute
   '/purchasing/orders/': typeof AdminPurchasingOrdersIndexRoute
-  '/purchasing/product-masters/': typeof AdminPurchasingProductMastersIndexRoute
-  '/purchasing/super-masters/': typeof AdminPurchasingSuperMastersIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -303,17 +310,18 @@ export interface FileRoutesByTo {
   '/orders/new': typeof AdminOrdersNewRoute
   '/products/$id': typeof AdminProductsIdRoute
   '/products/new': typeof AdminProductsNewRoute
+  '/purchasing/alerts': typeof AdminPurchasingAlertsRoute
   '/purchasing/suppliers': typeof AdminPurchasingSuppliersRoute
   '/reports/$customerId': typeof AdminReportsCustomerIdRoute
   '/purchasing': typeof AdminPurchasingIndexRoute
   '/reports': typeof AdminReportsIndexRoute
   '/products/$id/edit': typeof AdminProductsIdEditRoute
   '/purchasing/orders/$id': typeof AdminPurchasingOrdersIdRoute
+  '/purchasing/orders/new': typeof AdminPurchasingOrdersNewRoute
   '/purchasing/product-masters/$id': typeof AdminPurchasingProductMastersIdRoute
+  '/purchasing/product-masters/new': typeof AdminPurchasingProductMastersNewRoute
   '/purchasing/super-masters/$id': typeof AdminPurchasingSuperMastersIdRoute
   '/purchasing/orders': typeof AdminPurchasingOrdersIndexRoute
-  '/purchasing/product-masters': typeof AdminPurchasingProductMastersIndexRoute
-  '/purchasing/super-masters': typeof AdminPurchasingSuperMastersIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -343,17 +351,18 @@ export interface FileRoutesById {
   '/_admin/orders_/new': typeof AdminOrdersNewRoute
   '/_admin/products_/$id': typeof AdminProductsIdRoute
   '/_admin/products_/new': typeof AdminProductsNewRoute
+  '/_admin/purchasing/alerts': typeof AdminPurchasingAlertsRoute
   '/_admin/purchasing/suppliers': typeof AdminPurchasingSuppliersRoute
   '/_admin/reports/$customerId': typeof AdminReportsCustomerIdRoute
   '/_admin/purchasing/': typeof AdminPurchasingIndexRoute
   '/_admin/reports/': typeof AdminReportsIndexRoute
   '/_admin/products_/$id_/edit': typeof AdminProductsIdEditRoute
   '/_admin/purchasing/orders/$id': typeof AdminPurchasingOrdersIdRoute
+  '/_admin/purchasing/orders/new': typeof AdminPurchasingOrdersNewRoute
   '/_admin/purchasing/product-masters/$id': typeof AdminPurchasingProductMastersIdRoute
+  '/_admin/purchasing/product-masters/new': typeof AdminPurchasingProductMastersNewRoute
   '/_admin/purchasing/super-masters/$id': typeof AdminPurchasingSuperMastersIdRoute
   '/_admin/purchasing/orders/': typeof AdminPurchasingOrdersIndexRoute
-  '/_admin/purchasing/product-masters/': typeof AdminPurchasingProductMastersIndexRoute
-  '/_admin/purchasing/super-masters/': typeof AdminPurchasingSuperMastersIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -383,17 +392,18 @@ export interface FileRouteTypes {
     | '/orders/new'
     | '/products/$id'
     | '/products/new'
+    | '/purchasing/alerts'
     | '/purchasing/suppliers'
     | '/reports/$customerId'
     | '/purchasing/'
     | '/reports/'
     | '/products/$id/edit'
     | '/purchasing/orders/$id'
+    | '/purchasing/orders/new'
     | '/purchasing/product-masters/$id'
+    | '/purchasing/product-masters/new'
     | '/purchasing/super-masters/$id'
     | '/purchasing/orders/'
-    | '/purchasing/product-masters/'
-    | '/purchasing/super-masters/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -421,17 +431,18 @@ export interface FileRouteTypes {
     | '/orders/new'
     | '/products/$id'
     | '/products/new'
+    | '/purchasing/alerts'
     | '/purchasing/suppliers'
     | '/reports/$customerId'
     | '/purchasing'
     | '/reports'
     | '/products/$id/edit'
     | '/purchasing/orders/$id'
+    | '/purchasing/orders/new'
     | '/purchasing/product-masters/$id'
+    | '/purchasing/product-masters/new'
     | '/purchasing/super-masters/$id'
     | '/purchasing/orders'
-    | '/purchasing/product-masters'
-    | '/purchasing/super-masters'
   id:
     | '__root__'
     | '/_admin'
@@ -460,17 +471,18 @@ export interface FileRouteTypes {
     | '/_admin/orders_/new'
     | '/_admin/products_/$id'
     | '/_admin/products_/new'
+    | '/_admin/purchasing/alerts'
     | '/_admin/purchasing/suppliers'
     | '/_admin/reports/$customerId'
     | '/_admin/purchasing/'
     | '/_admin/reports/'
     | '/_admin/products_/$id_/edit'
     | '/_admin/purchasing/orders/$id'
+    | '/_admin/purchasing/orders/new'
     | '/_admin/purchasing/product-masters/$id'
+    | '/_admin/purchasing/product-masters/new'
     | '/_admin/purchasing/super-masters/$id'
     | '/_admin/purchasing/orders/'
-    | '/_admin/purchasing/product-masters/'
-    | '/_admin/purchasing/super-masters/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -669,6 +681,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPurchasingIndexRouteImport
       parentRoute: typeof AdminRoute
     }
+    '/_admin/purchasing/alerts': {
+      id: '/_admin/purchasing/alerts'
+      path: '/purchasing/alerts'
+      fullPath: '/purchasing/alerts'
+      preLoaderRoute: typeof AdminPurchasingAlertsRouteImport
+      parentRoute: typeof AdminRoute
+    }
     '/_admin/purchasing/suppliers': {
       id: '/_admin/purchasing/suppliers'
       path: '/purchasing/suppliers'
@@ -711,11 +730,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPurchasingOrdersIdRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/purchasing/product-masters/': {
-      id: '/_admin/purchasing/product-masters/'
-      path: '/purchasing/product-masters'
-      fullPath: '/purchasing/product-masters/'
-      preLoaderRoute: typeof AdminPurchasingProductMastersIndexRouteImport
+    '/_admin/purchasing/orders/new': {
+      id: '/_admin/purchasing/orders/new'
+      path: '/purchasing/orders/new'
+      fullPath: '/purchasing/orders/new'
+      preLoaderRoute: typeof AdminPurchasingOrdersNewRouteImport
       parentRoute: typeof AdminRoute
     }
     '/_admin/purchasing/product-masters/$id': {
@@ -725,11 +744,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminPurchasingProductMastersIdRouteImport
       parentRoute: typeof AdminRoute
     }
-    '/_admin/purchasing/super-masters/': {
-      id: '/_admin/purchasing/super-masters/'
-      path: '/purchasing/super-masters'
-      fullPath: '/purchasing/super-masters/'
-      preLoaderRoute: typeof AdminPurchasingSuperMastersIndexRouteImport
+    '/_admin/purchasing/product-masters/new': {
+      id: '/_admin/purchasing/product-masters/new'
+      path: '/purchasing/product-masters/new'
+      fullPath: '/purchasing/product-masters/new'
+      preLoaderRoute: typeof AdminPurchasingProductMastersNewRouteImport
       parentRoute: typeof AdminRoute
     }
     '/_admin/purchasing/super-masters/$id': {
@@ -767,17 +786,18 @@ interface AdminRouteChildren {
   AdminOrdersNewRoute: typeof AdminOrdersNewRoute
   AdminProductsIdRoute: typeof AdminProductsIdRoute
   AdminProductsNewRoute: typeof AdminProductsNewRoute
+  AdminPurchasingAlertsRoute: typeof AdminPurchasingAlertsRoute
   AdminPurchasingSuppliersRoute: typeof AdminPurchasingSuppliersRoute
   AdminReportsCustomerIdRoute: typeof AdminReportsCustomerIdRoute
   AdminPurchasingIndexRoute: typeof AdminPurchasingIndexRoute
   AdminReportsIndexRoute: typeof AdminReportsIndexRoute
   AdminProductsIdEditRoute: typeof AdminProductsIdEditRoute
   AdminPurchasingOrdersIdRoute: typeof AdminPurchasingOrdersIdRoute
+  AdminPurchasingOrdersNewRoute: typeof AdminPurchasingOrdersNewRoute
   AdminPurchasingProductMastersIdRoute: typeof AdminPurchasingProductMastersIdRoute
+  AdminPurchasingProductMastersNewRoute: typeof AdminPurchasingProductMastersNewRoute
   AdminPurchasingSuperMastersIdRoute: typeof AdminPurchasingSuperMastersIdRoute
   AdminPurchasingOrdersIndexRoute: typeof AdminPurchasingOrdersIndexRoute
-  AdminPurchasingProductMastersIndexRoute: typeof AdminPurchasingProductMastersIndexRoute
-  AdminPurchasingSuperMastersIndexRoute: typeof AdminPurchasingSuperMastersIndexRoute
 }
 
 const AdminRouteChildren: AdminRouteChildren = {
@@ -805,18 +825,18 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminOrdersNewRoute: AdminOrdersNewRoute,
   AdminProductsIdRoute: AdminProductsIdRoute,
   AdminProductsNewRoute: AdminProductsNewRoute,
+  AdminPurchasingAlertsRoute: AdminPurchasingAlertsRoute,
   AdminPurchasingSuppliersRoute: AdminPurchasingSuppliersRoute,
   AdminReportsCustomerIdRoute: AdminReportsCustomerIdRoute,
   AdminPurchasingIndexRoute: AdminPurchasingIndexRoute,
   AdminReportsIndexRoute: AdminReportsIndexRoute,
   AdminProductsIdEditRoute: AdminProductsIdEditRoute,
   AdminPurchasingOrdersIdRoute: AdminPurchasingOrdersIdRoute,
+  AdminPurchasingOrdersNewRoute: AdminPurchasingOrdersNewRoute,
   AdminPurchasingProductMastersIdRoute: AdminPurchasingProductMastersIdRoute,
+  AdminPurchasingProductMastersNewRoute: AdminPurchasingProductMastersNewRoute,
   AdminPurchasingSuperMastersIdRoute: AdminPurchasingSuperMastersIdRoute,
   AdminPurchasingOrdersIndexRoute: AdminPurchasingOrdersIndexRoute,
-  AdminPurchasingProductMastersIndexRoute:
-    AdminPurchasingProductMastersIndexRoute,
-  AdminPurchasingSuperMastersIndexRoute: AdminPurchasingSuperMastersIndexRoute,
 }
 
 const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)

@@ -42,8 +42,12 @@ function mapOrder(raw) {
         right: { sph: it.sph, cyl: it.cyl, axis: it.axis, add: it.add },
         left: { sph: "", cyl: "", axis: "", add: "" }
       },
+      // requested_quantity / unit_price are always pieces / per piece; unit, unit_quantity and
+      // unit_rate are what the customer ordered (older orders have none and were pieces).
       qty: it.requested_quantity || 0,
-      unitPrice: it.unit_price || 0,
+      unit: it.unit || "piece",
+      unitQty: it.unit_quantity ?? (it.requested_quantity || 0),
+      unitPrice: it.unit_rate ?? (it.unit_price || 0),
       total: (it.unit_price || 0) * (it.requested_quantity || 0),
       location: whLoc ? { floor: whLoc.floor, rack: whLoc.rack, box: whLoc.box_no } : null
     };
@@ -241,8 +245,11 @@ export function OrderDetails() {
                             <div><span className="text-slate-400">ADD:</span> <span className="font-mono font-semibold">{item.powers.left.add || "-"}</span></div>
                           </div>
                         </td>
-                        <td className="py-4 px-4 text-center font-bold text-slate-700">{item.qty}</td>
-                        <td className="py-4 px-4 text-right text-slate-600 font-mono">₹{item.unitPrice}</td>
+                        <td className="py-4 px-4 text-center font-bold text-slate-700">
+                          {item.unitQty} {item.unit === "pair" ? (item.unitQty === 1 ? "pair" : "pairs") : "pcs"}
+                          {item.unit === "pair" && <div className="text-[11px] font-normal text-slate-400">= {item.qty} pcs</div>}
+                        </td>
+                        <td className="py-4 px-4 text-right text-slate-600 font-mono">₹{item.unitPrice}<span className="text-[11px] text-slate-400">/{item.unit === "pair" ? "pair" : "pc"}</span></td>
                         <td className="py-4 px-4 text-right font-bold text-slate-800 text-[14px]">₹{item.total.toLocaleString()}</td>
                       </tr>
                       {expandedItem === item.id && (

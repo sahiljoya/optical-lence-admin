@@ -31,10 +31,10 @@ export const ownRatios = (grid, rowRange, colRange) => {
 // Ratios never change; only the total does.
 export const spreadTotal = (ratios, total) => {
   const sum = Object.values(ratios).reduce((s, v) => s + v, 0);
-  const pairs = {};
+  const pieces = {};
   const t = Math.max(0, Math.floor(Number(total) || 0));
-  Object.entries(ratios).forEach(([k, ratio]) => { pairs[k] = sum ? Math.floor((t * ratio) / sum) : 0; });
-  return pairs;
+  Object.entries(ratios).forEach(([k, ratio]) => { pieces[k] = sum ? Math.floor((t * ratio) / sum) : 0; });
+  return pieces;
 };
 
 // Step 4 — what is short for one power: keep − in stock − being made − on the way, never below 0.

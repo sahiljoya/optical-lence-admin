@@ -58,6 +58,7 @@ export function CreateProduct() {
     range_label: "",
     return_status: "Can Take",
     low_stock_threshold: 15,
+    sale_unit: "piece",
   });
 
   const [rangeConfig, setRangeConfig] = useState(defaultRangeConfigFromProduct(null));
@@ -909,6 +910,21 @@ export function CreateProduct() {
                     className="w-full h-9 sm:h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] font-mono text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
                   />
                 </div>
+                <div>
+                  <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5 flex items-center justify-between">
+                    Default Unit <DeptBadge dept="sales" />
+                  </label>
+                  <select
+                    value={productData.sale_unit === "pair" ? "pair" : "piece"}
+                    onChange={(e) => setProductData({ ...productData, sale_unit: e.target.value })}
+                    className="w-full h-9 sm:h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/15 shadow-xs transition-all"
+                  >
+                    <option value="piece">Piece</option>
+                    <option value="pair">Pair</option>
+                  </select>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1">Used when the customer does not choose. Either can always be ordered: 1 pair = 2 pieces at 2 × the per-piece price.</p>
+                </div>
+
                 <div>
                   <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5 flex items-center justify-between">
                     Return Status <DeptBadge dept="sales" />

@@ -79,9 +79,14 @@ export function CreateOrder() {
     }
   };
 
+  // Piece / pair: any product can be ordered either way; a line starts in the product's default
+  // unit. Prices from the catalog are per piece; a pair line is priced per pair (2 pieces).
+  const PIECES_PER_UNIT = { piece: 1, pair: 2 };
   const addToCart = (lens) => {
     const qty = Number(qtyByProduct[lens.product_id] || 1);
     if (qty <= 0) return;
+    const saleUnit = lens.sale_unit || "piece";
+    const unit = saleUnit === "pair" ? "pair" : "piece";
     setCart(prev => [...prev, {
       key: `${lens.product_id}-${Date.now()}`,
       product_id: lens.product_id,
@@ -93,13 +98,26 @@ export function CreateOrder() {
       axis: rx.axis === "" ? null : Number(rx.axis),
       add: rx.add === "" ? null : Number(rx.add),
       qty,
-      unitPrice: Number(lens.min_selling_price) || 0,
+      saleUnit,
+      unit,
+      unitPrice: (Number(lens.min_selling_price) || 0) * PIECES_PER_UNIT[unit],
     }]);
   };
 
+  // Switching piece <-> pair keeps the price per piece: the line price doubles or halves.
+  const updateCartUnit = (key, unit) => setCart(prev => prev.map(c => (c.key === key && c.unit !== unit
+    ? { ...c, unit, qty: cleanQty(c.qty, unit), unitPrice: +((c.unitPrice / PIECES_PER_UNIT[c.unit]) * PIECES_PER_UNIT[unit]).toFixed(2) }
+    : c)));
+
   const removeFromCart = (key) => setCart(prev => prev.filter(c => c.key !== key));
   const updateCartPrice = (key, price) => setCart(prev => prev.map(c => c.key === key ? { ...c, unitPrice: Number(price) || 0 } : c));
-  const updateCartQty = (key, qty) => setCart(prev => prev.map(c => c.key === key ? { ...c, qty: Math.max(1, Number(qty) || 1) } : c));
+  // Pieces must come out whole: a piece line takes 1, 2, 3…; a pair line can be in halves
+  // (0.5 pair = 1 piece, 1.5 pairs = 3 pieces).
+  const cleanQty = (qty, unit) => {
+    const step = unit === "pair" ? 0.5 : 1;
+    return Math.max(step, Math.round((Number(qty) || step) / step) * step);
+  };
+  const updateCartQty = (key, qty) => setCart(prev => prev.map(c => c.key === key ? { ...c, qty: cleanQty(qty, c.unit) } : c));
 
   const subtotal = useMemo(() => cart.reduce((s, c) => s + c.qty * c.unitPrice, 0), [cart]);
   const gstRate = selectedCustomer?.negotiated_gst_rate || 5;
@@ -123,7 +141,7 @@ export function CreateOrder() {
         customerId: selectedCustomer._id,
         items: cart.map(c => ({
           product_id: c.product_id, sph: c.sph, cyl: c.cyl, axis: c.axis, add: c.add,
-          quantity: c.qty, unit_price: c.unitPrice
+          quantity: c.qty, unit_price: c.unitPrice, unit: c.unit
         })),
         orderType,
         deliveryPartner,
@@ -215,7 +233,7 @@ export function CreateOrder() {
                     <div className="min-w-0">
                       <div className="font-bold text-[13px] text-slate-800 truncate">{lens.brand} — {lens.product_code}</div>
                       <div className="text-[11px] text-slate-500">{lens.lens_type} • {lens.coating} • Index {lens.index}</div>
-                      <div className="text-[11px] font-mono text-slate-400">₹{lens.min_selling_price}/pc • Stock: {lens.matched_power?.total_quantity ?? 0}</div>
+                      <div className="text-[11px] font-mono text-slate-400">₹{lens.min_selling_price}/pc • Stock: {lens.matched_power?.total_quantity ?? 0} pcs • Default: {lens.sale_unit === "pair" ? "pair" : "piece"}</div>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
                       <input
@@ -259,13 +277,19 @@ export function CreateOrder() {
                     <button onClick={() => removeFromCart(item.key)} className="text-slate-400 hover:text-rose-600"><Trash2 size={14} /></button>
                   </div>
                   <div className="flex justify-between items-center mt-3 border-t border-slate-50 pt-2 gap-2">
-                    <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600">
+                    <div className="flex items-center gap-1.5 text-[12px] font-medium text-slate-600 flex-wrap">
                       Qty:
-                      <input type="number" min="1" value={item.qty} onChange={e => updateCartQty(item.key, e.target.value)} className="w-12 h-7 px-1 border border-slate-200 rounded text-center text-[12px]" />
+                      <input type="number" min={item.unit === "pair" ? 0.5 : 1} step={item.unit === "pair" ? 0.5 : 1} value={item.qty} onChange={e => updateCartQty(item.key, e.target.value)} aria-label="Quantity" className="w-12 h-7 px-1 border border-slate-200 rounded text-center text-[12px]" />
+                      <select value={item.unit} onChange={e => updateCartUnit(item.key, e.target.value)} aria-label="Unit" className="h-7 px-1 border border-slate-200 rounded text-[12px] bg-white">
+                        <option value="piece">Piece</option>
+                        <option value="pair">Pair</option>
+                      </select>
+                      {item.unit === "pair" && <span className="text-[11px] text-slate-400">= {item.qty * 2} pcs</span>}
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[12px] text-slate-400">₹</span>
-                      <input type="number" value={item.unitPrice} onChange={e => updateCartPrice(item.key, e.target.value)} className="w-20 h-7 px-1 border border-slate-200 rounded text-right text-[12px] font-bold text-blue-700" />
+                      <input type="number" value={item.unitPrice} onChange={e => updateCartPrice(item.key, e.target.value)} aria-label={`Price per ${item.unit}`} className="w-20 h-7 px-1 border border-slate-200 rounded text-right text-[12px] font-bold text-blue-700" />
+                      <span className="text-[11px] text-slate-400">/{item.unit === "pair" ? "pair" : "pc"}</span>
                     </div>
                   </div>
                 </div>

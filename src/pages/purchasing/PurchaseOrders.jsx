@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ClipboardList, ArrowRight } from "lucide-react";
+import { ClipboardList, ArrowRight, Factory } from "lucide-react";
 import { listPurchaseOrders, listSuppliers, PO_STAGES } from "@/services/purchaseApi";
 import { PurchasingShell, Loading, Empty, ErrorNote, Pill, StagePill, useLoad, inputCls, thCls, tdCls, tableHead, fmtDate, fmtNum, btnSecondary } from "./shared";
 
@@ -26,7 +26,8 @@ export function PurchaseOrders() {
     <PurchasingShell
       icon={ClipboardList}
       title="Purchase orders"
-      subtitle="Made from a Product Master. Each order shows the next thing to do. New orders start from a Product Master or the running-low list."
+      subtitle="Each order shows its next step. To make a new order, open a Product Master and press “Check & make order”."
+      actions={<Link to="/purchasing/suppliers" className={btnSecondary}><Factory size={15} /> Suppliers</Link>}
     >
       {loading && !data && <Loading />}
       {error && <ErrorNote>{error}</ErrorNote>}
@@ -53,9 +54,9 @@ export function PurchaseOrders() {
                   <thead style={tableHead}>
                     <tr>
                       <th className={thCls}>Order</th>
-                      <th className={thCls}>Price line</th>
+                      <th className={thCls}>Product</th>
                       <th className={thCls}>Supplier</th>
-                      <th className={`${thCls} text-right`}>Pairs</th>
+                      <th className={`${thCls} text-right`}>Pieces</th>
                       <th className={thCls}>Stage</th>
                       <th className={thCls}>Created</th>
                       <th className={`${thCls} text-right`}>Next step</th>

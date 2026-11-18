@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "@tanstack/react-router";
-import { Loader2, X, FlaskConical, Check } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { Loader2, X, FlaskConical, Check, ChevronRight, Calculator } from "lucide-react";
 import { hasPermission } from "@/lib/permissions";
-import { IS_MOCK, PO_STAGES } from "@/services/purchaseApi";
+import { IS_MOCK, PO_STAGES, getAlertCount } from "@/services/purchaseApi";
 
 export const inputCls = "h-9 px-3 text-[13px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 w-full disabled:bg-slate-50 disabled:text-slate-500";
 export const labelCls = "block text-[12px] font-bold text-slate-700 mb-1.5";
@@ -44,19 +44,53 @@ export function useLoad(loader, deps = []) {
   return { ...state, reload: run, setData };
 }
 
-// The sections follow the flow: Super Master -> Product Master -> Purchase order.
+// Only three tabs. Product Masters live inside their Super Master; suppliers are reached from Orders.
 const TABS = [
-  ["Overview", "/purchasing", "VIEW_PURCHASING", true],
-  ["1 · Super Masters", "/purchasing/super-masters", "VIEW_PURCHASING"],
-  ["2 · Product Masters", "/purchasing/product-masters", "VIEW_PURCHASING"],
-  ["3 · Purchase orders", "/purchasing/orders", ["VIEW_PURCHASE_ORDERS", "VIEW_PURCHASING"]],
-  ["Suppliers & settings", "/purchasing/suppliers", "VIEW_PURCHASING"],
+  // "Check & make order" (/purchasing/orders/new) is a step inside a Product Master, so it stays under Super Masters.
+  { label: "Super Masters", to: "/purchasing", permission: "VIEW_PURCHASING", match: (p) => p === "/purchasing" || p === "/purchasing/" || p.startsWith("/purchasing/super-masters") || p.startsWith("/purchasing/product-masters") || p.startsWith("/purchasing/orders/new") },
+  { label: "Orders", to: "/purchasing/orders", permission: ["VIEW_PURCHASE_ORDERS", "VIEW_PURCHASING"], match: (p) => (p.startsWith("/purchasing/orders") && !p.startsWith("/purchasing/orders/new")) || p.startsWith("/purchasing/suppliers") },
+  { label: "Alerts", to: "/purchasing/alerts", permission: "VIEW_PURCHASING", match: (p) => p.startsWith("/purchasing/alerts"), badge: true },
 ];
 
-export function PurchasingShell({ icon: Icon, title, subtitle, actions, children }) {
+// crumbs: [{ label, to?, params? }] — where you are, e.g. Super Masters › M05 › AIRSMART 1.56.
+export function PurchasingShell({ icon: Icon, title, subtitle, actions, crumbs, children }) {
+  const pathname = useRouterState({ select: (st) => st.location.pathname });
+  const [alertCount, setAlertCount] = useState(0);
+  useEffect(() => { getAlertCount().then(setAlertCount).catch(() => {}); }, [pathname]);
+
   return (
     <>
-      <div className="mb-4 mt-2 flex flex-wrap items-start justify-between gap-3">
+      <nav className="mt-1 mb-4 flex gap-1.5 overflow-x-auto custom-scrollbar" aria-label="Purchasing sections">
+        {TABS.filter((t) => hasPermission(t.permission)).map((t) => {
+          const active = t.match(pathname);
+          return (
+            <Link
+              key={t.to}
+              to={t.to}
+              aria-current={active ? "page" : undefined}
+              className={`h-10 px-4 rounded-xl text-[14px] font-semibold whitespace-nowrap inline-flex items-center gap-2 border transition-colors ${active ? "bg-blue-600 border-blue-600 text-white" : "bg-white border-slate-200 text-slate-600 hover:text-slate-900 hover:border-slate-300"}`}
+            >
+              {t.label}
+              {t.badge && alertCount > 0 && (
+                <span className={`min-w-5 h-5 px-1.5 rounded-full text-[11px] font-bold grid place-items-center ${active ? "bg-white text-blue-700" : "bg-rose-600 text-white"}`}>{alertCount}</span>
+              )}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {crumbs?.length > 0 && (
+        <ol className="flex flex-wrap items-center gap-1 text-[12px] text-slate-500 mb-1.5" aria-label="You are here">
+          {crumbs.map((c, i) => (
+            <li key={`${c.label}${i}`} className="flex items-center gap-1">
+              {i > 0 && <ChevronRight size={12} className="text-slate-300" />}
+              {c.to ? <Link to={c.to} params={c.params} className="hover:text-blue-700 hover:underline">{c.label}</Link> : <span className="text-slate-700 font-semibold">{c.label}</span>}
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
             {Icon && <Icon className="text-blue-600 shrink-0" size={22} />} {title}
@@ -65,20 +99,6 @@ export function PurchasingShell({ icon: Icon, title, subtitle, actions, children
         </div>
         {actions && <div className="flex flex-wrap items-center gap-2">{actions}</div>}
       </div>
-
-      <nav className="mb-5 flex gap-1 overflow-x-auto custom-scrollbar border-b border-slate-200" aria-label="Purchasing sections">
-        {TABS.filter(([, , permission]) => hasPermission(permission)).map(([label, to, , exact]) => (
-          <Link
-            key={to}
-            to={to}
-            activeOptions={{ exact: !!exact }}
-            className="px-3 py-2.5 text-[13px] font-semibold text-slate-500 hover:text-slate-900 whitespace-nowrap border-b-2 border-transparent -mb-px"
-            activeProps={{ className: "px-3 py-2.5 text-[13px] font-semibold whitespace-nowrap border-b-2 -mb-px text-blue-700 border-blue-600" }}
-          >
-            {label}
-          </Link>
-        ))}
-      </nav>
 
       {IS_MOCK && (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-1.5 text-[12px] text-amber-900">
@@ -316,20 +336,20 @@ export function PowerMatrix({ rows, cols, colAxis, value, tone = "blue", cellBg,
 }
 
 // Which speed band a power falls in, by its net monthly sale. Bands are sorted high to low.
-export function speedBand(bands, pairsPerMonth) {
-  if (!pairsPerMonth) return null;
-  const sorted = [...(bands || [])].sort((a, b) => b.min_pairs - a.min_pairs);
-  return sorted.find((b) => pairsPerMonth >= b.min_pairs) || null;
+export function speedBand(bands, piecesPerMonth) {
+  if (!piecesPerMonth) return null;
+  const sorted = [...(bands || [])].sort((a, b) => b.min_pieces - a.min_pieces);
+  return sorted.find((b) => piecesPerMonth >= b.min_pieces) || null;
 }
 
 export function SpeedLegend({ bands }) {
-  const sorted = [...(bands || [])].sort((a, b) => b.min_pairs - a.min_pairs);
+  const sorted = [...(bands || [])].sort((a, b) => b.min_pieces - a.min_pieces);
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-600">
       {sorted.map((b) => (
         <span key={b.label} className="inline-flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded" style={{ background: b.colour }} />
-          {b.label} ({b.min_pairs}+ pairs/month)
+          {b.label} ({b.min_pieces}+ pieces/month)
         </span>
       ))}
       <span className="inline-flex items-center gap-1.5"><span className="inline-block w-3 h-3 rounded border border-slate-300 bg-white" /> Slower</span>
@@ -397,5 +417,41 @@ export function StageSteps({ stage }) {
         );
       })}
     </ol>
+  );
+}
+
+// "Work it out from sales": net monthly sale (chosen basis) × months = a suggested total.
+export function SalesHelper({ figures, basis, months, onBasis, onMonths, onUse, disabled }) {
+  const monthly = figures.find((f) => f.id === basis)?.monthly ?? 0;
+  const result = monthly * (Number(months) || 0);
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50/70 p-3 space-y-2.5">
+      <div className="text-[12px] font-bold text-slate-700 flex items-center gap-1.5"><Calculator size={13} /> Work it out from sales</div>
+      <div className="grid grid-cols-2 gap-1.5">
+        {figures.map((f) => (
+          <button
+            key={f.id}
+            type="button"
+            disabled={disabled}
+            aria-pressed={basis === f.id}
+            onClick={() => onBasis(f.id)}
+            className={`rounded-lg border px-2 py-1.5 text-left cursor-pointer disabled:cursor-not-allowed ${basis === f.id ? "border-blue-500 bg-white" : "border-transparent bg-white/60 hover:bg-white"}`}
+          >
+            <div className="text-[10px] font-semibold text-slate-500">{f.label}</div>
+            <div className="text-[13px] font-bold text-slate-900 tabular-nums">{fmtNum(f.monthly)} / month</div>
+          </button>
+        ))}
+      </div>
+      <div className="flex items-end gap-2">
+        <div className="w-20">
+          <label className="block text-[11px] font-bold text-slate-600 mb-1" htmlFor="helper-months">Months</label>
+          <input id="helper-months" type="number" min="1" disabled={disabled} className={`${inputCls} !h-8`} value={months} onChange={(e) => onMonths(e.target.value)} />
+        </div>
+        <div className="flex-1 text-[12px] text-slate-600 pb-1.5 tabular-nums">
+          {fmtNum(monthly)} × {months || 0} = <b className="text-slate-900">{fmtNum(result)}</b>
+        </div>
+        <button type="button" className={`${btnSecondary} !h-8 !text-[12px]`} disabled={disabled || result <= 0} onClick={() => onUse(result)}>Use</button>
+      </div>
+    </div>
   );
 }

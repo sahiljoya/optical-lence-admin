@@ -63,6 +63,7 @@ export function EditProduct() {
     lens_nature: "Finished",
     purchase_status: "Stable",
     return_status: "Can Take",
+    sale_unit: "piece",
     part_number: "",
     product_image: "",
     low_stock_threshold: 15,
@@ -189,6 +190,7 @@ export function EditProduct() {
           lens_nature: product.lens_nature || "Finished",
           purchase_status: product.purchase_status || "Stable",
           return_status: product.return_status || "Can Take",
+          sale_unit: product.sale_unit || "piece",
           part_number: product.part_number || "",
           product_image: product.product_image || "",
           low_stock_threshold: product.low_stock_threshold ?? 15,
@@ -1006,6 +1008,21 @@ export function EditProduct() {
                     <option value="Dead Stock">Dead Stock</option>
                     <option value="Stopped">Stopped</option>
                   </select>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] sm:text-xs font-bold text-slate-700 mb-1 sm:mb-1.5 flex items-center justify-between">
+                    Default Unit
+                  </label>
+                  <select
+                    value={productData.sale_unit === "pair" ? "pair" : "piece"}
+                    onChange={(e) => setProductData({ ...productData, sale_unit: e.target.value })}
+                    className="w-full h-9 sm:h-10 px-2.5 sm:px-3 bg-white border border-slate-200 rounded-xl text-xs sm:text-[13px] text-slate-800 focus:outline-none focus:border-blue-500 shadow-xs"
+                  >
+                    <option value="piece">Piece</option>
+                    <option value="pair">Pair</option>
+                  </select>
+                  <p className="text-[10px] sm:text-[11px] text-slate-500 mt-1">Used when the customer does not choose. Either can always be ordered: 1 pair = 2 pieces at 2 × the per-piece price.</p>
                 </div>
 
                 <div>
