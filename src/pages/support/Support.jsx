@@ -58,13 +58,17 @@ export function Support() {
         params.status = activeFilter;
       }
       const res = await supportService.getTickets(params);
-      const list = res?.data?.list || res?.data || [];
+      const list = Array.isArray(res?.data?.list)
+        ? res.data.list
+        : Array.isArray(res?.data)
+        ? res.data
+        : [];
       setTickets(list);
 
       // Auto-select first ticket if none selected or current is not in list
       if (list.length > 0) {
-        if (!selectedTicketId || !list.some((t) => t._id === selectedTicketId)) {
-          setSelectedTicketId(list[0]._id);
+        if (!selectedTicketId || !list.some((t) => t?._id === selectedTicketId)) {
+          setSelectedTicketId(list[0]?._id);
         }
       } else {
         setSelectedTicketId(null);
@@ -120,10 +124,16 @@ export function Support() {
       customerService
         .getCustomers({ is_active: true, approval_status: "APPROVED", limit: 100 })
         .then((res) => {
-          const list = res.data?.customers || res.data || [];
+          const list = Array.isArray(res?.data?.list)
+            ? res.data.list
+            : Array.isArray(res?.data?.customers)
+            ? res.data.customers
+            : Array.isArray(res?.data)
+            ? res.data
+            : [];
           setCustomers(list);
           if (list.length > 0) {
-            setNewTicketForm((prev) => ({ ...prev, customerId: list[0]._id }));
+            setNewTicketForm((prev) => ({ ...prev, customerId: list[0]?._id || "" }));
           }
         })
         .catch((err) => {
@@ -149,7 +159,9 @@ export function Support() {
 
       // Update ticket in local list (status may have changed to In Progress)
       setTickets((prev) =>
-        prev.map((t) => (t._id === updatedTicket._id ? { ...t, ...updatedTicket } : t))
+        Array.isArray(prev)
+          ? prev.map((t) => (t?._id === updatedTicket?._id ? { ...t, ...updatedTicket } : t))
+          : []
       );
       notify.success("Reply sent.");
     } catch (err) {
@@ -170,7 +182,9 @@ export function Support() {
       const updatedTicket = res.data;
       setSelectedTicketDetail((prev) => ({ ...prev, status: newStatus }));
       setTickets((prev) =>
-        prev.map((t) => (t._id === updatedTicket._id ? { ...t, status: newStatus } : t))
+        Array.isArray(prev)
+          ? prev.map((t) => (t?._id === updatedTicket?._id ? { ...t, status: newStatus } : t))
+          : []
       );
       notify.success(`Status updated to ${newStatus}.`);
     } catch (err) {
@@ -225,10 +239,12 @@ export function Support() {
 
   // Filtered tickets based on search query
   const filteredTickets = useMemo(() => {
+    if (!Array.isArray(tickets)) return [];
     if (!searchQuery.trim()) return tickets;
     const q = searchQuery.toLowerCase().trim();
     return tickets.filter((t) => {
-      const subject = t.subject?.toLowerCase() || "";
+      if (!t) return false;
+      const subject = (t.subject || "").toLowerCase();
       const custName = (t.customer_id?.name || t.customer_id?.company_name || "").toLowerCase();
       const id = (t._id || "").toLowerCase();
       const cat = (t.category || "").toLowerCase();
@@ -573,11 +589,12 @@ export function Support() {
                     <option value="" disabled>
                       Select a customer
                     </option>
-                    {customers.map((c) => (
-                      <option key={c._id} value={c._id}>
-                        {c.company_name || c.name} ({c.phone || "No phone"})
-                      </option>
-                    ))}
+                    {Array.isArray(customers) &&
+                      customers.map((c) => (
+                        <option key={c._id} value={c._id}>
+                          {c.company_name || c.name} ({c.phone || "No phone"})
+                        </option>
+                      ))}
                   </select>
                 )}
               </div>

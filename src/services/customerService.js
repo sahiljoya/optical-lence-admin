@@ -37,8 +37,9 @@ export const customerService = {
 
   toggleMultiDevice: (customerId, allow_multi_device) => makeRequestAuth("post", "/admin/customer/toggle-multi-device", { customerId, allow_multi_device }),
 
-  requestLimitIncrease: (customerId, requestedAmount, reason) =>
-    makeRequestAuth("post", "/admin/customer/limit/request", { customerId, requestedAmount, reason }),
+  // changeType: "INCREASE" (default) or "DECREASE"; requestedAmount is always the positive change.
+  requestLimitIncrease: (customerId, requestedAmount, reason, changeType = "INCREASE") =>
+    makeRequestAuth("post", "/admin/customer/limit/request", { customerId, requestedAmount, reason, changeType }),
 
   getLimitIncreaseQueue: () => makeRequestAuth("get", "/admin/customer/limit/queue"),
 
@@ -59,7 +60,8 @@ export const customerService = {
   getCustomerLedger: (customerId, filters = {}) =>
     makeRequestAuth("get", `/admin/ledger/${customerId}`, filters),
 
-  getRecentOrders: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/orders`),
+  // params: page, limit (max 100). Items come with product details (brand, index, coating…).
+  getRecentOrders: (customerId, params = {}) => makeRequestAuth("get", `/admin/customer/${customerId}/orders`, params),
 
   getOrderVolume: (customerId) => makeRequestAuth("get", `/admin/customer/${customerId}/order-volume`),
 

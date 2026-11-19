@@ -8,7 +8,7 @@ import {
   Tag, AlertTriangle, Trash2, Smartphone, Globe, MessageSquare, XCircle, History
 } from "lucide-react";
 import { customerService } from "@/services/customerService";
-import { productApi } from "@/services/productApi";
+import { NegotiatedPriceForm } from "@/components/customers/NegotiatedPriceForm";
 import { userService } from "@/services/userService";
 import { StatusPill } from "@/components/common/StatusPill";
 import { notify } from "@/lib/notify";
@@ -42,7 +42,6 @@ export function CustomerDetails() {
   const userRole = adminUser?.role?.name?.toLowerCase() || "";
   const isOwner = userRole === "admin";
   const isAccounts = userRole === "accounts";
-  const isSales = userRole === "sales";
 
   const [data, setData] = useState(null);
   const [allCustomers, setAllCustomers] = useState([]);
@@ -68,7 +67,7 @@ export function CustomerDetails() {
 
   // Credit Limit Request & Account Status modals
   const [showLimitModal, setShowLimitModal] = useState(false);
-  const [limitForm, setLimitForm] = useState({ amount: "", reason: "" });
+  const [limitForm, setLimitForm] = useState({ amount: "", reason: "", type: "INCREASE" });
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [newStatus, setNewStatus] = useState("Credit");
   const [showGstModal, setShowGstModal] = useState(false);
@@ -108,12 +107,6 @@ export function CustomerDetails() {
 
   // Negotiated Pricing Section state (Floor-protected)
   const [negotiatedPrices, setNegotiatedPrices] = useState([]);
-  const [productsList, setProductsList] = useState([]);
-  const [selectedBrand, setSelectedBrand] = useState("all");
-  const [selectedProductId, setSelectedProductId] = useState("");
-  const [customPriceInput, setCustomPriceInput] = useState("");
-  const [customPriceNote, setCustomPriceNote] = useState("");
-  const [priceSaving, setPriceSaving] = useState(false);
 
   // Credit Limit Request History state
   const [limitRequests, setLimitRequests] = useState([]);
@@ -135,11 +128,10 @@ export function CustomerDetails() {
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [res, subRes, negRes, prodsRes, usersRes, limitReqRes, discountReqRes] = await Promise.all([
+      const [res, subRes, negRes, usersRes, limitReqRes, discountReqRes] = await Promise.all([
         customerService.getCustomerById(id),
         customerService.getSubCustomers(id),
         customerService.getCustomerNegotiatedPrices(id).catch(() => ({ data: [] })),
-        productApi.getProducts({ limit: 300 }).catch(() => ({ data: { list: [] } })),
         userService.getEmployees({ limit: 100 }).catch(() => ({ data: { list: [] } })),
         customerService.getCustomerLimitRequests(id).catch(() => ({ data: [] })),
         customerService.getCustomerDiscountRequests(id).catch(() => ({ data: [] }))
@@ -153,7 +145,6 @@ export function CustomerDetails() {
       });
 
       setNegotiatedPrices(negRes.data || []);
-      setProductsList(prodsRes.data?.list || prodsRes.data || []);
       setSalespeopleList(usersRes.data?.list || usersRes.data || []);
       setLimitRequests(limitReqRes.data || []);
       setDiscountRequests(discountReqRes.data || []);
@@ -537,7 +528,7 @@ export function CustomerDetails() {
 
   // Limit & Status Handlers
   const handleOpenLimitModal = () => {
-    setLimitForm({ amount: "", reason: "" });
+    setLimitForm({ amount: "", reason: "", type: "INCREASE" });
     setShowLimitModal(true);
   };
 
@@ -545,8 +536,9 @@ export function CustomerDetails() {
     e.preventDefault();
     setActionLoading("limit");
     try {
-      await customerService.requestLimitIncrease(id, Number(limitForm.amount), limitForm.reason);
-      notify.success("Limit increase request sent to Accounts Team.");
+      await customerService.requestLimitIncrease(id, Number(limitForm.amount), limitForm.reason, limitForm.type);
+      notify.success(`Limit ${limitForm.type === "DECREASE" ? "decrease" : "increase"} request sent for approval.`);
+      await fetchData();
       setShowLimitModal(false);
     } catch (err) {
       notify.error(err.message || "Failed to request limit increase.");
@@ -630,69 +622,7 @@ export function CustomerDetails() {
     }
   };
 
-  // Negotiated Price Handlers (Floor Protected)
-  const availableBrands = Array.from(new Set(productsList.map(p => p.brand).filter(Boolean))).sort();
-  const filteredProducts = selectedBrand === "all" 
-    ? productsList 
-    : productsList.filter(p => p.brand === selectedBrand);
-
-  const selectedProduct = productsList.find(p => p._id === selectedProductId);
-  const selectedProdTierPrice = selectedProduct?.tier_prices?.[data?.pricing_tier || "stock_a"] ?? "-";
-  const selectedFloorPrice = selectedProduct?.min_selling_price ?? null;
-  const isBelowFloor = selectedFloorPrice != null && customPriceInput && Number(customPriceInput) < selectedFloorPrice;
-
-  const handleSaveNegotiatedPrice = async (e) => {
-    e.preventDefault();
-    if (!selectedProductId) return notify.warning("Please select a product.");
-    if (!customPriceInput || Number(customPriceInput) <= 0) return notify.warning("Please enter a valid price.");
-
-    if (isBelowFloor) {
-      return notify.error(`Cannot save: Price (₹${customPriceInput}) is below minimum floor price (₹${selectedFloorPrice}).`);
-    }
-
-    setPriceSaving(true);
-    try {
-      if (isSales || isAccounts) {
-        const res = await customerService.createDiscountRequest({
-          customerId: id,
-          productId: selectedProductId,
-          requestedPrice: Number(customPriceInput),
-          reason: customPriceNote || (isAccounts ? "Initiated by Accounts team for Owner approval" : "")
-        });
-        if (res.error === false) {
-          notify.success(
-            isAccounts
-              ? "Special price submitted for Owner approval (Awaiting Owner Sign-Off)!"
-              : "Discount approval request submitted successfully to Accounts Team & Owner!"
-          );
-          setSelectedProductId("");
-          setCustomPriceInput("");
-          setCustomPriceNote("");
-          await fetchData();
-        } else {
-          notify.error(res.message || "Failed to submit discount request.");
-        }
-      } else {
-        const res = await customerService.setNegotiatedPrice(id, selectedProductId, Number(customPriceInput));
-        if (res.error === false) {
-          notify.success("Special negotiated price set successfully!");
-          setSelectedProductId("");
-          setCustomPriceInput("");
-          setCustomPriceNote("");
-          const negRes = await customerService.getCustomerNegotiatedPrices(id);
-          setNegotiatedPrices(negRes.data || []);
-          await fetchData();
-        } else {
-          notify.error(res.message || "Failed to set negotiated price.");
-        }
-      }
-    } catch (err) {
-      notify.error(err.message || "Error saving special price.");
-    } finally {
-      setPriceSaving(false);
-    }
-  };
-
+  // Negotiated prices: setting / requesting is in <NegotiatedPriceForm />.
   const handleDeleteNegotiatedPrice = async (productId) => {
     const ok = await confirm("Remove this special negotiated price? The customer will revert to their standard category tier price.", {
       title: "Remove Special Price",
@@ -1082,7 +1012,7 @@ export function CustomerDetails() {
               <div className="pt-4 border-t border-slate-100">
                 {hasPermission("REQUEST_CREDIT_LIMIT") && (
                   <button onClick={handleOpenLimitModal} className="w-full h-9 flex items-center justify-center gap-2 text-[13px] font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors">
-                    <TrendingUp size={14}/> Request Limit Increase
+                    <TrendingUp size={14}/> Request Limit Change
                   </button>
                 )}
               </div>
@@ -1471,114 +1401,8 @@ export function CustomerDetails() {
               </div>
             </div>
 
-            {/* Set New Negotiated Price Form */}
-            <form onSubmit={handleSaveNegotiatedPrice} className="p-5 border-b border-slate-100 bg-blue-50/20">
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                <div className="sm:col-span-3">
-                  <label className="block text-[12px] font-semibold text-slate-700 mb-1">Filter Brand</label>
-                  <select 
-                    value={selectedBrand} 
-                    onChange={e => {
-                      setSelectedBrand(e.target.value);
-                      setSelectedProductId("");
-                    }}
-                    className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="all">All Brands ({productsList.length})</option>
-                    {availableBrands.map(b => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-4">
-                  <label className="block text-[12px] font-semibold text-slate-700 mb-1">
-                    Select Product Variant <span className="text-slate-400 font-normal">({filteredProducts.length})</span>
-                  </label>
-                  <select 
-                    value={selectedProductId} 
-                    onChange={e => setSelectedProductId(e.target.value)}
-                    className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none focus:border-blue-500"
-                  >
-                    <option value="">-- Choose Lens Variant --</option>
-                    {filteredProducts.map(p => (
-                      <option key={p._id} value={p._id}>
-                        {[p.brand, p.index, p.base, p.coating].filter(Boolean).join(" ")} ({p.product_code || "SKU"})
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-2">
-                  <label className="block text-[12px] font-semibold text-slate-700 mb-1">Special Rate (₹)</label>
-                  <input 
-                    type="number" 
-                    min="1" 
-                    placeholder="e.g. 85" 
-                    value={customPriceInput} 
-                    onChange={e => setCustomPriceInput(e.target.value)}
-                    className={`w-full border px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none ${isBelowFloor ? 'border-red-500 focus:border-red-500' : 'border-slate-200 focus:border-blue-500'}`}
-                  />
-                </div>
-
-                <div className="sm:col-span-3">
-                  <button 
-                    type="submit" 
-                    disabled={priceSaving || !selectedProductId || !customPriceInput || isBelowFloor}
-                    className={`w-full h-[38px] flex items-center justify-center gap-1.5 text-[12px] font-semibold text-white rounded-lg shadow-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
-                      isOwner 
-                        ? 'bg-emerald-600 hover:bg-emerald-700' 
-                        : isAccounts 
-                        ? 'bg-blue-600 hover:bg-blue-700' 
-                        : 'bg-indigo-600 hover:bg-indigo-700'
-                    }`}
-                  >
-                    {priceSaving ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />}
-                    {isOwner ? "Set Special Rate (Direct)" : isAccounts ? "Submit for Owner Approval" : "Request Special Discount"}
-                  </button>
-                </div>
-              </div>
-
-              {/* Note / Commitment Reason */}
-              <div className="mt-3">
-                <label className="block text-[12px] font-semibold text-slate-700 mb-1">
-                  Reason / Commitment Note {isOwner ? <span className="text-slate-400 font-normal">(Optional)</span> : <span className="text-amber-600 font-medium">(Required for approval review)</span>}
-                </label>
-                <input 
-                  type="text" 
-                  placeholder={
-                    isOwner
-                      ? "Optional internal note for this negotiated rate"
-                      : isAccounts
-                      ? "Reason for special rate (e.g., Accounts review agreement, awaiting Owner approval)"
-                      : "Reason / volume commitment (e.g., Client committed to 100 pairs/month, competitor price match)"
-                  }
-                  value={customPriceNote} 
-                  onChange={e => setCustomPriceNote(e.target.value)}
-                  className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-white focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              {/* Selected Product Floor Price & Tier Price Info Box */}
-              {selectedProduct && (
-                <div className="mt-3 p-3 bg-white border border-slate-200 rounded-lg flex flex-wrap items-center justify-between gap-3 text-[12px]">
-                  <div className="flex items-center gap-4">
-                    <span>
-                      Standard Rate ({data.pricing_tier}): <strong className="text-slate-800 font-semibold">₹{selectedProdTierPrice}</strong>
-                    </span>
-                    <span>
-                      Minimum Floor Price: <strong className="text-indigo-600 font-semibold">₹{selectedFloorPrice != null ? selectedFloorPrice : "None"}</strong>
-                    </span>
-                  </div>
-
-                  {isBelowFloor && (
-                    <div className="flex items-center gap-1.5 text-red-600 font-semibold">
-                      <AlertTriangle size={14} /> Price is lower than floor price (₹{selectedFloorPrice})!
-                    </div>
-                  )}
-                </div>
-              )}
-            </form>
+            {/* Set / request a negotiated price (brand → power → product, role based) */}
+            <NegotiatedPriceForm customerId={id} pricingTier={data.pricing_tier} onSaved={fetchData} />
 
             {/* List of Active Negotiated Prices */}
             <div className="overflow-x-auto overflow-y-auto max-h-[260px] w-full custom-scrollbar">
@@ -1638,14 +1462,14 @@ export function CustomerDetails() {
               <h3 className="text-[14px] font-bold text-slate-800 flex items-center gap-2">
                 <History size={16} className="text-blue-600"/> Credit Limit Request History
               </h3>
-              <p className="text-[12px] text-slate-500 mt-0.5">Requests raised by sales staff to increase this customer's credit limit.</p>
+              <p className="text-[12px] text-slate-500 mt-0.5">Requests raised by staff to increase or decrease this customer's credit limit.</p>
             </div>
             <div className="overflow-x-auto overflow-y-auto max-h-[240px] w-full custom-scrollbar">
               <table className="w-full text-left text-[13px] min-w-[600px]">
                 <thead className="bg-slate-50 border-b border-border text-[11px] uppercase tracking-wider text-slate-500 sticky top-0 z-10 shadow-2xs">
                   <tr>
                     <th className="py-2.5 px-4 sm:px-5 font-semibold">Requested By</th>
-                    <th className="py-2.5 px-3 sm:px-4 font-semibold text-right">Current → Requested</th>
+                    <th className="py-2.5 px-3 sm:px-4 font-semibold text-right">Current → Change</th>
                     <th className="py-2.5 px-3 sm:px-4 font-semibold">Reason</th>
                     <th className="py-2.5 px-3 sm:px-4 font-semibold text-center">Status</th>
                     <th className="py-2.5 px-3 sm:px-4 font-semibold text-right w-36">Action</th>
@@ -1661,7 +1485,7 @@ export function CustomerDetails() {
                       <td className="py-3 px-3 sm:px-4 text-right">
                         <span className="text-slate-500">₹{req.current_limit?.toLocaleString()}</span>
                         <span className="mx-1 text-slate-300">→</span>
-                        <span className="font-bold text-blue-600">₹{req.requested_amount?.toLocaleString()}</span>
+                        <span className={`font-bold ${req.change_type === "DECREASE" ? "text-rose-600" : "text-blue-600"}`}>{req.change_type === "DECREASE" ? "−" : "+"}₹{req.requested_amount?.toLocaleString()}</span>
                       </td>
                       <td className="py-3 px-3 sm:px-4 text-slate-600 max-w-xs">{req.reason || "—"}</td>
                       <td className="py-3 px-3 sm:px-4 text-center">
@@ -2011,7 +1835,8 @@ export function CustomerDetails() {
                   </div>
                   <div>
                     <label className="block text-[12px] font-semibold text-slate-700 mb-1">Credit Limit (₹)</label>
-                    <input type="number" min="0" value={editForm.credit_limit} onChange={e => setEditForm({...editForm, credit_limit: e.target.value})} className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-slate-50/50 focus:bg-white focus:outline-none focus:border-blue-500" />
+                    <input type="number" min="0" disabled={!isOwner} value={editForm.credit_limit} onChange={e => setEditForm({...editForm, credit_limit: e.target.value})} className="w-full border border-slate-200 px-3 py-2 rounded-lg text-[13px] bg-slate-50/50 focus:bg-white focus:outline-none focus:border-blue-500 disabled:opacity-60 disabled:cursor-not-allowed" />
+                    {!isOwner && <p className="text-[11px] text-slate-400 mt-1">Only the owner can change this directly. Use "Request Limit Change".</p>}
                   </div>
                   <div>
                     <label className="block text-[12px] font-semibold text-slate-700 mb-1">Assigned Salesperson</label>
@@ -2179,19 +2004,24 @@ export function CustomerDetails() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm my-4 sm:my-8 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             <div className="px-5 py-4 border-b border-slate-100 bg-slate-50/80 flex justify-between items-center">
-              <h2 className="text-md font-bold text-slate-900 flex items-center gap-2">Request Limit Increase</h2>
+              <h2 className="text-md font-bold text-slate-900 flex items-center gap-2">Request Limit Change</h2>
               <button onClick={() => setShowLimitModal(false)} className="text-slate-400 hover:text-slate-700 hover:bg-slate-200 p-1.5 rounded-xl transition-colors"><X size={16}/></button>
             </div>
             <form onSubmit={handleRequestLimit} className="p-5 space-y-4">
               <div className="text-[12px] text-slate-500">Current Limit: <span className="font-bold text-slate-800">₹{(data.credit_limit || 0).toLocaleString()}</span></div>
+              <div className="grid grid-cols-2 gap-2">
+                {[["INCREASE", "Increase"], ["DECREASE", "Decrease"]].map(([key, label]) => (
+                  <button key={key} type="button" onClick={() => setLimitForm({ ...limitForm, type: key })} className={`h-9 rounded-lg text-[12px] font-semibold border transition-colors ${limitForm.type === key ? (key === "DECREASE" ? "bg-rose-600 text-white border-rose-600" : "bg-blue-600 text-white border-blue-600") : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50"}`}>{label}</button>
+                ))}
+              </div>
               <div>
-                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Increase Amount (₹) <span className="text-red-500">*</span></label>
-                <p className="text-[11px] text-slate-400 mb-1.5">Enter how much to add to the current limit, not the new total.</p>
-                <input required type="number" min="1" value={limitForm.amount} onChange={e=>setLimitForm({...limitForm, amount: e.target.value})} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-slate-50/50 focus:bg-white" placeholder="e.g. 20000" />
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">{limitForm.type === "DECREASE" ? "Decrease" : "Increase"} Amount (₹) <span className="text-red-500">*</span></label>
+                <p className="text-[11px] text-slate-400 mb-1.5">Enter how much to {limitForm.type === "DECREASE" ? "take off" : "add to"} the current limit, not the new total.{limitForm.amount ? ` New limit: ₹${Math.max(0, (data.credit_limit || 0) + (limitForm.type === "DECREASE" ? -1 : 1) * Number(limitForm.amount)).toLocaleString()}` : ""}</p>
+                <input required type="number" min="1" max={limitForm.type === "DECREASE" ? (data.credit_limit || 0) : undefined} value={limitForm.amount} onChange={e=>setLimitForm({...limitForm, amount: e.target.value})} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-slate-50/50 focus:bg-white" placeholder="e.g. 20000" />
               </div>
               <div>
                 <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Reason <span className="text-red-500">*</span></label>
-                <textarea required value={limitForm.reason} onChange={e=>setLimitForm({...limitForm, reason: e.target.value})} rows={3} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-slate-50/50 focus:bg-white" placeholder="Why does this customer need a higher limit?" />
+                <textarea required value={limitForm.reason} onChange={e=>setLimitForm({...limitForm, reason: e.target.value})} rows={3} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-shadow bg-slate-50/50 focus:bg-white" placeholder={limitForm.type === "DECREASE" ? "Why should this customer's limit be reduced?" : "Why does this customer need a higher limit?"} />
               </div>
               <div className="pt-2 flex flex-col-reverse sm:flex-row justify-end gap-2 mt-2">
                 <button type="button" onClick={() => setShowLimitModal(false)} className="w-full sm:w-auto h-9 px-4 text-[12px] font-medium text-slate-600 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors">Cancel</button>
@@ -2309,13 +2139,13 @@ export function CustomerDetails() {
             <form onSubmit={handleApproveLimitRequest} className="p-5 space-y-4">
               <div>
                 <div className="text-[12px] text-slate-500">Current Limit: ₹{(data.credit_limit ?? selectedLimitRequest.current_limit)?.toLocaleString()}</div>
-                <div className="text-[12px] text-blue-600 font-medium mt-0.5">Customer requested an increase of ₹{selectedLimitRequest.requested_amount?.toLocaleString()}</div>
+                <div className={`text-[12px] font-medium mt-0.5 ${selectedLimitRequest.change_type === "DECREASE" ? "text-rose-600" : "text-blue-600"}`}>Requested {selectedLimitRequest.change_type === "DECREASE" ? "decrease" : "increase"} of ₹{selectedLimitRequest.requested_amount?.toLocaleString()}</div>
               </div>
               <div>
-                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Approve Increase Amount (₹) <span className="text-red-500">*</span></label>
+                <label className="block text-[13px] font-semibold text-slate-700 mb-1.5">Approve {selectedLimitRequest.change_type === "DECREASE" ? "Decrease" : "Increase"} Amount (₹) <span className="text-red-500">*</span></label>
                 <input required type="number" min="1" value={approveLimitAmount} onChange={e=>setApproveLimitAmount(e.target.value)} className="w-full border border-slate-200 px-3 py-2.5 rounded-lg text-[13px] focus:outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 transition-shadow bg-slate-50/50 focus:bg-white" />
                 <p className="text-[11px] text-slate-500 mt-2">
-                  New Credit Limit will be: <span className="font-bold text-emerald-700">₹{((data.credit_limit ?? selectedLimitRequest.current_limit ?? 0) + (parseFloat(approveLimitAmount) || 0)).toLocaleString()}</span>
+                  New Credit Limit will be: <span className="font-bold text-emerald-700">₹{Math.max(0, (data.credit_limit ?? selectedLimitRequest.current_limit ?? 0) + (selectedLimitRequest.change_type === "DECREASE" ? -1 : 1) * (parseFloat(approveLimitAmount) || 0)).toLocaleString()}</span>
                 </p>
               </div>
               <div>

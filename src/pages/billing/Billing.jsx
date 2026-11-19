@@ -235,7 +235,7 @@ export function Billing() {
         approvedAmount: amount,
         remarks: approveRemarks
       });
-      notify.success(`Credit limit for ${selectedRequest.customer_id?.company_name || selectedRequest.customer_id?.name} approved at ₹${amount}`);
+      notify.success(`Credit limit ${selectedRequest.change_type === "DECREASE" ? "decrease" : "increase"} of ₹${amount} approved for ${selectedRequest.customer_id?.company_name || selectedRequest.customer_id?.name}`);
       setShowApproveModal(false);
       await fetchLimitRequests();
     } catch (err) {
@@ -568,7 +568,7 @@ export function Billing() {
                       <div className="font-semibold text-[13px] text-slate-700">₹{req.current_limit.toLocaleString()}</div>
                     </td>
                     <td className="px-5 py-4 text-right">
-                      <div className="font-bold text-[15px] text-blue-600">₹{req.requested_amount.toLocaleString()}</div>
+                      <div className={`font-bold text-[15px] ${req.change_type === "DECREASE" ? "text-rose-600" : "text-blue-600"}`}>{req.change_type === "DECREASE" ? "−" : "+"}₹{req.requested_amount.toLocaleString()}</div>
                     </td>
                     <td className="px-5 py-4">
                       <p className="text-[12px] text-slate-600 max-w-xs">{req.reason}</p>
@@ -923,8 +923,8 @@ export function Billing() {
               </div>
 
               <div className="mb-4">
-                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Approve Increase Amount (₹)</label>
-                <p className="text-[11px] text-blue-600 mb-2 font-medium">Customer requested an increase of ₹{selectedRequest.requested_amount.toLocaleString()}</p>
+                <label className="block text-[12px] font-bold text-slate-700 mb-1.5">Approve {selectedRequest.change_type === "DECREASE" ? "Decrease" : "Increase"} Amount (₹)</label>
+                <p className={`text-[11px] mb-2 font-medium ${selectedRequest.change_type === "DECREASE" ? "text-rose-600" : "text-blue-600"}`}>Requested {selectedRequest.change_type === "DECREASE" ? "decrease" : "increase"} of ₹{selectedRequest.requested_amount.toLocaleString()}</p>
                 <input
                   type="number"
                   value={approveAmount}
@@ -933,7 +933,7 @@ export function Billing() {
                   autoFocus
                 />
                 <p className="text-[11px] text-slate-500 mt-2">
-                  New Credit Limit will be: <span className="font-bold text-emerald-700">₹{((selectedRequest.customer_id?.credit_limit ?? selectedRequest.current_limit) + (parseFloat(approveAmount) || 0)).toLocaleString()}</span>
+                  New Credit Limit will be: <span className="font-bold text-emerald-700">₹{Math.max(0, (selectedRequest.customer_id?.credit_limit ?? selectedRequest.current_limit) + (selectedRequest.change_type === "DECREASE" ? -1 : 1) * (parseFloat(approveAmount) || 0)).toLocaleString()}</span>
                 </p>
               </div>
 

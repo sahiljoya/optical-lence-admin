@@ -4,32 +4,43 @@ import { mediaApi } from "@/services/mediaService";
 import { uploadImageApi } from "@/config/apiClient";
 import { ImageUploadInput } from "@/components/common/ImageUploadInput";
 import { notify } from "@/lib/notify";
+import { getUrlKind, KIND_OF_TYPE } from "@/lib/mediaUrl";
 
+// A poster holds only images and a video only videos. Each type keeps its own list while the
+// form is open: switching type shows the other (empty) list, and the old links are removed
+// only when the change is saved. Cancel keeps everything as it was.
 export function MediaModal({ isOpen, onClose, media = null, onSaved }) {
   const isEdit = !!media;
 
   const [type, setType] = useState("poster"); // "poster" | "video"
   const [title, setTitle] = useState("");
   const [thumbnailUrl, setThumbnailUrl] = useState("");
-  const [urls, setUrls] = useState([]);
+  const [urlsByType, setUrlsByType] = useState({ poster: [], video: [] });
   const [newUrlInput, setNewUrlInput] = useState("");
   const [isActive, setIsActive] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isUploadingResource, setIsUploadingResource] = useState(false);
 
+  const urls = urlsByType[type] || [];
+  const setUrls = (list) => setUrlsByType((prev) => ({ ...prev, [type]: list }));
+  const originalType = media?.type || null;
+  const originalCount = Array.isArray(media?.urls) ? media.urls.length : 0;
+  const typeChanged = isEdit && originalType && type !== originalType;
+
   useEffect(() => {
     if (isOpen) {
       if (media) {
-        setType(media.type || "poster");
+        const startType = media.type || "poster";
+        setType(startType);
         setTitle(media.title || "");
         setThumbnailUrl(media.thumbnail_url || "");
-        setUrls(Array.isArray(media.urls) ? [...media.urls] : []);
+        setUrlsByType({ poster: [], video: [], [startType]: Array.isArray(media.urls) ? [...media.urls] : [] });
         setIsActive(media.is_active !== undefined ? media.is_active : true);
       } else {
         setType("poster");
         setTitle("");
         setThumbnailUrl("");
-        setUrls([]);
+        setUrlsByType({ poster: [], video: [] });
         setIsActive(true);
       }
       setNewUrlInput("");
@@ -38,9 +49,23 @@ export function MediaModal({ isOpen, onClose, media = null, onSaved }) {
 
   if (!isOpen) return null;
 
+  const wrongKindMessage = (url) =>
+    type === "video"
+      ? `Only video links (MP4, WebM, MOV, YouTube, Vimeo…) can be added to a video. This is not a video: ${url}`
+      : `Only image links (JPG, PNG, WEBP…) can be added to a poster. This is not an image: ${url}`;
+
   const handleAddUrl = (urlToAdd) => {
     const val = (urlToAdd || newUrlInput).trim();
     if (!val) return;
+    const kind = getUrlKind(val);
+    if (kind === "invalid") {
+      notify.warning("Please enter a full link starting with http:// or https://");
+      return;
+    }
+    if (kind !== KIND_OF_TYPE[type]) {
+      notify.warning(wrongKindMessage(val));
+      return;
+    }
     if (urls.includes(val)) {
       notify.warning("This URL is already added.");
       return;
@@ -56,6 +81,13 @@ export function MediaModal({ isOpen, onClose, media = null, onSaved }) {
   const handleResourceFileUpload = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    const wantedPrefix = type === "video" ? "video/" : "image/";
+    if (!String(file.type || "").startsWith(wantedPrefix)) {
+      notify.warning(type === "video" ? "Please choose a video file (MP4, WebM, MOV)." : "Please choose an image file (JPG, PNG, WEBP).");
+      e.target.value = "";
+      return;
+    }
 
     const maxSize = type === "video" ? 100 * 1024 * 1024 : 25 * 1024 * 1024;
     const maxLabel = type === "video" ? "100MB" : "25MB";
@@ -94,6 +126,22 @@ export function MediaModal({ isOpen, onClose, media = null, onSaved }) {
 
     if (!thumbnailUrl.trim()) {
       notify.warning("Please upload or enter a thumbnail image URL.");
+      return;
+    }
+
+    if (getUrlKind(thumbnailUrl) !== "image") {
+      notify.warning("Thumbnail must be an image link (JPG, PNG, WEBP…).");
+      return;
+    }
+
+    const wrong = urls.find((u) => getUrlKind(u) !== KIND_OF_TYPE[type]);
+    if (wrong) {
+      notify.warning(wrongKindMessage(wrong));
+      return;
+    }
+
+    if (type === "video" && urls.filter(Boolean).length === 0) {
+      notify.warning("Add at least one video link or upload a video file.");
       return;
     }
 
@@ -218,6 +266,12 @@ export function MediaModal({ isOpen, onClose, media = null, onSaved }) {
               </label>
               <span className="text-[10px] text-slate-400">{urls.length} added</span>
             </div>
+
+            {typeChanged && originalCount > 0 && (
+              <p className="px-2.5 py-2 rounded-lg bg-amber-50 border border-amber-200 text-[11px] text-amber-800">
+                Changing to {type === "video" ? "Training Video" : "Promotional Poster"}: the {originalCount} old {originalType === "video" ? "video link" : "image"}{originalCount === 1 ? "" : "s"} will be removed when you save. {type === "video" ? "Add the video below." : "Upload the poster images below."} Cancel keeps everything as it is.
+              </p>
+            )}
 
             {/* List of added URLs */}
             {urls.length > 0 && (
