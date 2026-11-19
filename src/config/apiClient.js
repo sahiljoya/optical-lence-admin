@@ -5,6 +5,7 @@ import { getItem } from "@/services/storage";
 const BACKEND_URL = "https://opticale-backend.onrender.com/api/v1";
 // const BACKEND_URL = "http://localhost:8080/api/v1";
 
+
 /**
  * Make an unauthenticated API request
  * @param {"get"|"post"|"put"|"delete"} method
