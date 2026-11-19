@@ -57,8 +57,11 @@ export function MediaModal({ isOpen, onClose, media = null, onSaved }) {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 20 * 1024 * 1024) {
-      notify.warning("File size must be less than 20MB");
+    const maxSize = type === "video" ? 100 * 1024 * 1024 : 25 * 1024 * 1024;
+    const maxLabel = type === "video" ? "100MB" : "25MB";
+
+    if (file.size > maxSize) {
+      notify.warning(`File size must be less than ${maxLabel}`);
       return;
     }
 
@@ -68,7 +71,7 @@ export function MediaModal({ isOpen, onClose, media = null, onSaved }) {
       const uploadedUrl = res.data?.imageUrl || res.imageUrl;
       if (uploadedUrl) {
         handleAddUrl(uploadedUrl);
-        notify.success("File uploaded and added to list!");
+        notify.success(`${type === "video" ? "Video" : "File"} uploaded and added to list!`);
       } else {
         notify.error("Upload succeeded but file URL was missing.");
       }
@@ -271,29 +274,33 @@ export function MediaModal({ isOpen, onClose, media = null, onSaved }) {
               </button>
             </div>
 
-            {/* Optional File Upload button for posters */}
-            {type === "poster" && (
-              <div>
-                <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[11px] font-semibold transition-colors cursor-pointer">
-                  {isUploadingResource ? (
-                    <>
-                      <Loader2 size={13} className="animate-spin" /> Uploading...
-                    </>
-                  ) : (
-                    <>
-                      <Upload size={13} /> Upload Image File to List
-                    </>
-                  )}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    disabled={isUploadingResource}
-                    onChange={handleResourceFileUpload}
-                    className="hidden"
-                  />
-                </label>
-              </div>
-            )}
+            {/* File Upload button for posters & videos */}
+            <div>
+              <label className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl text-[11px] font-semibold transition-colors cursor-pointer">
+                {isUploadingResource ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" /> Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload size={13} />{" "}
+                    {type === "video" ? "Upload Video File to List (MP4, WebM, MOV)" : "Upload Image File to List"}
+                  </>
+                )}
+                <input
+                  type="file"
+                  accept={type === "video" ? "video/*,video/mp4,video/webm,video/quicktime" : "image/*"}
+                  disabled={isUploadingResource}
+                  onChange={handleResourceFileUpload}
+                  className="hidden"
+                />
+              </label>
+              {type === "video" && (
+                <span className="block text-[10px] text-slate-400 mt-1">
+                  Supports MP4, WebM, MOV (Max 100MB). Or paste a YouTube/CDN link above.
+                </span>
+              )}
+            </div>
           </div>
 
           {/* 5. Status Toggle */}

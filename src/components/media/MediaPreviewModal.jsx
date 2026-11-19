@@ -21,7 +21,10 @@ export function MediaPreviewModal({ isOpen, onClose, media }) {
   };
 
   const embedUrl = !isPoster ? getEmbedUrl(currentUrl) : null;
-  const isDirectVideo = !isPoster && !embedUrl && /\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(currentUrl);
+  const isDirectVideo =
+    !isPoster &&
+    !embedUrl &&
+    (/\.(mp4|webm|ogg|mov)(\?.*)?$/i.test(currentUrl) || currentUrl.includes("/video/upload/"));
 
   return (
     <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-5 overflow-y-auto animate-in fade-in duration-200">

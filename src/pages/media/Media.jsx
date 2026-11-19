@@ -78,9 +78,9 @@ export function Media() {
       const res = await mediaApi.getMediaList(params);
       if (res && res.error === false) {
         const payload = res.data || {};
-        setMediaList(payload.data || []);
-        setTotal(payload.total || 0);
-        setTotalPages(payload.totalPages || 1);
+        setMediaList(payload?.list || []);
+        setTotal(payload?.total || 0);
+        setTotalPages(payload?.totalPages || 1);
       } else {
         notify.error(res?.message || "Failed to load marketing media.");
       }
@@ -117,12 +117,12 @@ export function Media() {
       const res = await mediaApi.updateMedia(item._id, { is_active: newStatus });
       if (res && res.error === false) {
         setMediaList((prev) =>
-          prev.map((m) => (m._id === item._id ? { ...m, is_active: newStatus } : m))
+          prev.map((m) => (m._id === item._id ? { ...m, is_active: newStatus } : m)),
         );
         notify.success(
           newStatus
             ? `"${item.title}" activated — visible in mobile app.`
-            : `"${item.title}" deactivated — hidden from customers.`
+            : `"${item.title}" deactivated — hidden from customers.`,
         );
       } else {
         notify.error(res?.message || "Failed to update status.");
@@ -182,7 +182,8 @@ export function Media() {
             </span>
           </h1>
           <p className="text-[11px] sm:text-xs md:text-[13px] text-slate-500 mt-0.5">
-            Manage promotional posters, banners, and lens training videos for the customer mobile app.
+            Manage promotional posters, banners, and lens training videos for the customer mobile
+            app.
           </p>
         </div>
 
@@ -227,7 +228,8 @@ export function Media() {
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <ImageIcon size={13} className={typeFilter === "poster" ? "text-amber-600" : ""} /> Posters
+            <ImageIcon size={13} className={typeFilter === "poster" ? "text-amber-600" : ""} />{" "}
+            Posters
           </button>
           <button
             type="button"
@@ -241,7 +243,8 @@ export function Media() {
                 : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <VideoIcon size={13} className={typeFilter === "video" ? "text-purple-600" : ""} /> Videos
+            <VideoIcon size={13} className={typeFilter === "video" ? "text-purple-600" : ""} />{" "}
+            Videos
           </button>
         </div>
 
@@ -289,7 +292,9 @@ export function Media() {
           <div className="w-14 h-14 mx-auto rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
             <ImageIcon size={28} />
           </div>
-          <h3 className="text-sm sm:text-base font-bold text-slate-800">No Marketing Media Found</h3>
+          <h3 className="text-sm sm:text-base font-bold text-slate-800">
+            No Marketing Media Found
+          </h3>
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             {searchTerm || typeFilter !== "all" || statusFilter !== "all"
               ? "Try adjusting your search terms or filters to find what you are looking for."
