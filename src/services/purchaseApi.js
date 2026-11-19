@@ -96,7 +96,7 @@ const masters = [
   buildMaster({ id: "M05", code: "M05", title: "−6/−2", lens_types: ["Single Vision"], index: null, diameter: null, axis: null, col_axis: "cyl", rows: steps(0, -6), cols: steps(0, -2), ratio: minusRatio, file_name: "M05 -6-2.xlsx" }),
   buildMaster({ id: "M06", code: "M06", title: "+4/+2", lens_types: ["Single Vision"], index: null, diameter: null, axis: null, col_axis: "cyl", rows: steps(0, 4), cols: steps(0, 2), ratio: (r, c) => 70 * Math.exp(-Math.abs(r) / 1.6) * Math.exp(-Math.abs(c) / 0.8), file_name: "M06 +4+2.xlsx" }),
   buildMaster({ id: "M10", code: "M10", title: "−6/−4", lens_types: ["Single Vision"], index: null, diameter: null, axis: null, col_axis: "cyl", rows: steps(0, -6), cols: steps(-2.25, -4), ratio: (r, c) => 24 * Math.exp(-Math.abs(r) / 2.4) * Math.exp(-(Math.abs(c) - 2.25) / 0.8), file_name: "M10 -6-4.pdf" }),
-  buildMaster({ id: "M26", code: "M26", title: "−2 SPH with ADD", lens_types: ["KT", "Progressive"], index: null, diameter: null, axis: null, col_axis: "add", rows: steps(0, -2), cols: steps(0.75, 3), ratio: (r, c) => (c === 0.75 ? 0 : 60 * Math.exp(-Math.abs(r) / 1.2) * (1 - Math.abs(c - 2) / 2.5)), file_name: "M26 KT ADD.xlsx" }),
+  buildMaster({ id: "M26", code: "M26", title: "−2 SPH with ADD", lens_types: ["KT", "Progressive"], index: null, diameter: null, axis: null, col_axis: "add", rows: steps(0, -2), cols: steps(0.75, 3), ratio: (r, c) => 60 * Math.exp(-Math.abs(r) / 1.2) * Math.max(0.2, 1 - Math.abs(c - 2) / 2.5), file_name: "M26 KT ADD.xlsx" }),
   buildMaster({ id: "1142", code: "1142", title: "Comp KT +2+1 × 180°", lens_types: ["KT"], index: 1.56, diameter: 65, axis: 180, col_axis: "cyl", rows: steps(0.25, 2), cols: steps(0.25, 1), ratio: (r, c) => 30 * Math.exp(-Math.abs(r) / 1.1) * Math.exp(-Math.abs(c) / 0.7), file_name: "1142 Comp KT.pdf" }),
 ];
 
@@ -379,6 +379,27 @@ export const saveSuperMaster = ({ replaceId, code, title, lens_types, index, dia
 };
 
 // ---------- Product Masters ----------
+
+export const listProductMasters = () => {
+  const withPm = lines.filter((l) => l.pm);
+  const result = withPm.map((line) => {
+    const card = pmCard(line);
+    const m = masterById(line.pm.master_id);
+    return {
+      ...card,
+      master_id: line.pm.master_id,
+      master_code: m ? m.code : line.pm.master_id,
+      master_title: m ? m.title : "",
+      lens_type: line.lens_type,
+      index: line.index,
+      diameter: line.diameter,
+      monthly_sale: netMonthly(line, 3),
+      created_at: line.pm.created_at,
+      last_order_at: line.pm.last_order_at,
+    };
+  });
+  return delay(result);
+};
 
 // Everything the "Create Product Master" page needs: the Super Master's grid and the products
 // that fit it (lens type, index, diameter and range).

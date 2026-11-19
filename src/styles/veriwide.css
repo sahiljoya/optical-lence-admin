@@ -102,6 +102,13 @@
   box-shadow: none !important;
   border-color: var(--card-border) !important;
 }
+.veriwide-root .vw-purchasing-input:focus,
+.veriwide-root .vw-purchasing-input:focus-visible,
+.vw-purchasing-input:focus,
+.vw-purchasing-input:focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
 .vw-card { background: var(--card); border: 1px solid var(--card-border); border-radius: 14px; box-shadow: var(--shadow); }
 .vw-nav-collapsed { justify-content: center !important; padding: 0 !important; width: 44px !important; height: 44px !important; margin: 0 auto 4px auto !important; }
 .vw-rail::-webkit-scrollbar { width: 4px; }

@@ -58,7 +58,7 @@ function SettingsCard({ canManage }) {
             <div key={i} className="grid grid-cols-[44px_1fr_120px_36px] gap-2 items-end">
               <div>
                 <label className="sr-only" htmlFor={`band-colour-${i}`}>Colour for {band.label}</label>
-                <input id={`band-colour-${i}`} type="color" className="h-9 w-11 rounded-lg border border-slate-200 bg-white p-1 cursor-pointer" value={band.colour} onChange={(e) => setBand(i, { colour: e.target.value })} />
+                <input id={`band-colour-${i}`} type="color" className="vw-purchasing-input h-9 w-11 rounded-lg border border-slate-200 bg-white p-1 cursor-pointer focus:border-blue-500" value={band.colour} onChange={(e) => setBand(i, { colour: e.target.value })} />
               </div>
               <div>
                 <label className={labelCls} htmlFor={`band-label-${i}`}>Name</label>

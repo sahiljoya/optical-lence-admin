@@ -107,8 +107,8 @@ function Builder({ setup }) {
       {/* 2 — which powers */}
       <StepCard n={2} muted={!product} title="Choose the powers" subtitle={`Take this product's own range, a smaller or bigger part, or the whole ${master.code}.`}>
         {!product || !range ? <p className="text-[13px] text-slate-500">Choose a product first.</p> : (
-          <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4">
-            <div className="space-y-3">
+          <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4 items-start">
+            <div className="space-y-3 xl:sticky xl:top-4">
               <div className="grid grid-cols-1 gap-2">
                 <button type="button" aria-pressed={sameAs(range, productRange(product))} onClick={() => setRange(productRange(product))} className={`h-10 rounded-xl border text-[13px] font-semibold cursor-pointer ${sameAs(range, productRange(product)) ? "border-blue-500 bg-blue-50 text-blue-800" : "border-slate-200 bg-white hover:bg-slate-50"}`}>
                   {sameAs(range, productRange(product)) && <Check size={14} className="inline mr-1" />}This product's range ({product.range_label})
@@ -147,8 +147,8 @@ function Builder({ setup }) {
       {/* 3 — how many pieces */}
       <StepCard n={3} muted={!product} title="How many pieces in total?" subtitle="The total is shared out over the selected powers by their mix. Later you can change only this total.">
         {!product || !own ? <p className="text-[13px] text-slate-500">Choose a product first.</p> : (
-          <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4">
-            <div className="space-y-3">
+          <div className="grid grid-cols-1 xl:grid-cols-[280px_1fr] gap-4 items-start">
+            <div className="space-y-3 xl:sticky xl:top-4">
               <div>
                 <label className={labelCls} htmlFor="pm-total">Total pieces</label>
                 <input id="pm-total" type="number" min="1" className={`${inputCls} !h-11 !text-[18px] font-bold tabular-nums`} value={total} onChange={(e) => setTotal(e.target.value)} />
@@ -199,7 +199,7 @@ export function CreateProductMaster() {
   const search = useSearch({ strict: false });
   const smId = search?.sm;
   const { data, loading, error } = useLoad(() => getProductMasterSetup(smId), [smId]);
-  const crumbs = [{ label: "Super Masters", to: "/purchasing" }, { label: smId || "—", to: "/purchasing/super-masters/$id", params: { id: smId } }, { label: "New Product Master" }];
+  const crumbs = [{ label: "Product Masters", to: "/purchasing/product-masters" }, ...(smId ? [{ label: smId, to: "/purchasing/super-masters/$id", params: { id: smId } }] : []), { label: "New Product Master" }];
 
   if (!hasPermission("MANAGE_PURCHASING")) {
     return <PurchasingShell crumbs={crumbs} title="New Product Master"><ErrorNote>You do not have permission to create Product Masters.</ErrorNote></PurchasingShell>;

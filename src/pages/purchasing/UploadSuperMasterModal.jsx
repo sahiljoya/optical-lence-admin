@@ -133,7 +133,7 @@ export function UploadSuperMasterModal({ replace = null, onClose, onSaved }) {
             <div className="text-[13px] text-slate-700">
               Read from <b className="text-slate-900">{preview.file_name}</b> ({preview.file_type}) · {preview.rows.length * preview.cols.length} powers · ratios add up to {fmtNum(ratioSum)}
             </div>
-            <PowerMatrix rows={preview.rows} cols={preview.cols} colAxis={preview.col_axis} value={(r, c) => preview.cells[cellKey(r, c)] ?? 0} maxHeight="50vh" />
+            <PowerMatrix compact rows={preview.rows} cols={preview.cols} colAxis={preview.col_axis} value={(r, c) => preview.cells[cellKey(r, c)] ?? 0} maxHeight="50vh" />
             <p className="text-[12px] text-slate-500">
               Check every number against the file before saving. Every power in the grid is part of the range, even with ratio 0.
               <span className="text-amber-700"> Sample preview: reading real files comes with the backend.</span>

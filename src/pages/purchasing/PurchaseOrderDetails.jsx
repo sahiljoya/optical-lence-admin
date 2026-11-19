@@ -101,60 +101,60 @@ export function PurchaseOrderDetails() {
         <BigNumber label="PI value / piece" value={po.pi_value_per_piece ? `₹${fmtNum(po.pi_value_per_piece)}` : "—"} hint={po.pi_number || "Not received yet"} />
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
-        <Card
-          className="min-w-0"
-          title="Pieces by power"
-          actions={(
-            <Segmented
-              label="What the matrix shows"
-              value={mode}
-              onChange={setMode}
-              options={[{ id: "ordered", label: "Ordered" }, { id: "received", label: "Received" }, { id: "keep", label: "Pieces to keep" }]}
-            />
-          )}
-        >
-          <PowerMatrix
-            rows={po.grid.rows}
-            cols={po.grid.cols}
-            colAxis={po.grid.col_axis}
-            tone={mode === "ordered" ? "orange" : "blue"}
-            value={(r, c) => byKey[cellKey(r, c)]?.[mode] ?? 0}
-            cellTitle={(r, c) => {
-              const row = byKey[cellKey(r, c)];
-              return row ? `${fmtPower(r)} / ${fmtPower(c)} · keep ${row.keep} · in stock ${row.free_stock} · being made ${row.being_made} · on the way ${row.on_the_way} → ordered ${row.ordered} · received ${row.received}` : `${fmtPower(r)} / ${fmtPower(c)} · not ordered`;
-            }}
-          />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4 items-start">
+        <Card title="Details">
+          <dl className="text-[13px] space-y-2">
+            {[
+              ["Stage", <span key="s" className="flex items-center gap-1.5"><StagePill stage={po.stage} />{po.on_hold && <Pill tone="red">On hold</Pill>}</span>],
+              ["Price line", <Link key="l" to="/purchasing/product-masters/$id" params={{ id: po.line.id }} className="font-semibold text-blue-700 hover:underline">{po.line.id}</Link>],
+              ["Supplier", po.supplier_name],
+              ["Company", po.company],
+              ["Packing list", po.packing_list_ref || "—"],
+              ["Created", `${po.created_by}, ${fmtDate(po.created_at)}`],
+            ].map(([k, v]) => (
+              <div key={k} className="flex justify-between gap-3"><dt className="text-slate-500">{k}</dt><dd className="font-semibold text-slate-800 text-right">{v}</dd></div>
+            ))}
+          </dl>
         </Card>
 
-        <aside className="space-y-4">
-          <Card title="Details">
-            <dl className="text-[13px] space-y-2">
-              {[
-                ["Stage", <span key="s" className="flex items-center gap-1.5"><StagePill stage={po.stage} />{po.on_hold && <Pill tone="red">On hold</Pill>}</span>],
-                ["Price line", <Link key="l" to="/purchasing/product-masters/$id" params={{ id: po.line.id }} className="font-semibold text-blue-700 hover:underline">{po.line.id}</Link>],
-                ["Supplier", po.supplier_name],
-                ["Company", po.company],
-                ["Packing list", po.packing_list_ref || "—"],
-                ["Created", `${po.created_by}, ${fmtDate(po.created_at)}`],
-              ].map(([k, v]) => (
-                <div key={k} className="flex justify-between gap-3"><dt className="text-slate-500">{k}</dt><dd className="font-semibold text-slate-800 text-right">{v}</dd></div>
-              ))}
-            </dl>
-          </Card>
-          <Card title="History">
-            <ol className="space-y-2.5">
-              {po.history.map((h, i) => (
-                <li key={`${h.at}${i}`} className="text-[12px] border-l-2 border-slate-200 pl-3">
-                  <div className="font-semibold text-slate-800">{h.action}</div>
-                  {h.note && <div className="text-slate-600">{h.note}</div>}
-                  <div className="text-slate-500">{h.by} · {fmtDate(h.at)}</div>
-                </li>
-              ))}
-            </ol>
-          </Card>
-        </aside>
+        <Card title="History">
+          <ol className="space-y-2.5">
+            {po.history.map((h, i) => (
+              <li key={`${h.at}${i}`} className="text-[12px] border-l-2 border-slate-200 pl-3">
+                <div className="font-semibold text-slate-800">{h.action}</div>
+                {h.note && <div className="text-slate-600">{h.note}</div>}
+                <div className="text-slate-500">{h.by} · {fmtDate(h.at)}</div>
+              </li>
+            ))}
+          </ol>
+        </Card>
       </div>
+
+      <Card
+        className="min-w-0 w-full"
+        title="Pieces by power"
+        actions={(
+          <Segmented
+            label="What the matrix shows"
+            value={mode}
+            onChange={setMode}
+            options={[{ id: "ordered", label: "Ordered" }, { id: "received", label: "Received" }, { id: "keep", label: "Pieces to keep" }]}
+          />
+        )}
+      >
+        <PowerMatrix
+          fullWidth
+          rows={po.grid.rows}
+          cols={po.grid.cols}
+          colAxis={po.grid.col_axis}
+          tone={mode === "ordered" ? "orange" : "blue"}
+          value={(r, c) => byKey[cellKey(r, c)]?.[mode] ?? 0}
+          cellTitle={(r, c) => {
+            const row = byKey[cellKey(r, c)];
+            return row ? `${fmtPower(r)} / ${fmtPower(c)} · keep ${row.keep} · in stock ${row.free_stock} · being made ${row.being_made} · on the way ${row.on_the_way} → ordered ${row.ordered} · received ${row.received}` : `${fmtPower(r)} / ${fmtPower(c)} · not ordered`;
+          }}
+        />
+      </Card>
 
       {dialog === "next" && next && (
         <Modal

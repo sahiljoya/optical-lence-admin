@@ -54,7 +54,7 @@ export function AdminLayout() {
         collapsed={desktopCollapsed}
         onToggleCollapse={handleToggleSidebar}
       />
-      <main className="min-w-0 flex flex-col gap-4 flex-1 px-3.5 sm:px-5 lg:px-7 py-3 sm:py-4 overflow-x-hidden">
+      <main className="min-w-0 flex flex-col gap-4 flex-1 px-3.5 sm:px-5 lg:px-7 py-3 sm:py-4 overflow-x-clip">
         <TopBar
           onToggleSidebar={handleToggleSidebar}
           onOpenMobileMenu={() => setMobileMenuOpen(true)}

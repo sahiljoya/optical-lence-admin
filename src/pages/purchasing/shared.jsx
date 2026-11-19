@@ -4,7 +4,7 @@ import { Loader2, X, FlaskConical, Check, ChevronRight, Calculator } from "lucid
 import { hasPermission } from "@/lib/permissions";
 import { IS_MOCK, PO_STAGES, getAlertCount } from "@/services/purchaseApi";
 
-export const inputCls = "h-9 px-3 text-[13px] bg-white border border-slate-200 rounded-lg focus:outline-none focus:border-blue-500 w-full disabled:bg-slate-50 disabled:text-slate-500";
+export const inputCls = "vw-purchasing-input h-9 px-3 text-[13px] bg-white border border-slate-200 rounded-lg focus:outline-none focus-visible:outline-none focus:border-blue-500 w-full disabled:bg-slate-50 disabled:text-slate-500";
 export const labelCls = "block text-[12px] font-bold text-slate-700 mb-1.5";
 export const btnPrimary = "vw-btn-primary h-9 text-[13px] inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer";
 export const btnSecondary = "vw-btn-secondary h-9 text-[13px] inline-flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer";
@@ -44,10 +44,9 @@ export function useLoad(loader, deps = []) {
   return { ...state, reload: run, setData };
 }
 
-// Only three tabs. Product Masters live inside their Super Master; suppliers are reached from Orders.
 const TABS = [
-  // "Check & make order" (/purchasing/orders/new) is a step inside a Product Master, so it stays under Super Masters.
-  { label: "Super Masters", to: "/purchasing", permission: "VIEW_PURCHASING", match: (p) => p === "/purchasing" || p === "/purchasing/" || p.startsWith("/purchasing/super-masters") || p.startsWith("/purchasing/product-masters") || p.startsWith("/purchasing/orders/new") },
+  { label: "Super Masters", to: "/purchasing", permission: "VIEW_PURCHASING", match: (p) => p === "/purchasing" || p === "/purchasing/" || p.startsWith("/purchasing/super-masters") },
+  { label: "Product Masters", to: "/purchasing/product-masters", permission: "VIEW_PURCHASING", match: (p) => p.startsWith("/purchasing/product-masters") || p.startsWith("/purchasing/orders/new") },
   { label: "Orders", to: "/purchasing/orders", permission: ["VIEW_PURCHASE_ORDERS", "VIEW_PURCHASING"], match: (p) => (p.startsWith("/purchasing/orders") && !p.startsWith("/purchasing/orders/new")) || p.startsWith("/purchasing/suppliers") },
   { label: "Alerts", to: "/purchasing/alerts", permission: "VIEW_PURCHASING", match: (p) => p.startsWith("/purchasing/alerts"), badge: true },
 ];
@@ -128,9 +127,9 @@ export function ErrorNote({ children }) {
   return <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[13px] text-rose-800">{children}</div>;
 }
 
-export function Card({ title, subtitle, actions, children, className = "", id }) {
+export function Card({ title, subtitle, actions, children, className = "", id, style }) {
   return (
-    <section id={id} className={`vw-card p-4 sm:p-5 ${className}`}>
+    <section id={id} style={style} className={`vw-card p-4 sm:p-5 ${className}`}>
       {(title || actions) && (
         <div className="flex flex-wrap items-start justify-between gap-2 mb-3">
           <div className="min-w-0">
@@ -257,7 +256,7 @@ export function Segmented({ options, value, onChange, label }) {
 // value(row, col) returns a number, or null for a power that is not part of this grid.
 // isOut(row, col) marks powers that are shown but not counted (hatched grey, left out of totals) —
 // used to show the part of a Super Master a line does not take.
-export function PowerMatrix({ rows, cols, colAxis, value, tone = "blue", cellBg, cellTitle, maxHeight = "64vh", emptyZero = false, isOut }) {
+export function PowerMatrix({ rows, cols, colAxis, value, tone = "blue", cellBg, cellTitle, maxHeight = "70vh", emptyZero = false, isOut, compact = false, fullWidth = false }) {
   const grid = rows.map((r) => cols.map((c) => value(r, c)));
   const out = (i, j) => (isOut ? isOut(rows[i], cols[j]) : false);
   const counted = (i, j) => (out(i, j) ? 0 : grid[i][j] ?? 0);
@@ -267,33 +266,49 @@ export function PowerMatrix({ rows, cols, colAxis, value, tone = "blue", cellBg,
   const max = Math.max(1, ...rows.flatMap((_, i) => cols.map((_c, j) => counted(i, j))));
   const rgb = tone === "orange" ? "234,88,12" : "37,99,235";
   const shade = (v) => (v ? `rgba(${rgb},${(0.07 + 0.43 * (v / max)).toFixed(3)})` : undefined);
-  const headCell = "px-1 py-1.5 text-[11px] font-bold text-slate-500 whitespace-nowrap text-center bg-white";
-  const totalCell = "h-8 min-w-[56px] px-2 rounded-md grid place-items-center text-[12px] font-bold tabular-nums bg-slate-100 text-slate-900";
+
+  const cellH = compact ? "h-8" : "h-9";
+  const cellFont = compact ? "text-[12px]" : "text-[12px] xl:text-[13px]";
+  const cellMinW = compact ? "min-w-[48px]" : "min-w-[54px] xl:min-w-[62px]";
 
   return (
-    <div className="overflow-auto custom-scrollbar rounded-xl border border-slate-200 bg-white" style={{ maxHeight }}>
-      <table className="tabular-nums" style={{ borderCollapse: "separate", borderSpacing: 3 }}>
+    <div className="w-full max-w-full overflow-auto custom-scrollbar rounded-xl border border-slate-200 bg-white" style={{ maxHeight, scrollbarGutter: "stable" }}>
+      <table className="w-full min-w-max tabular-nums" style={{ borderCollapse: "separate", borderSpacing: 0 }}>
         <thead>
           <tr>
-            <th className={`${headCell} sticky left-0 top-0 z-30 text-left pl-2`}>SPH ↓ {colAxis === "add" ? "ADD" : "CYL"} →</th>
-            {cols.map((c) => <th key={c} className={`${headCell} sticky top-0 z-20`}>{fmtPower(c)}</th>)}
-            <th className={`${headCell} sticky top-0 z-20 text-slate-800 pl-2`}>Total</th>
+            <th className="sticky left-0 top-0 z-30 bg-white px-3 py-2.5 text-[11px] font-bold text-slate-500 text-center whitespace-nowrap min-w-[124px] w-32 border-b border-r border-slate-200 shadow-[1px_0_0_0_#e2e8f0]">
+              SPH ↓ {colAxis === "add" ? "ADD" : "CYL"} →
+            </th>
+            {cols.map((c) => (
+              <th key={c} className="sticky top-0 z-20 bg-white px-2 py-2.5 text-[11px] xl:text-[12px] font-bold text-slate-600 text-center whitespace-nowrap border-b border-slate-200 min-w-[54px]">
+                {fmtPower(c)}
+              </th>
+            ))}
+            <th className="sticky top-0 z-20 bg-white px-3 py-2.5 text-[11px] xl:text-[12px] font-bold text-slate-800 text-center whitespace-nowrap border-b border-l border-slate-200 min-w-[64px]">
+              Total
+            </th>
           </tr>
         </thead>
         <tbody>
           {rows.map((r, i) => (
             <tr key={r}>
-              <th className="sticky left-0 z-10 bg-white px-2 text-[12px] font-bold text-slate-600 text-right whitespace-nowrap">{fmtPower(r)}</th>
+              <th className="sticky left-0 z-10 bg-white px-3 py-1.5 text-[12px] xl:text-[13px] font-bold text-slate-700 text-center whitespace-nowrap border-r border-slate-200 min-w-[124px] w-32 shadow-[1px_0_0_0_#e2e8f0]">
+                {fmtPower(r)}
+              </th>
               {cols.map((c, j) => {
                 const v = grid[i][j];
                 if (v === null || v === undefined) {
-                  return <td key={c}><div className="h-8 min-w-[48px] rounded-md border border-dashed border-slate-200" title="Not part of this line" /></td>;
+                  return (
+                    <td key={c} className="p-1">
+                      <div className={`${cellH} ${cellMinW} w-full rounded-md border border-dashed border-slate-200`} title="Not part of this line" />
+                    </td>
+                  );
                 }
                 if (out(i, j)) {
                   return (
-                    <td key={c}>
+                    <td key={c} className="p-1">
                       <div
-                        className="h-8 min-w-[48px] px-1.5 rounded-md grid place-items-center text-[12px] text-slate-400 bg-slate-100"
+                        className={`${cellH} ${cellMinW} w-full rounded-md grid place-items-center text-slate-400 bg-slate-100 ${cellFont}`}
                         style={{ backgroundImage: "repeating-linear-gradient(135deg, transparent 0 5px, rgba(148,163,184,0.25) 5px 6px)" }}
                         title={`${fmtPower(r)} / ${fmtPower(c)}: left out — not part of this line`}
                       >
@@ -304,9 +319,9 @@ export function PowerMatrix({ rows, cols, colAxis, value, tone = "blue", cellBg,
                 }
                 const bg = cellBg ? cellBg(r, c, v) : shade(v);
                 return (
-                  <td key={c}>
+                  <td key={c} className="p-1">
                     <div
-                      className={`h-8 min-w-[48px] px-1.5 rounded-md grid place-items-center text-[12px] font-semibold ${v === 0 ? "text-slate-400 bg-slate-50" : "text-slate-900"}`}
+                      className={`${cellH} ${cellMinW} w-full px-2 rounded-md grid place-items-center font-semibold ${cellFont} ${v === 0 ? "text-slate-400 bg-slate-50" : "text-slate-900"}`}
                       style={v === 0 ? undefined : { background: bg }}
                       title={cellTitle ? cellTitle(r, c, v) : `${fmtPower(r)} / ${fmtPower(c)}: ${v}`}
                     >
@@ -315,18 +330,30 @@ export function PowerMatrix({ rows, cols, colAxis, value, tone = "blue", cellBg,
                   </td>
                 );
               })}
-              <td className="pl-2"><div className={totalCell}>{fmtNum(rowTotals[i])}</div></td>
+              <td className="p-1 pl-2 border-l border-slate-100">
+                <div className={`${cellH} min-w-[60px] w-full px-2 rounded-md grid place-items-center text-[12px] xl:text-[13px] font-bold tabular-nums bg-slate-100 text-slate-900`}>
+                  {fmtNum(rowTotals[i])}
+                </div>
+              </td>
             </tr>
           ))}
         </tbody>
         <tfoot>
           <tr>
-            <th className="sticky left-0 bottom-0 z-30 bg-white px-2 text-[12px] font-bold text-slate-800 text-right">Total</th>
+            <th className="sticky left-0 bottom-0 z-30 bg-white px-3 py-2 text-[12px] xl:text-[13px] font-bold text-slate-800 text-center whitespace-nowrap border-t border-r border-slate-200 min-w-[124px] w-32 shadow-[1px_0_0_0_#e2e8f0]">
+              Total
+            </th>
             {colTotals.map((t, j) => (
-              <td key={cols[j]} className="sticky bottom-0 z-20 bg-white pt-1"><div className={totalCell}>{fmtNum(t)}</div></td>
+              <td key={cols[j]} className="sticky bottom-0 z-20 bg-white p-1 border-t border-slate-200">
+                <div className={`${cellH} ${cellMinW} w-full px-2 rounded-md grid place-items-center text-[12px] xl:text-[13px] font-bold tabular-nums bg-slate-100 text-slate-900`}>
+                  {fmtNum(t)}
+                </div>
+              </td>
             ))}
-            <td className="sticky bottom-0 z-20 bg-white pt-1 pl-2">
-              <div className="h-8 min-w-[64px] px-2 rounded-md grid place-items-center text-[13px] font-bold tabular-nums bg-slate-900 text-white" title="Grand total">{fmtNum(grand)}</div>
+            <td className="sticky bottom-0 z-20 bg-white p-1 pl-2 border-t border-l border-slate-200">
+              <div className={`${cellH} min-w-[68px] w-full px-2.5 rounded-md grid place-items-center text-[13px] xl:text-[14px] font-bold tabular-nums bg-slate-900 text-white`} title="Grand total">
+                {fmtNum(grand)}
+              </div>
             </td>
           </tr>
         </tfoot>

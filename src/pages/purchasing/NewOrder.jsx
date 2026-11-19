@@ -101,33 +101,19 @@ export function NewOrder() {
             {check.line.last_counted && ` Stock last counted ${fmtDate(check.line.last_counted)}.`}
           </p>
 
-          <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
-            <Card className="min-w-0" title="For each power" actions={<Segmented label="What the grid shows" value={view} onChange={setView} options={VIEWS} />}>
-              <PowerMatrix
-                rows={check.rows}
-                cols={check.cols}
-                colAxis={check.col_axis}
-                tone={view === "need" ? "orange" : "blue"}
-                value={(r, c) => check.cells[cellKey(r, c)]?.[view] ?? null}
-                cellTitle={(r, c) => {
-                  const x = check.cells[cellKey(r, c)];
-                  return `${fmtPower(r)} / ${fmtPower(c)} · keep ${x.keep} − in stock ${x.free} − being made ${x.making} − on the way ${x.transit} = need ${x.need}`;
-                }}
-              />
-            </Card>
-
-            <Card title={check.totals.need > 0 ? `Order ${fmtNum(check.totals.need)} pieces?` : "Nothing to order"}>
-              {check.open_po ? (
-                <div className="space-y-2">
-                  <Link to="/purchasing/orders/$id" params={{ id: check.open_po.id }} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 hover:border-blue-300">
-                    <span className="text-[13px] font-bold text-blue-700">{check.open_po.po_number} is already open</span>
-                    <StagePill stage={check.open_po.stage} />
-                  </Link>
-                  <p className="text-[12px] text-slate-500">Finish that order first. Only one open order per product.</p>
-                </div>
-              ) : check.totals.need === 0 ? (
-                <p className="text-[13px] text-slate-600">What we have already covers the Product Master.</p>
-              ) : canManage ? (
+          <Card className="mb-4" title={check.totals.need > 0 ? `Order ${fmtNum(check.totals.need)} pieces?` : "Nothing to order"}>
+            {check.open_po ? (
+              <div className="space-y-2">
+                <Link to="/purchasing/orders/$id" params={{ id: check.open_po.id }} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 hover:border-blue-300 max-w-md">
+                  <span className="text-[13px] font-bold text-blue-700">{check.open_po.po_number} is already open</span>
+                  <StagePill stage={check.open_po.stage} />
+                </Link>
+                <p className="text-[12px] text-slate-500">Finish that order first. Only one open order per product.</p>
+              </div>
+            ) : check.totals.need === 0 ? (
+              <p className="text-[13px] text-slate-600">What we have already covers the Product Master.</p>
+            ) : canManage ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
                 <div className="space-y-3">
                   <div>
                     <label className={labelCls} htmlFor="po-supplier">Supplier</label>
@@ -140,21 +126,38 @@ export function NewOrder() {
                     )}
                   </div>
                   <div className="text-[12px] text-slate-600">Company: <b className="text-slate-900">{check.company}</b></div>
-                  <button type="button" className={`${btnPrimary} w-full !h-11 !text-[14px]`} disabled={!!busy || !chosenSupplier} onClick={create}>
-                    {busy === "create" ? <Loader2 size={15} className="animate-spin" /> : <ShoppingCart size={15} />} Create order · {fmtNum(check.totals.need)} pieces
-                  </button>
-                  <button type="button" className={`${btnSecondary} w-full`} disabled={!!busy} onClick={ignore}>
-                    {busy === "ignore" && <Loader2 size={14} className="animate-spin" />} Ignore, don't order now
-                  </button>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button type="button" className={`${btnPrimary} flex-1 !h-11 !text-[14px]`} disabled={!!busy || !chosenSupplier} onClick={create}>
+                      {busy === "create" ? <Loader2 size={15} className="animate-spin" /> : <ShoppingCart size={15} />} Create order · {fmtNum(check.totals.need)} pieces
+                    </button>
+                    <button type="button" className={btnSecondary} disabled={!!busy} onClick={ignore}>
+                      {busy === "ignore" && <Loader2 size={14} className="animate-spin" />} Ignore, don't order now
+                    </button>
+                  </div>
                   <p className="text-[11px] text-slate-500">Nothing goes to the supplier yet. The order starts as “Held”; you send it yourself.</p>
                 </div>
-              ) : null}
-              <div className="mt-4 pt-3 border-t border-slate-100">
-                <div className="text-[12px] font-bold text-slate-700 mb-2">An order goes through 6 steps</div>
-                <StageStrip current={check.open_po?.stage} />
+                <div className="rounded-xl border border-slate-100 bg-slate-50/70 p-4">
+                  <div className="text-[12px] font-bold text-slate-700 mb-2.5">An order goes through 6 steps</div>
+                  <StageStrip current={check.open_po?.stage} />
+                </div>
               </div>
-            </Card>
-          </div>
+            ) : null}
+          </Card>
+
+          <Card className="min-w-0 w-full" title="For each power" actions={<Segmented label="What the grid shows" value={view} onChange={setView} options={VIEWS} />}>
+            <PowerMatrix
+              fullWidth
+              rows={check.rows}
+              cols={check.cols}
+              colAxis={check.col_axis}
+              tone={view === "need" ? "orange" : "blue"}
+              value={(r, c) => check.cells[cellKey(r, c)]?.[view] ?? null}
+              cellTitle={(r, c) => {
+                const x = check.cells[cellKey(r, c)];
+                return `${fmtPower(r)} / ${fmtPower(c)} · keep ${x.keep} − in stock ${x.free} − being made ${x.making} − on the way ${x.transit} = need ${x.need}`;
+              }}
+            />
+          </Card>
         </div>
       )}
     </PurchasingShell>

@@ -139,25 +139,47 @@ function Detail({ data, onChange }) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-4 items-start">
-        <Card
-          className="min-w-0"
-          title={mode === "keep" ? "Pieces to keep, for each power" : "Mix (ratio) from the Super Master"}
-          subtitle={mode === "keep"
-            ? `${changed ? `Preview, not saved: ${fmtNum(data.pm.total)} → ${fmtNum(total)} pieces. ` : ""}Each power is rounded down, so the grid adds up to ${fmtNum(keepSum)}.`
-            : "These come from the Super Master and cannot be changed here."}
-          actions={<Segmented label="What the grid shows" value={mode} onChange={setMode} options={[{ id: "keep", label: "Pieces" }, { id: "ratio", label: "Mix" }]} />}
-        >
-          <PowerMatrix
-            rows={data.rows}
-            cols={data.cols}
-            colAxis={data.master.col_axis}
-            value={(r, c) => (mode === "keep" ? pieces[cellKey(r, c)] : data.cells[cellKey(r, c)]?.ratio) ?? null}
-            cellTitle={(r, c) => `${fmtPower(r)} / ${fmtPower(c)} · mix ${data.cells[cellKey(r, c)]?.ratio} → keep ${pieces[cellKey(r, c)]} pieces`}
-          />
+      <Card
+        className="min-w-0 w-full mb-4"
+        title={mode === "keep" ? "Pieces to keep, for each power" : "Mix (ratio) from the Super Master"}
+        subtitle={mode === "keep"
+          ? `${changed ? `Preview, not saved: ${fmtNum(data.pm.total)} → ${fmtNum(total)} pieces. ` : ""}Each power is rounded down, so the grid adds up to ${fmtNum(keepSum)}.`
+          : "These come from the Super Master and cannot be changed here."}
+        actions={<Segmented label="What the grid shows" value={mode} onChange={setMode} options={[{ id: "keep", label: "Pieces" }, { id: "ratio", label: "Mix" }]} />}
+      >
+        <PowerMatrix
+          fullWidth
+          rows={data.rows}
+          cols={data.cols}
+          colAxis={data.master.col_axis}
+          value={(r, c) => (mode === "keep" ? pieces[cellKey(r, c)] : data.cells[cellKey(r, c)]?.ratio) ?? null}
+          cellTitle={(r, c) => `${fmtPower(r)} / ${fmtPower(c)} · mix ${data.cells[cellKey(r, c)]?.ratio} → keep ${pieces[cellKey(r, c)]} pieces`}
+        />
+      </Card>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-start">
+        <Card title="Total pieces" subtitle="The only number you can change. Each power follows its mix.">
+          <div className="space-y-3">
+            <div>
+              <label className={labelCls} htmlFor="pm-total">Total pieces</label>
+              <input id="pm-total" type="number" min="1" disabled={!canManage} className={`${inputCls} !h-11 !text-[18px] font-bold tabular-nums`} value={draft} onChange={(e) => setDraft(e.target.value)} />
+            </div>
+            {canManage && <SalesHelper figures={data.figures} basis={basis} months={months} onBasis={setBasis} onMonths={setMonths} onUse={(v) => setDraft(String(v))} />}
+            {canManage && (
+              <div className="flex gap-2">
+                <button type="button" className={`${btnPrimary} flex-1`} disabled={!changed || total <= 0 || busy === "total"} onClick={saveTotal}>
+                  {busy === "total" ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save total
+                </button>
+                {changed && <button type="button" className={btnSecondary} onClick={() => setDraft(String(data.pm.total))}>Undo</button>}
+              </div>
+            )}
+            <div className="flex items-start gap-1.5 text-[11px] text-slate-500"><Lock size={12} className="mt-0.5 shrink-0" /> The mix comes from the Super Master.</div>
+          </div>
         </Card>
 
-        <aside className="space-y-4">
+        <AlertCard key={`${data.pm.alert.set_at}`} data={data} onSaved={onChange} canManage={canManage} />
+
+        <div className="space-y-4">
           <Card title="Make an order" subtitle="See what we have and what we need. Then order it, or not.">
             {data.open_po ? (
               <Link to="/purchasing/orders/$id" params={{ id: data.open_po.id }} className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3 py-2.5 hover:border-blue-300">
@@ -169,27 +191,6 @@ function Detail({ data, onChange }) {
             )}
           </Card>
 
-          <Card title="Total pieces" subtitle="The only number you can change. Each power follows its mix.">
-            <div className="space-y-3">
-              <div>
-                <label className={labelCls} htmlFor="pm-total">Total pieces</label>
-                <input id="pm-total" type="number" min="1" disabled={!canManage} className={`${inputCls} !h-11 !text-[18px] font-bold tabular-nums`} value={draft} onChange={(e) => setDraft(e.target.value)} />
-              </div>
-              {canManage && <SalesHelper figures={data.figures} basis={basis} months={months} onBasis={setBasis} onMonths={setMonths} onUse={(v) => setDraft(String(v))} />}
-              {canManage && (
-                <div className="flex gap-2">
-                  <button type="button" className={`${btnPrimary} flex-1`} disabled={!changed || total <= 0 || busy === "total"} onClick={saveTotal}>
-                    {busy === "total" ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Save total
-                  </button>
-                  {changed && <button type="button" className={btnSecondary} onClick={() => setDraft(String(data.pm.total))}>Undo</button>}
-                </div>
-              )}
-              <div className="flex items-start gap-1.5 text-[11px] text-slate-500"><Lock size={12} className="mt-0.5 shrink-0" /> The mix comes from the Super Master.</div>
-            </div>
-          </Card>
-
-          <AlertCard key={`${data.pm.alert.set_at}`} data={data} onSaved={onChange} canManage={canManage} />
-
           <Card title="History">
             <ol className="space-y-2">
               {data.pm.history.slice(0, 5).map((h, i) => (
@@ -200,7 +201,7 @@ function Detail({ data, onChange }) {
               ))}
             </ol>
           </Card>
-        </aside>
+        </div>
       </div>
       {confirmDialog}
     </>
@@ -211,7 +212,7 @@ export function ProductMasterView() {
   const { id } = useParams({ strict: false });
   const { data, loading, error, setData } = useLoad(() => getProductMaster(id), [id]);
   const crumbs = [
-    { label: "Super Masters", to: "/purchasing" },
+    { label: "Product Masters", to: "/purchasing/product-masters" },
     ...(data ? [{ label: data.master.code, to: "/purchasing/super-masters/$id", params: { id: data.master.id } }] : []),
     { label: data ? `${data.line.product} ${data.line.range_label}` : id },
   ];
@@ -221,6 +222,16 @@ export function ProductMasterView() {
       crumbs={crumbs}
       title={data ? `${data.line.product} ${data.line.range_label}` : "Product Master"}
       subtitle={data ? `Product Master · ${data.line.lens_type} · index ${data.line.index}${data.line.diameter ? ` · ${data.line.diameter} mm` : ""} · sells ${fmtNum(data.line.monthly_sale)} pieces a month` : undefined}
+      actions={data && (
+        data.open_po ? (
+          <Link to="/purchasing/orders/$id" params={{ id: data.open_po.id }} className={btnSecondary}>
+            <span className="font-bold text-blue-700">{data.open_po.po_number} is open</span>
+            <StagePill stage={data.open_po.stage} />
+          </Link>
+        ) : (
+          <Link to="/purchasing/orders/new" search={{ pm: data.line.id }} className={btnPrimary}><ShoppingCart size={15} /> Check & make order</Link>
+        )
+      )}
     >
       {loading && !data && <Loading />}
       {error && <ErrorNote>{error}</ErrorNote>}
